@@ -2906,7 +2906,8 @@ function renderMeasurementPanelHtml(g, idx){
   const numFieldsHtml = MEASUREMENT_FIELDS.map(f=>
     `<div class="field" style="margin-bottom:6px;"><label style="font-size:11px;">${f.label}</label><input type="number" step="0.01" class="meas-field" data-idx="${idx}" data-key="${f.key}" value="${m[f.key]||""}" placeholder="0"></div>`
   ).join("");
-  const choiceFieldsHtml = MEASUREMENT_CHOICE_FIELDS.map(f=>{
+  const garmentTypeField = MEASUREMENT_CHOICE_FIELDS.find(f=>f.key==="garmentType");
+  const buildChoiceFieldHtml = f=>{
     const list = state[f.listKey]||[];
     const cur = m[f.key]||"";
     const curItem = list.find(o=>o.code===cur);
@@ -2915,14 +2916,19 @@ function renderMeasurementPanelHtml(g, idx){
       <select class="meas-choice" data-idx="${idx}" data-key="${f.key}">${opts}</select>
       ${curItem && curItem.image ? `<img src="${curItem.image}" style="max-width:70px;max-height:70px;border-radius:6px;margin-top:4px;border:1px solid var(--border);">` : ""}
     </div>`;
-  }).join("");
+  };
+  const garmentTypeFieldHtml = buildChoiceFieldHtml(garmentTypeField);
+  const choiceFieldsHtml = MEASUREMENT_CHOICE_FIELDS.filter(f=>f.key!=="garmentType").map(buildChoiceFieldHtml).join("");
   return `<div class="meas-panel" data-idx="${idx}" style="display:none;margin-top:10px;background:var(--surface2);border-radius:10px;border:1px solid var(--border);overflow:hidden;">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface3);border-bottom:1px solid var(--border);">
       <b style="font-size:14px;">📐 كرت المقاس — ثوب ${idx+1}</b>
       <button type="button" class="icon-btn meas-close-btn" data-idx="${idx}" title="إغلاق">✕</button>
     </div>
     <div style="display:flex;gap:14px;padding:14px;flex-wrap:wrap;">
-      <div style="width:210px;flex-shrink:0;">${buildMannequinPreviewHtml(m)}</div>
+      <div style="width:210px;flex-shrink:0;">
+        <div style="background:var(--surface3);border:1px solid var(--gold);border-radius:8px;padding:8px;margin-bottom:8px;">${garmentTypeFieldHtml}</div>
+        ${buildMannequinPreviewHtml(m)}
+      </div>
       <div style="flex:1;min-width:280px;">
         <div class="row-3">${numFieldsHtml}</div>
         <div class="stitch"></div>
