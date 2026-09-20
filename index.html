@@ -4065,7 +4065,7 @@ function renderReturnResponsibleSelect(){
   $("returnResponsibleDatalist").innerHTML = employees.map(u=>`<option value="${esc(u.username)}"></option>`).join("");
   if(current){ const u = employees.find(x=>x.username===current); if(u) $("returnResponsibleSearch").value = u.username; }
 }
-function submitInvoiceReturn(){
+async function submitInvoiceReturn(){
   const num = $("returnInvNumber").value.trim();
   const inv = state.invoices.find(i=>i.number===num);
   if(!inv){ showToast("ما فيه فاتورة بهذا الرقم"); return; }
@@ -4074,6 +4074,7 @@ function submitInvoiceReturn(){
   const boxId = $("returnSourceBox").value;
   if(!reason){ showToast("أدخل سبب المرتجع"); return; }
   const preReturnSaleTotal = invoiceSaleTotal(inv);
+  const returnSnapshot = JSON.parse(JSON.stringify(state));
   if(refundAmount>0){
     if(!boxId){ showToast("اختر الصندوق اللي يخصم منه المبلغ المرتجع"); return; }
     const box = state.cashBoxes.find(b=>b.id===boxId);
@@ -4111,7 +4112,7 @@ function submitInvoiceReturn(){
     requestMsg = ` — تم فتح طلب قرار مسؤولية تلقائياً لـ${responsibleUsername} بشاشة البريد`;
   }
   if(wageClawbacks.length) requestMsg += ` — تم استرداد أجرة مصروفة مسبقاً: ${wageClawbacks.join("، ")}`;
-  saveState(); renderAll();
+  if(!await saveStateWithRollback(returnSnapshot)) return;
   logAudit("invoice_returned", {invoiceNumber:num, reason, refundAmount, lostCost, responsibleUsername: responsibleUsername||null});
   $("returnInvNumber").value=""; $("returnReason").value=""; $("returnAmount").value=""; $("returnResponsible").value=""; $("returnResponsibleSearch").value="";
   showToast((lostCost>0 ? `تم تسجيل المرتجع — ⚠ خسارة قماش/تصنيع مقصوص فعلياً: ${lostCost.toFixed(0)} ريال (${wasCut.join("، ")})` : "تم تسجيل المرتجع") + requestMsg);
@@ -4212,9 +4213,10 @@ function submitMailLeaveRequest(){
   $("mailLeaveFrom").value=""; $("mailLeaveTo").value=""; $("mailLeaveReason").value=""; switchMailComposeForm(null);
   showToast("تم إرسال طلب الإجازة للمدير");
 }
-function decideSimpleMailRequest(reqId, approved){
+async function decideSimpleMailRequest(reqId, approved){
   const r = state.mailRequests.find(x=>x.id===reqId);
   if(!r) return;
+  const snapshot = JSON.parse(JSON.stringify(state));
   if(r.type==="advance" && approved){
     const boxId = userBoxes(currentUser.username)[0]?.id;
     if(!boxId){ showToast("ما فيه صندوق متاح لك لصرف السلفة منه"); return; }
@@ -4223,7 +4225,7 @@ function decideSimpleMailRequest(reqId, approved){
   }
   r.status = "decided"; r.decidedBy = currentUser.username; r.decidedAt = todayStr();
   r.decisionLabel = approved ? "✅ تمت الموافقة" : "❌ مرفوض";
-  saveState(); renderAll();
+  if(!await saveStateWithRollback(snapshot)) return;
   showToast(approved ? "تمت الموافقة على الطلب" : "تم رفض الطلب");
 }
 let mailDecisionTargetId = null;
@@ -4240,16 +4242,18 @@ function openMailDecisionModal(reqId){
 }
 function closeMailDecisionModal(){ $("mailDecisionModalOverlay").classList.add("hidden"); mailDecisionTargetId=null; }
 function nextDecisionNo(){ const n=state.settings.nextDecisionNumber||1; state.settings.nextDecisionNumber=n+1; return n; }
-function confirmMailDecision(){
+async function confirmMailDecision(){
   const r = state.mailRequests.find(x=>x.id===mailDecisionTargetId);
   if(!r) return;
   const choice = $("mailDecisionChoice").value;
   if(choice==="reject"){
+    const rejectSnapshot = JSON.parse(JSON.stringify(state));
     const seq = nextDecisionNo();
     const message = `تم رفض طلب الترجيع الخاص بفاتورة #${r.invoiceNumber} — لن يتم استرداد أي مبلغ ولا خصم عليك.`;
     state.decisions.push({id:Date.now()+"", seq, type:"return_defect", recipientUsername:r.responsibleUsername, amount:0, reason:r.reason, message, decidedBy:currentUser.username, date:todayStr()});
     r.status="decided"; r.decidedBy=currentUser.username; r.decidedAt=todayStr(); r.decisionLabel=`قرار رقم ${seq} — ❌ رفض الترجيع، بدون أي خصم من أي صندوق`;
-    saveState(); renderAll(); closeMailDecisionModal();
+    if(!await saveStateWithRollback(rejectSnapshot)) return;
+    closeMailDecisionModal();
     showToast(`تم رفض الترجيع رقم ${seq} — ما انخصم أي مبلغ`);
     return;
   }
@@ -4257,6 +4261,15 @@ function confirmMailDecision(){
   const box = findCashBox(boxId);
   if(!box){ showToast("اختر الصندوق"); return; }
   if(boxTotal(box) < r.amount){ showToast(`رصيد الصندوق (${boxTotal(box).toFixed(0)} ريال) أقل من مبلغ الاسترداد`); return; }
+  // validate the partial-amount input BEFORE any mutation below — this used to run after the
+  // refund was already deducted from the box, so an invalid amount here left that deduction
+  // applied with no ledger entry to explain it (and applied a second time on a valid retry)
+  let partialAmount = 0;
+  if(choice==="partial"){
+    partialAmount = parseFloat($("mailDecisionPartialAmount").value)||0;
+    if(partialAmount<0 || partialAmount>r.amount){ showToast(`أدخل مبلغ صحيح بين 0 و${r.amount.toFixed(0)} ريال`); return; }
+  }
+  const decisionSnapshot = JSON.parse(JSON.stringify(state));
   // 1) refund the customer
   box.balance -= r.amount;
   // 2) mark the invoice's garments as cancelled + log as a return (customer already had it — no stock impact)
@@ -4273,8 +4286,6 @@ function confirmMailDecision(){
     deductedAmount = costTotal;
     decisionLabel = `خصم التكاليف المباشرة فقط (${costTotal.toFixed(0)} ﷼) من ${r.responsibleUsername}`;
   } else if(choice==="partial"){
-    const partialAmount = parseFloat($("mailDecisionPartialAmount").value)||0;
-    if(partialAmount<0 || partialAmount>r.amount){ showToast(`أدخل مبلغ صحيح بين 0 و${r.amount.toFixed(0)} ريال`); return; }
     if(partialAmount>0) addPayrollEntry(r.responsibleUsername, "deduction", partialAmount, null, `خصم جزئي فاتورة مرتجعة #${inv?inv.number:r.invoiceNumber} بسبب خلل — طلب بريد #${r.seq}`);
     deductedAmount = partialAmount;
     const shopShare = r.amount - partialAmount;
@@ -4293,16 +4304,18 @@ function confirmMailDecision(){
     : `تم إصدار قرار رقم ${seq} بخصوص فاتورة مرتجعة بسببك (${r.reason}) — قرر المدير تحمّل المحل للمبلغ، بدون خصم عليك.`;
   state.decisions.push({id:Date.now()+"", seq, type:"return_defect", recipientUsername:r.responsibleUsername, amount:deductedAmount, reason:r.reason, message, decidedBy:currentUser.username, date:todayStr()});
   r.status="decided"; r.decidedBy=currentUser.username; r.decidedAt=todayStr(); r.decisionLabel=`قرار رقم ${seq} — ${decisionLabel}`;
-  saveState(); renderAll(); closeMailDecisionModal();
+  if(!await saveStateWithRollback(decisionSnapshot)) return;
+  closeMailDecisionModal();
   showToast(`تم تنفيذ القرار رقم ${seq} مالياً`);
 }
-function submitBonusOrDeduction(){
+async function submitBonusOrDeduction(){
   const username = $("bonusEmployee").value;
   const type = $("bonusType").value;
   const amount = parseFloat($("bonusAmount").value)||0;
   const reason = $("bonusReason").value.trim();
   if(amount<=0){ showToast("أدخل مبلغ صحيح"); return; }
   if(!reason){ showToast("أدخل السبب"); return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
   const result = addPayrollEntry(username, type, amount, null, reason);
   if(!result.ok){ showToast(result.msg); return; }
   const seq = nextDecisionNo();
@@ -4310,7 +4323,7 @@ function submitBonusOrDeduction(){
     ? `تم إصدار قرار رقم ${seq} — تمت مكافأتك بمبلغ ${amount.toFixed(0)} ريال نظير: ${reason}`
     : `تم إصدار قرار رقم ${seq} بخصم مبلغ ${amount.toFixed(0)} ريال بحقك بسبب: ${reason}`;
   state.decisions.push({id:Date.now()+"", seq, type, recipientUsername:username, amount, reason, message, decidedBy:currentUser.username, date:todayStr()});
-  saveState(); renderAll();
+  if(!await saveStateWithRollback(snapshot)) return;
   $("bonusAmount").value=""; $("bonusReason").value="";
   showToast(`تم تنفيذ القرار رقم ${seq}`);
 }
@@ -6422,13 +6435,14 @@ async function submitPayrollEntry(username){
   if(await saveStateWithRollback(snapshot)) showToast("تم تسجيل الحركة");
 }
 
-function addPurchaseReturn(){
+async function addPurchaseReturn(){
   const cardId = $("returnCard").value, qty = parseFloat($("returnQty").value)||0;
   const supplierId = $("returnSupplier").value, payStatus = $("returnPayStatus").value, boxId = $("returnBox").value;
   const linkedPurchaseId = $("returnLinkedPurchase").value;
   const card = findItemCard(cardId);
   if(!card){ showToast("اختر صنف"); return; }
   if(qty<=0){ showToast("أدخل كمية صحيحة"); return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
   const value = qty * card.currentCost;
   card.stockQty = (card.stockQty||0) - qty;
   if(payStatus==="deferred"){
@@ -6441,7 +6455,7 @@ function addPurchaseReturn(){
   const linkedPurchase = linkedPurchaseId ? state.purchases.find(p=>p.id===linkedPurchaseId) : null;
   state.purchaseReturns.push({id:Date.now()+"", date:todayStr(), itemCardId:cardId, quantity:qty, value, supplierId, payStatus, recordedBy:currentUser.username,
     linkedPurchaseId: linkedPurchaseId||null, purchaseInvoiceNo: linkedPurchase?linkedPurchase.invoiceNo:null, supplierInvoiceNo: linkedPurchase?linkedPurchase.supplierInvoiceNo:null});
-  saveState(); renderAll();
+  if(!await saveStateWithRollback(snapshot)) return;
   $("returnQty").value="";
   showToast("تم تسجيل المرتجع");
 }
