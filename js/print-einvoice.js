@@ -229,6 +229,7 @@ function buildCuttingCardHtml(inv, gIdx){
       }).join("");
       return `<div style="position:relative;width:100%;">
         <img src="${images[view]}" style="width:100%;max-height:320px;object-fit:contain;display:block;margin:0 auto;">
+        ${view==="front" ? mannequinFrontOverlayHtml(collarImg, chestPocketImg, jabzourImg, cufflinkImg) : ""}
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;">${linesSvg}</svg>
         ${labelsHtml}
       </div>`;
