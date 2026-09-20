@@ -4361,6 +4361,10 @@ async function saveInvoice(){
   }
   const originMonth = editingId ? state.invoices.find(i=>i.id===editingId).originMonth : date.slice(0,7);
   if(isMonthClosed(originMonth) && editingId){ showToast("هذا الشهر مقفول"); return; }
+  // snapshot the whole state before any mutation below (advisory credits, fabric reservation,
+  // loyalty points, cash box balances, the invoice itself...) so a failed cloud save can be
+  // rolled back cleanly instead of leaving these applied only in this tab's memory
+  const stateSnapshotBeforeSave = JSON.parse(JSON.stringify(state));
   const oldInv = editingId ? state.invoices.find(i=>i.id===editingId) : null;
   const garments = readGarmentFields(oldInv? oldInv.garments : null);
   // freeze cost snapshot for garments that don't yet have one, or recompute since still open
@@ -4469,8 +4473,6 @@ async function saveInvoice(){
   } else {
     state.invoices.push(invData);
     state.settings.nextInvoiceNumber++;
-    selectedOfferIds = [];
-    appliedPromoCode = null;
   }
   if(!editingId && invData.customerMobile){
     $("printReceiptBanner").innerHTML = `<p class="sub" style="text-align:center;">⏳ جاري حفظ الفاتورة بالسحابة...</p>`;
@@ -4485,17 +4487,24 @@ async function saveInvoice(){
   }
   const saved = await saveState();
   if(saved){
+    if(!editingId){ selectedOfferIds = []; appliedPromoCode = null; }
     showToast(editingId ? "تم تحديث الفاتورة" : (appliedOffers.length ? `تم حفظ الفاتورة — تطبيق: ${appliedOffers.join("، ")}` : "تم حفظ الفاتورة"));
     if(!editingId){
       $("printReceiptBanner").innerHTML = `<button class="btn btn-gold btn-sm" style="width:100%;" onclick="printCustomerReceipt('${invData.id}')">🖨 طباعة فاتورة العميل</button>
         <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:6px;" onclick="shareReceiptViaWhatsApp('${invData.id}')">📤 إرسال الفاتورة واتساب</button>` +
         invData.garments.map((g,i)=>`<button class="btn btn-ghost btn-sm" style="width:100%;margin-top:6px;" onclick="printCuttingCard('${invData.id}', ${i})">🖨 طباعة كرت القصاص — ثوب ${i+1}</button>`).join("");
     }
+    resetForm(); renderAll();
   } else {
-    // the cloud save failed — do NOT offer print/share on data that isn't safely persisted yet
-    $("printReceiptBanner").innerHTML = `<p class="sub" style="text-align:center;color:var(--loss);">⚠ تعذّر حفظ الفاتورة بالسحابة — لا تطبعها أو ترسلها للعميل قبل ما تتأكد إنها انحفظت (جرّب مرة ثانية بعد التأكد من الإنترنت).</p>`;
+    // the cloud save failed — roll back every local mutation (advisory credits, fabric
+    // reservation, loyalty points, cash box balances, the invoice itself...) instead of
+    // leaving them applied only in this tab's memory, and keep the form filled in as-is
+    // so the cashier can just retry instead of re-entering everything from scratch
+    state = stateSnapshotBeforeSave;
+    $("printReceiptBanner").innerHTML = `<p class="sub" style="text-align:center;color:var(--loss);">⚠ تعذّر حفظ الفاتورة بالسحابة — ما انحفظ شي، البيانات لسا موجودة بالفورم. تأكد من الاتصال بالإنترنت وجرّب "حفظ" مرة ثانية.</p>`;
+    $("printReceiptBanner").style.display = "";
+    renderAll();
   }
-  resetForm(); renderAll();
 }
 
 // ---------------- unified work distribution + overdue ----------------
@@ -5312,6 +5321,7 @@ async function saveDistribution(inv){
 // ---------------- monthly closing ----------------
 async function performCloseMonth(){
   const m = state.settings.currentMonth;
+  if(isMonthClosed(m)){ showToast("هذا الشهر مقفول أصلاً — ما يمكن إقفاله مرة ثانية"); return; }
   const isAdmin = currentUser.role==="مدير";
   if(!isAdmin){
     const [y,mo] = m.split("-").map(Number);
@@ -5319,32 +5329,49 @@ async function performCloseMonth(){
     if(serverDate() <= lastDayOfMonth){ showToast("ما يمكن إقفال الشهر قبل انتهائه فعلياً — هذا متاح للمدير بس قبل نهاية الشهر"); return; }
   }
   if(!await confirmWithPassword(`بيتم إقفال شهر ${monthDisplay(m)}:\n- يتجمّد تقرير أرباح/خسائر نهائي لهذا الشهر.\n- أي ثوب ما انسلّم يتحول لحالة "معلقة" وينتقل لقائمة المتعثرة.\nأدخل كلمة مرورك للتأكيد.`)) return;
-  const invs = state.invoices.filter(i=>i.originMonth===m);
-  const monthlyFin = computeMonthlyFinancials(m);
-  const readyCount = totalReadyGarmentsCount(); // snapshot BEFORE status mutation below turns undelivered "جاهز" garments into "معلقة"
-  const overdueCount = overdueReadyGarments().length;
-  let garmentCount=0, embroCount=0, embroRevenue=0;
-  invs.forEach(inv=>{
-    inv.garments.forEach(g=>{ if(g.status!=="ملغي") g.costSnapshot = liveGarmentCost(g); });
-    inv.garments.forEach(g=>{
-      if(g.status==="ملغي") return;
-      garmentCount++;
-      if(g.hasEmbroidery){ embroCount++; embroRevenue += (g.embroideryPrice||0); }
-      if(g.status!=="تسليم") g.status="معلقة";
+  // guard against a double-click (or a retry after a silent save failure) re-closing the same
+  // month and re-running payroll a second time while the first close is still in flight
+  const btn = $("closeMonthBtn");
+  if(btn) btn.disabled = true;
+  try{
+    if(isMonthClosed(m)){ showToast("هذا الشهر مقفول أصلاً — ما يمكن إقفاله مرة ثانية"); return; }
+    const stateSnapshot = JSON.parse(JSON.stringify(state));
+    const invs = state.invoices.filter(i=>i.originMonth===m);
+    const monthlyFin = computeMonthlyFinancials(m);
+    const readyCount = totalReadyGarmentsCount(); // snapshot BEFORE status mutation below turns undelivered "جاهز" garments into "معلقة"
+    const overdueCount = overdueReadyGarments().length;
+    let garmentCount=0, embroCount=0, embroRevenue=0;
+    invs.forEach(inv=>{
+      inv.garments.forEach(g=>{ if(g.status!=="ملغي") g.costSnapshot = liveGarmentCost(g); });
+      inv.garments.forEach(g=>{
+        if(g.status==="ملغي") return;
+        garmentCount++;
+        if(g.hasEmbroidery){ embroCount++; embroRevenue += (g.embroideryPrice||0); }
+        if(g.status!=="تسليم") g.status="معلقة";
+      });
     });
-  });
-  const pendingCustodyCarried = totalPendingCustody();
-  state.closingReports.push({
-    monthLabel:m, closedAt:serverDate().toISOString(), invoicedTotal:monthlyFin.revenue, costTotal:monthlyFin.cost, collectedTotal:monthlyFin.revenue,
-    profitInvoiced: monthlyFin.profit, profitCollected: monthlyFin.profit,
-    garmentCount, embroCount, embroRevenue, invoiceCount: invs.length, pendingCustodyCarried,
-    readyCount, overdueCount,
-  });
-  runPayrollForMonth(m);
-  state.settings.currentMonth = nextMonthLabel(m);
-  saveState(); renderAll();
-  logAudit("month_closed", {monthLabel:m, profit:monthlyFin.profit, garmentCount, invoiceCount:invs.length});
-  showToast("تم إقفال الشهر وتجميد التقرير");
+    const pendingCustodyCarried = totalPendingCustody();
+    state.closingReports.push({
+      monthLabel:m, closedAt:serverDate().toISOString(), invoicedTotal:monthlyFin.revenue, costTotal:monthlyFin.cost, collectedTotal:monthlyFin.revenue,
+      profitInvoiced: monthlyFin.profit, profitCollected: monthlyFin.profit,
+      garmentCount, embroCount, embroRevenue, invoiceCount: invs.length, pendingCustodyCarried,
+      readyCount, overdueCount,
+    });
+    runPayrollForMonth(m);
+    state.settings.currentMonth = nextMonthLabel(m);
+    const saved = await saveState();
+    if(!saved){
+      state = stateSnapshot; // roll back the in-memory close/payroll so a retry starts clean
+      renderAll();
+      showToast("⚠ تعذّر حفظ إقفال الشهر بالسحابة — لم يُقفل الشهر، تأكد من الاتصال بالإنترنت وحاول مرة ثانية");
+      return;
+    }
+    renderAll();
+    logAudit("month_closed", {monthLabel:m, profit:monthlyFin.profit, garmentCount, invoiceCount:invs.length});
+    showToast("تم إقفال الشهر وتجميد التقرير");
+  } finally {
+    if(btn) btn.disabled = false;
+  }
 }
 function garmentQualifiesForCommission(g){
   const basis = state.settings.commissionBasis||"تسليم";
@@ -5832,7 +5859,7 @@ function renderAlterationsLog(){
     const statusTxt = a.status==="pending" ? `<span style="color:var(--gold-soft);">بانتظار الخياط</span>` : `<span style="color:var(--profit);">تم — ${a.dateCompleted}</span>`;
     return `<div class="garment-card"><span class="tag">تعديل #${a.alterationNumber||"—"} — فاتورة ${a.invoiceNumber} — ثوب ${a.garmentIndex+1}</span>
       <p class="sub" style="margin:6px 0;">السبب: ${esc(a.reason)} — المتسبب: ${esc(a.responsible)} — الخياط الأصلي: ${esc(garmentTailor)} — استُلم بتاريخ ${a.dateReceived}</p>
-      ${a.notes?`<p class="sub">ملاحظات: ${a.notes}</p>`:""}
+      ${a.notes?`<p class="sub">ملاحظات: ${esc(a.notes)}</p>`:""}
       <p>${statusTxt}</p>
       ${inv ? `<button class="btn btn-ghost btn-sm" onclick="printCuttingCard('${inv.id}', ${a.garmentIndex})">📐 عرض كرت المقاسات</button>` : ""}
     </div>`;
