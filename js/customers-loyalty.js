@@ -302,15 +302,15 @@ function renderMeasurementPanelHtml(g, idx){
       <button type="button" class="icon-btn meas-close-btn" data-idx="${idx}" title="إغلاق"><i data-lucide="x"></i></button>
     </div>
     <div style="display:flex;gap:14px;padding:14px;flex-wrap:wrap;">
-      <div style="width:210px;flex-shrink:0;">
+      <div style="flex:1 1 320px;min-width:280px;">
         <div style="background:var(--surface3);border:1px solid var(--gold);border-radius:8px;padding:8px;margin-bottom:8px;">${garmentTypeFieldHtml}</div>
         ${buildMeasurementHistoryBoxHtml(idx, g.itemCardId)}
         ${buildMannequinPreviewHtml(m)}
       </div>
-      <div style="flex:1;min-width:280px;">
-        <div class="row-3">${numFieldsHtml}</div>
+      <div style="flex:1 1 320px;min-width:280px;">
+        <div class="row-2">${numFieldsHtml}</div>
         <div class="stitch"></div>
-        <div class="row-3">${choiceFieldsHtml}</div>
+        <div class="row-2">${choiceFieldsHtml}</div>
         <div class="row-3" style="margin-top:6px;">
           <label style="display:flex;align-items:center;gap:6px;font-size:13px;"><input type="checkbox" class="meas-urgent" data-idx="${idx}" ${g.urgent?"checked":""}> مستعجل</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:13px;"><input type="checkbox" class="meas-sample" data-idx="${idx}" ${g.sample?"checked":""}> عينة</label>
