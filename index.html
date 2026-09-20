@@ -3677,6 +3677,7 @@ async function saveShiftClosing(){
     systemTotal:a.expected.total, physicalTotal:a.physicalTotal, diff:a.diff, timestamp:serverDate().toISOString(),
   });
   if(!await saveStateWithRollback(snapshot)) return; // don't claim success below if the closing record never actually made it to the cloud
+  logAudit("shift_closing_saved", {date:a.date, systemTotal:a.expected.total, physicalTotal:a.physicalTotal, diff:a.diff});
   showToast("تم حفظ سجل الإقفال");
 }
 function renderShiftClosingsLog(){
@@ -3715,6 +3716,7 @@ async function submitVoucher(){
   const voucherNo = type==="receipt" ? nextReceiptVoucherNo() : nextPaymentVoucherNo();
   state.vouchers.push({id:Date.now()+"", voucherNo, type, amount, party, reason, boxId, boxName:box.name, date:todayStr(), recordedBy:currentUser.username});
   if(await saveStateWithRollback(snapshot)){
+    logAudit("voucher_recorded", {voucherNo, type, amount, party, reason, boxName:box.name});
     $("voucherAmount").value=""; $("voucherParty").value=""; $("voucherReason").value="";
     showToast(`تم تسجيل سند ${type==="receipt"?"قبض":"صرف"} رقم ${voucherNo}`);
   }
@@ -3795,7 +3797,10 @@ async function acceptTransferRequest(id){
   const toBox = mainBoxOf(req.toOwner,"cash");
   if(toBox) toBox.balance += req.amount;
   req.status="accepted"; req.resolvedAt=todayStr(); req.voucherNumber=nextVoucherNo();
-  if(await saveStateWithRollback(snapshot)) showToast(`تم استلام المبلغ — سند رقم ${req.voucherNumber}`);
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("transfer_accepted", {amount:req.amount, fromOwner:req.fromOwner, toOwner:req.toOwner, voucherNumber:req.voucherNumber});
+    showToast(`تم استلام المبلغ — سند رقم ${req.voucherNumber}`);
+  }
 }
 async function rejectTransferRequest(id){
   const req = state.transferRequests.find(r=>r.id===id); if(!req || req.status!=="pending") return;
@@ -3804,7 +3809,10 @@ async function rejectTransferRequest(id){
   const fromBox = findCashBox(req.fromBoxId);
   if(fromBox) fromBox.balance += req.amount;
   req.status="rejected"; req.resolvedAt=todayStr();
-  if(await saveStateWithRollback(snapshot)) showToast("تم رفض التحويل وإرجاع المبلغ للمرسل");
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("transfer_rejected", {amount:req.amount, fromOwner:req.fromOwner, toOwner:req.toOwner});
+    showToast("تم رفض التحويل وإرجاع المبلغ للمرسل");
+  }
 }
 function addExpense(data){
   const box = findCashBox(data.sourceBoxId);
@@ -4277,6 +4285,7 @@ async function decideSimpleMailRequest(reqId, approved){
   r.status = "decided"; r.decidedBy = currentUser.username; r.decidedAt = todayStr();
   r.decisionLabel = approved ? "✅ تمت الموافقة" : "❌ مرفوض";
   if(!await saveStateWithRollback(snapshot)) return;
+  logAudit("mail_request_decided", {type:r.type, seq:r.seq, approved, employeeUsername:r.employeeUsername, amount:r.amount||0});
   showToast(approved ? "تمت الموافقة على الطلب" : "تم رفض الطلب");
 }
 let mailDecisionTargetId = null;
@@ -4304,6 +4313,7 @@ async function confirmMailDecision(){
     state.decisions.push({id:Date.now()+"", seq, type:"return_defect", recipientUsername:r.responsibleUsername, amount:0, reason:r.reason, message, decidedBy:currentUser.username, date:todayStr()});
     r.status="decided"; r.decidedBy=currentUser.username; r.decidedAt=todayStr(); r.decisionLabel=`قرار رقم ${seq} — ❌ رفض الترجيع، بدون أي خصم من أي صندوق`;
     if(!await saveStateWithRollback(rejectSnapshot)) return;
+    logAudit("mail_decision_resolved", {seq, choice:"reject", invoiceNumber:r.invoiceNumber, responsibleUsername:r.responsibleUsername});
     closeMailDecisionModal();
     showToast(`تم رفض الترجيع رقم ${seq} — ما انخصم أي مبلغ`);
     return;
@@ -4356,6 +4366,7 @@ async function confirmMailDecision(){
   state.decisions.push({id:Date.now()+"", seq, type:"return_defect", recipientUsername:r.responsibleUsername, amount:deductedAmount, reason:r.reason, message, decidedBy:currentUser.username, date:todayStr()});
   r.status="decided"; r.decidedBy=currentUser.username; r.decidedAt=todayStr(); r.decisionLabel=`قرار رقم ${seq} — ${decisionLabel}`;
   if(!await saveStateWithRollback(decisionSnapshot)) return;
+  logAudit("mail_decision_resolved", {seq, choice, invoiceNumber:r.invoiceNumber, responsibleUsername:r.responsibleUsername, refundAmount:r.amount, deductedAmount});
   closeMailDecisionModal();
   showToast(`تم تنفيذ القرار رقم ${seq} مالياً`);
 }
@@ -4375,6 +4386,7 @@ async function submitBonusOrDeduction(){
     : `تم إصدار قرار رقم ${seq} بخصم مبلغ ${amount.toFixed(0)} ريال بحقك بسبب: ${reason}`;
   state.decisions.push({id:Date.now()+"", seq, type, recipientUsername:username, amount, reason, message, decidedBy:currentUser.username, date:todayStr()});
   if(!await saveStateWithRollback(snapshot)) return;
+  logAudit("bonus_or_deduction", {seq, type, username, amount, reason});
   $("bonusAmount").value=""; $("bonusReason").value="";
   showToast(`تم تنفيذ القرار رقم ${seq}`);
 }
@@ -4592,6 +4604,7 @@ async function saveInvoice(){
   }
   const saved = await saveState();
   if(saved){
+    logAudit(editingId ? "invoice_edited" : "invoice_created", {invoiceNumber:number, saleTotal: invoiceSaleTotal(invData), paid: invoicePaid(invData)});
     if(!editingId){ selectedOfferIds = []; appliedPromoCode = null; }
     showToast(editingId ? "تم تحديث الفاتورة" : (appliedOffers.length ? `تم حفظ الفاتورة — تطبيق: ${appliedOffers.join("، ")}` : "تم حفظ الفاتورة"));
     if(!editingId){
@@ -4813,6 +4826,7 @@ async function creditDeliverGarment(invId, idx){
   if(!g.deliveredDate) g.deliveredDate=todayStr();
   if(!g.creditDelivered){ g.creditDelivered=true; g.creditAmount=amount; g.creditPaid=0; }
   if(!await saveStateWithRollback(snapshot)) return;
+  logAudit("garment_credit_delivered", {invoiceNumber:inv.number, garmentIdx:idx, amount});
   showToast("تم التسليم بدين — انتقل الثوب لقائمة مديونية الثياب");
   searchInvoiceForDistribution();
 }
@@ -5359,7 +5373,10 @@ async function settleCustomerDebt(invId){
   const payment = {id:Date.now()+"-settle", date:todayStr(), cash: method==="cash"?amount:0, network: method==="network"?amount:0, receipt:"", recordedBy: currentUser.username, note:"سداد من شاشة مديونيات العملاء"};
   inv.payments.push(payment);
   applyPaymentToBalances(payment); // this was missing entirely before — the cash/network was never credited to any box
-  if(await saveStateWithRollback(snapshot)) showToast(`✅ تم تسجيل سداد ${amount.toFixed(0)} ريال لفاتورة ${inv.number}`);
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("customer_debt_settled", {invoiceNumber:inv.number, amount, method});
+    showToast(`✅ تم تسجيل سداد ${amount.toFixed(0)} ريال لفاتورة ${inv.number}`);
+  }
 }
 async function payCreditDebt(invId, idx){
   const inv = state.invoices.find(i=>i.id===invId); if(!inv) return;
@@ -5380,7 +5397,10 @@ async function payCreditDebt(invId, idx){
   inv.payments.push(payment);
   applyPaymentToBalances(payment);
   g.creditPaid += (cash+network);
-  if(await saveStateWithRollback(snapshot)) showToast("تم تسجيل السداد");
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("credit_debt_settled", {invoiceNumber:inv.number, garmentIdx:idx, cash, network});
+    showToast("تم تسجيل السداد");
+  }
 }
 async function saveDistribution(inv){
   const isAdmin = currentUser.role==="مدير";
@@ -6037,6 +6057,7 @@ async function confirmLegacyDeliver(){
   }
   if(item.deliveredCount>=item.count){ item.status="تم التسليم"; item.deliveredDate=todayStr(); }
   if(!await saveStateWithRollback(snapshot)) return;
+  logAudit("legacy_item_delivered", {itemName:item.name, qty, amountReceived});
   closeLegacyDeliverModal();
   showToast(item.status==="تم التسليم" ? "تم تسليم كامل القطع" : `تم تسليم ${qty} — متبقي ${item.count-item.deliveredCount}`);
 }
@@ -6215,7 +6236,10 @@ async function writeOffItemCard(id){
   card.stockQty = (card.stockQty||0) - avail; // brings cardAvailableQty(card) to exactly 0
   card.active = false;
   state.stockWriteOffs.push({id:Date.now()+"", itemCardId:id, date:todayStr(), qty:avail, recordedBy:currentUser.username});
-  if(await saveStateWithRollback(snapshot)) showToast("تم إتلاف الصنف وتصفير رصيده");
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("item_written_off", {cardName:card.name, qty:avail});
+    showToast("تم إتلاف الصنف وتصفير رصيده");
+  }
 }
 
 function renderSuppliers(){
@@ -6251,7 +6275,10 @@ async function paySupplier(supId){
   if(boxTotal(box) < amount){ showToast(`الرصيد غير كافٍ بالصندوق (المتاح ${boxTotal(box).toFixed(0)} ريال)`); return; }
   const snapshot = JSON.parse(JSON.stringify(state));
   box.balance -= amount; s.balance -= amount;
-  if(await saveStateWithRollback(snapshot)) showToast("تم تسديد المورد");
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("supplier_paid", {supplierName:s.name, amount});
+    showToast("تم تسديد المورد");
+  }
 }
 
 function refreshPurchaseForm(){
@@ -6373,6 +6400,7 @@ async function addPurchase(){
   const vatStatus = $("purchVatStatus").value;
   state.purchases.push({id:Date.now()+"", invoiceNo, date:todayStr(), supplierId, itemCardId:card.id, quantity:qty, unitPrice, total, payStatus, sourceBoxId: payStatus==="paid"?sourceBoxId:null, recordedBy:currentUser.username, supplierInvoiceNo, imageData, vatStatus});
   if(await saveStateWithRollback(purchaseSnapshot)){
+    logAudit("purchase_recorded", {invoiceNo, itemName, qty, unitPrice, total, payStatus});
     $("purchQty").value=""; $("purchUnitPrice").value=""; $("purchItemName").value=""; $("purchTotal").value=""; $("purchItemStatus").textContent=""; $("purchOrigin").value=""; $("purchSeason").value=""; $("purchFabricExtraWrap").style.display="none"; $("purchSupplierInvNo").value=""; $("purchImageFile").value="";
     showToast(`تم حفظ فاتورة الشراء رقم ${invoiceNo}`);
   }
@@ -6512,6 +6540,7 @@ async function addPurchaseReturn(){
   state.purchaseReturns.push({id:Date.now()+"", date:todayStr(), itemCardId:cardId, quantity:qty, value, supplierId, payStatus, recordedBy:currentUser.username,
     linkedPurchaseId: linkedPurchaseId||null, purchaseInvoiceNo: linkedPurchase?linkedPurchase.invoiceNo:null, supplierInvoiceNo: linkedPurchase?linkedPurchase.supplierInvoiceNo:null});
   if(!await saveStateWithRollback(snapshot)) return;
+  logAudit("purchase_return_recorded", {cardName:card.name, qty, value});
   $("returnQty").value="";
   showToast("تم تسجيل المرتجع");
 }
@@ -6614,6 +6643,7 @@ async function saveSaleInvoice(){
   state.salesInvoices.push({id:Date.now()+"", number, date, customerName:custName, customerMobile:custMobile, items, payment, recordedBy:currentUser.username});
   state.settings.nextSalesInvoiceNumber++;
   if(!await saveStateWithRollback(snapshot)) return; // form stays filled in so the cashier can just retry
+  logAudit("sale_invoice_recorded", {number, total, cash, network});
   resetSaleForm();
   showToast(lowStock.length? "تم الحفظ — تنبيه: بعض الأصناف تجاوزت المخزون المتاح" : "تم حفظ فاتورة المبيعات");
 }
