@@ -2189,7 +2189,12 @@ async function printCustomerReceipt(invId){
   const inv = state.invoices.find(i=>i.id===invId);
   if(!inv) return;
   await renderReceiptIntoPrintArea(inv);
-  $("dynamicPageSize").textContent = `@media print{ @page{ size:${state.settings.thermalPaperWidth||58}mm auto; margin:0; } }`;
+  // "auto" for the page height silently makes some print/PDF engines (verified: Chromium's own
+  // print-to-PDF) drop the whole @page size and fall back to a default Letter/A4-sized page —
+  // which is what was actually causing thermal receipts/labels/vouchers to print at the wrong
+  // size with clipped tables. An explicit, generous fixed height is reliably honored instead;
+  // thermal printers just cut the roll once the content ends, so the extra unused length is harmless.
+  $("dynamicPageSize").textContent = `@media print{ @page{ size:${state.settings.thermalPaperWidth||58}mm 2000mm; margin:0; } }`;
   setTimeout(()=> safePrint(), 300);
 }
 function buildInvoiceTextMessage(inv){
@@ -3763,7 +3768,12 @@ function printVoucher(id){
       <p style="margin:10px 0 3px;">توقيع المسؤول: __________</p>
     </div>
   </div>`;
-  $("dynamicPageSize").textContent = `@media print{ @page{ size:${state.settings.thermalPaperWidth||58}mm auto; margin:0; } }`;
+  // "auto" for the page height silently makes some print/PDF engines (verified: Chromium's own
+  // print-to-PDF) drop the whole @page size and fall back to a default Letter/A4-sized page —
+  // which is what was actually causing thermal receipts/labels/vouchers to print at the wrong
+  // size with clipped tables. An explicit, generous fixed height is reliably honored instead;
+  // thermal printers just cut the roll once the content ends, so the extra unused length is harmless.
+  $("dynamicPageSize").textContent = `@media print{ @page{ size:${state.settings.thermalPaperWidth||58}mm 2000mm; margin:0; } }`;
   $("printArea").innerHTML = html;
   safePrint();
 }
@@ -6221,7 +6231,12 @@ function printItemCardLabel(cardId, copies){
     </div>`;
   const fullHtml = `<div id="labelShareRoot">${Array(copies).fill(oneLabel).join("")}</div>`;
   $("printArea").innerHTML = fullHtml;
-  $("dynamicPageSize").textContent = `@media print{ @page{ size:${state.settings.thermalPaperWidth||58}mm auto; margin:0; } }`;
+  // "auto" for the page height silently makes some print/PDF engines (verified: Chromium's own
+  // print-to-PDF) drop the whole @page size and fall back to a default Letter/A4-sized page —
+  // which is what was actually causing thermal receipts/labels/vouchers to print at the wrong
+  // size with clipped tables. An explicit, generous fixed height is reliably honored instead;
+  // thermal printers just cut the roll once the content ends, so the extra unused length is harmless.
+  $("dynamicPageSize").textContent = `@media print{ @page{ size:${state.settings.thermalPaperWidth||58}mm 2000mm; margin:0; } }`;
   setTimeout(()=> safePrint(), 300);
 }
 function toggleItemCardActive(id){ const c=findItemCard(id); if(c){ c.active=!c.active; saveState(); renderAll(); } }
@@ -6444,7 +6459,12 @@ function buildPurchaseInvoiceHtml(p){
 function printPurchaseInvoice(id){
   const p = state.purchases.find(x=>x.id===id);
   if(!p) return;
-  $("dynamicPageSize").textContent = `@media print{ @page{ size:${state.settings.thermalPaperWidth||58}mm auto; margin:0; } }`;
+  // "auto" for the page height silently makes some print/PDF engines (verified: Chromium's own
+  // print-to-PDF) drop the whole @page size and fall back to a default Letter/A4-sized page —
+  // which is what was actually causing thermal receipts/labels/vouchers to print at the wrong
+  // size with clipped tables. An explicit, generous fixed height is reliably honored instead;
+  // thermal printers just cut the roll once the content ends, so the extra unused length is harmless.
+  $("dynamicPageSize").textContent = `@media print{ @page{ size:${state.settings.thermalPaperWidth||58}mm 2000mm; margin:0; } }`;
   $("printArea").innerHTML = buildPurchaseInvoiceHtml(p);
   safePrint();
 }
