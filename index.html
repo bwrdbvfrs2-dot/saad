@@ -2247,6 +2247,7 @@ function ensureUserBoxes(username){
   }
 }
 let typeLibrariesReseeded = false;
+let addonSnapshotsBackfilled = false;
 function normalizeState(){
   if(!state.settings.fixedItems) state.settings.fixedItems=[];
   if(!state.settings.embroideryWage) state.settings.embroideryWage=15;
@@ -2281,7 +2282,20 @@ function normalizeState(){
   if(!state.salesInvoices) state.salesInvoices=[];
   if(!state.addonDefs) state.addonDefs=[];
   if(!state.tailorScans) state.tailorScans=[];
-  state.invoices.forEach(inv=> inv.garments.forEach(g=>{ if(!g.addons) g.addons=[]; }));
+  state.invoices.forEach(inv=> inv.garments.forEach(g=>{
+    if(!g.addons) g.addons=[];
+    // freeze what was actually charged for addons at the moment of invoice save (same principle
+    // as g.price/g.embroideryPrice) — without this, garmentAddonsTotal() re-reads live addonDefs/
+    // itemCard costs every time it's called, so editing an addon's price or deleting it later
+    // silently changes the sale total of every past invoice that used it, even closed ones.
+    // invoices saved before this fix never got a snapshot, so back-fill one here using today's
+    // prices as the best available freeze point — it stops further drift even if it can't recover
+    // the exact historical figure.
+    if(g.addonsSaleSnapshot===undefined){
+      g.addonsSaleSnapshot = garmentAddonsInfo(g).reduce((sum,a)=> sum+addonUnitPrice(a), 0);
+      addonSnapshotsBackfilled = true;
+    }
+  }));
   if(state.settings.measureUnit===undefined) state.settings.measureUnit="meter";
   if(state.settings.nextSalesInvoiceNumber===undefined) state.settings.nextSalesInvoiceNumber=1;
   if(state.settings.nextPurchaseInvoiceNumber===undefined) state.settings.nextPurchaseInvoiceNumber=1;
@@ -2555,8 +2569,9 @@ async function loadState(){
       if(snap.exists){
         state = snap.data();
         typeLibrariesReseeded = false;
+        addonSnapshotsBackfilled = false;
         normalizeState();
-        if(typeLibrariesReseeded) saveState();
+        if(typeLibrariesReseeded || addonSnapshotsBackfilled) saveState();
       } else if(firstLoad){
         normalizeState();
         STATE_DOC.set(JSON.parse(JSON.stringify(state))).catch(e=>console.error("Firestore init failed", e));
@@ -3358,7 +3373,14 @@ function currentFixedShare(extra=0, monthLabel=state.settings.currentMonth){
 }
 function garmentAddonsInfo(g){ return (g.addons||[]).map(id=>state.addonDefs.find(a=>a.id===id)).filter(Boolean); }
 function addonUnitPrice(a){ return a.kind==="service" ? (a.servicePrice||0) : (findItemCard(a.itemCardId)?.currentCost||0)*(a.qtyPerGarment||1); }
-function garmentAddonsTotal(g){ return garmentAddonsInfo(g).reduce((sum,a)=> sum+addonUnitPrice(a), 0); }
+function garmentAddonsTotal(g){
+  // once an invoice is saved, g.addonsSaleSnapshot freezes what the customer was actually charged
+  // for addons — same treatment as g.price/g.embroideryPrice, so it can't drift after the fact.
+  // while the garment is still being filled out in the invoice form (not saved yet), there's no
+  // snapshot and this correctly falls back to a live read of current addon prices for the preview.
+  if(g.addonsSaleSnapshot!==undefined) return g.addonsSaleSnapshot;
+  return garmentAddonsInfo(g).reduce((sum,a)=> sum+addonUnitPrice(a), 0);
+}
 function garmentAddonsCost(g){ return garmentAddonsInfo(g).filter(a=>a.kind==="physical").reduce((sum,a)=> sum+addonUnitPrice(a), 0); }
 function applyAddonsStock(g){
   if(g.addonsStockApplied) return;
@@ -4440,6 +4462,10 @@ async function saveInvoice(){
   // freeze cost snapshot for garments that don't yet have one, or recompute since still open
   const extraCount = garments.filter(g=>g.status!=="ملغي").length - (oldInv? oldInv.garments.filter(g=>g.status!=="ملغي").length:0);
   const fixedShare = currentFixedShare(Math.max(extraCount,0), originMonth);
+  // freeze the addon sale total too (same reasoning as costSnapshot below, but for what the
+  // customer is actually charged) — recomputed fresh on every save, including edits, so an edit
+  // re-freezes at the addon prices in effect at the moment of that edit
+  garments.forEach(g=>{ g.addonsSaleSnapshot = garmentAddonsInfo(g).reduce((sum,a)=> sum+addonUnitPrice(a), 0); });
   garments.forEach(g=>{ g.costSnapshot = computeCostSnapshot(g, fixedShare); });
   // advisory balances: reverse old garment credits (if editing), then re-apply fresh for current garments
   if(oldInv) oldInv.garments.forEach(g=>{ reverseGarmentAdvisory(g); returnFabricForGarment(g); reverseAddonsStock(g); });
