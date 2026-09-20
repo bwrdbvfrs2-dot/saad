@@ -386,7 +386,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-sensitiveFinancials">
 <div class="panel">
-  <h2>🔒 الإحصائيات المالية الحساسة</h2>
+  <h2>الإحصائيات المالية الحساسة</h2>
   <div id="sensitivePinGate">
     <p class="sub">هذا القسم محمي برقم سري إضافي يحدده المدير من الإعدادات — يُطلب في كل مرة حتى لو دخولك كمدير.</p>
     <div class="field" style="max-width:220px;"><label>الرقم السري</label><input type="password" id="sensitivePinInput"></div>
@@ -403,7 +403,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-advisoryBalances">
 <div class="panel">
-  <h2>📋 الأرصدة الإرشادية</h2>
+  <h2>الأرصدة الإرشادية</h2>
   <p class="sub">تذكيرية فقط — ما تدخل بحسابات الأرباح أو الأرصدة الحقيقية. تزيد مع كل ثوب جديد، وتنقص عند تسجيل مصروف من نفس الفئة.</p>
   <div id="advisoryBalancesGrid" class="report-grid"></div>
 </div>
@@ -411,7 +411,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-shiftClose">
 <div class="panel">
-  <h2>🧮 المساعد الذكي لإقفال الوردية</h2>
+  <h2>المساعد الذكي لإقفال الوردية</h2>
   <p class="sub">أدخل الأرقام الفعلية من واقع الدرج نهاية الوردية، والنظام يقارنها بالمتوقع تلقائياً.</p>
   <div class="row-2">
     <div class="field"><label>التاريخ (اليوم افتراضياً)</label><input type="date" id="shiftAuditDate"></div>
@@ -427,14 +427,14 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   <button class="btn btn-gold btn-sm" id="runShiftAuditBtn">🧮 احسب المطابقة</button>
   <div id="shiftAuditResult" style="margin-top:12px;"></div>
   <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">📜 سجل الإقفالات السابقة</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">سجل الإقفالات السابقة</h3>
   <div id="shiftClosingsLog"></div>
 </div>
 </div>
 
 <div class="tab-panel" id="tab-vouchers">
 <div class="panel">
-  <h2>🧾 سندات القبض والصرف</h2>
+  <h2>سندات القبض والصرف</h2>
   <p class="sub">سندات مستقلة تماماً عن الفواتير — لأي مبلغ يدخل أو يخرج من الصندوق لأي سبب.</p>
   <div class="row-2">
     <div class="field"><label>نوع السند</label><select id="voucherType"><option value="receipt">🟢 سند قبض (مبلغ داخل)</option><option value="payment">🔴 سند صرف (مبلغ خارج)</option></select></div>
@@ -447,7 +447,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   <div class="field"><label>السبب / البيان</label><input type="text" id="voucherReason" placeholder="مثلاً: سلفة، إرجاع مبلغ، مصروف طارئ..."></div>
   <button class="btn btn-gold btn-sm" id="submitVoucherBtn">💾 تسجيل السند</button>
   <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">📜 سجل السندات</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">سجل السندات</h3>
   <div class="row-2">
     <div class="field"><label>بحث (رقم السند / الطرف / السبب)</label><input type="text" id="voucherSearch" placeholder="اكتب أي شي..."></div>
     <div class="field"><label>النوع</label><select id="voucherFilterType"><option value="">-- الكل --</option><option value="receipt">قبض</option><option value="payment">صرف</option></select></div>
@@ -460,12 +460,12 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-production">
 <div class="panel">
-  <h2>🧵 متابعة الإنتاج اليومي للخياطين</h2>
+  <h2>متابعة الإنتاج اليومي للخياطين</h2>
   <p class="sub">يعتمد على تاريخ "تم التفصيل" الفعلي المسجّل تلقائياً وقت ما الخياط يمسح الفاتورة من شاشته.</p>
   <div class="field" style="max-width:220px;"><label>التاريخ</label><input type="date" id="productionDate"></div>
   <div id="productionTrackingView"></div>
   <div class="stitch"></div>
-  <h3 style="margin:0 0 8px;font-size:14px;">📅 الطاقة الإنتاجية للمواسم</h3>
+  <h3 style="margin:0 0 8px;font-size:14px;">الطاقة الإنتاجية للمواسم</h3>
   <p class="sub" style="margin-bottom:10px;">حدد فترة موسم (تاريخ بداية ونهاية مخصصين، مو بالضرورة نهاية شهر) — طاقتك الإنتاجية تُحسب تلقائياً من مجموع القدرة الإنتاجية الموسمية لكل خياطينك (تحددها من ⚙ المستخدمين والصلاحيات لكل خياط)، وتنخفض تلقائياً لو حذفت أي خياط.</p>
   <div class="row-3">
     <div class="field"><label>اسم الموسم</label><input type="text" id="seasonName" placeholder="مثلاً: موسم رمضان"></div>
@@ -526,9 +526,9 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-settingsShop">
 <div class="panel">
-  <h2>🏪 بيانات المحل والفاتورة</h2>
+  <h2>بيانات المحل والفاتورة</h2>
   <div id="adminOnly_settingsShop">
-      <h3 style="margin:0 0 8px;font-size:14px;">🏪 بيانات المحل</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">بيانات المحل</h3>
       <p class="sub" style="margin-bottom:10px;">تُستخدم بالفواتير المطبوعة والفوترة الإلكترونية مستقبلاً.</p>
       <div class="row-2">
         <div class="field"><label>اسم المحل (التجاري)</label><input type="text" id="setShopName" placeholder="مثلاً: خياط الأصالة"></div>
@@ -549,7 +549,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
       </div>
       <div class="field"><label>مظهر النظام</label><select id="setThemeMode"><option value="dark">فاتح احترافي (الوضع الافتراضي)</option><option value="light">فاتح دافئ</option></select></div>
       <div class="stitch"></div>
-      <h3 style="margin:0 0 8px;font-size:14px;">📋 بنود إضافية مخصصة</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">بنود إضافية مخصصة</h3>
       <p class="sub" style="margin-bottom:10px;">أضف أي بند حر تحتاجه (زي رقم شهادة قوى، ترخيص الدفاع المدني، أو أي شي ثاني) — وحدد بنفسك أي بند يظهر بالفاتورة المطبوعة.</p>
       <div id="customShopFieldsList"></div>
       <div class="row-3">
@@ -558,7 +558,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
         <div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-ghost btn-sm" id="addCustomFieldBtn" style="width:100%;">➕ إضافة</button></div>
       </div>
       <div class="stitch"></div>
-      <h3 style="margin:0 0 8px;font-size:14px;">🧾 ذيل الفاتورة</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">ذيل الفاتورة</h3>
       <p class="sub" style="margin-bottom:8px;">نص حر يظهر بأسفل كل فاتورة مطبوعة (مثلاً: شكراً لتعاملكم معنا، أو سياسة الاستبدال).</p>
       <textarea id="setInvoiceFooter" rows="3" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 11px;color:var(--ivory);font-family:inherit;font-size:14px;" placeholder="مثلاً: نشكركم على ثقتكم بنا 🌹"></textarea>
       <div class="stitch"></div>
@@ -572,7 +572,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
         <div class="field"><label>القص لازم يخلص قبل التسليم بكم يوم؟</label><input type="number" id="setCuttingOverdueDays" min="1" step="1"></div>
       </div>
       <div class="stitch"></div>
-      <h3 style="margin:0 0 8px;font-size:14px;">📜 شروط الفاتورة المطبوعة</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">شروط الفاتورة المطبوعة</h3>
       <p class="sub" style="margin-bottom:8px;">تظهر بأسفل كل فاتورة ضريبية مطبوعة، سطر لكل شرط.</p>
       <textarea id="setReceiptTerms" rows="6" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 11px;color:var(--ivory);font-family:inherit;font-size:13px;"></textarea>
       <div class="stitch"></div>
@@ -582,7 +582,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-settingsFinance">
 <div class="panel">
-  <h2>💰 المالية والتكاليف</h2>
+  <h2>المالية والتكاليف</h2>
     <p class="sub">تكلفة كل ثوب = تكلفة القماش الفعلية (من آخر شراء) + أجرة الخياط + الحشوات + (أجرة تطريز إن وجد) + حصة الثوب من التكاليف الثابتة وقت إصداره. تكلفة القماش تُدار من تبويب «📦 المخزون والمشتريات ← كروت الأصناف».</p>
     <div class="row-3">
       <div class="field"><label>أجرة الخياط الافتراضية (ريال/ثوب) — تُستخدم بس قبل تعيين خياط، أو لخياط ما حدّدت له سعر خاص</label><input type="number" id="setWage" min="0" step="0.5"></div>
@@ -608,7 +608,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
       <div class="field" id="minDepositValueWrap" style="display:none;"><label id="minDepositValueLabel">القيمة</label><input type="number" id="setMinDepositValue" min="0" step="0.5"></div>
     </div>
     <div class="stitch"></div>
-    <h3 style="margin:0 0 8px;font-size:14px;">🧱 بنود التكاليف الثابتة</h3>
+    <h3 style="margin:0 0 8px;font-size:14px;">بنود التكاليف الثابتة</h3>
     <p class="sub" style="margin-bottom:10px;">أضف أو احذف بنود (إيجار، كهرباء، ماء...) — الإجمالي يتحدث تلقائياً ويُستخدم لحساب حصة كل ثوب جديد. ⚠ الرواتب الأساسية لموظفين غير الخياط (من إدارة المستخدمين أدناه) تُضاف تلقائياً لهذا الإجمالي — لا تدخلها هنا مرة ثانية.</p>
     <div id="fixedItemsList"></div>
     <div class="row-3">
@@ -619,7 +619,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
     <div class="note-box" id="fixedShareNote"></div>
   <div id="adminOnly_settingsFinance">
       <div class="stitch"></div>
-      <h3 style="margin:0 0 8px;font-size:14px;">💰 ضريبة القيمة المضافة</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">ضريبة القيمة المضافة</h3>
       <div class="embro-toggle"><input type="checkbox" id="setVatEnabled"><label style="margin:0;">تفعيل ضريبة القيمة المضافة على الفواتير</label></div>
       <div class="row-2" style="margin-top:10px;">
         <div class="field"><label>الرقم الضريبي (15 رقم)</label><input type="text" id="setVatNumber" placeholder="اتركه فاضي لو لسا ما سجّلت"></div>
@@ -627,16 +627,16 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
       </div>
       <div class="field"><label>نوع أسعار البيع المُدخلة بالفاتورة</label><select id="setPricesIncludeVat"><option value="yes">شاملة الضريبة (السعر المُدخل هو الإجمالي النهائي)</option><option value="no">بدون ضريبة (الضريبة تُضاف فوق السعر المُدخل)</option></select></div>
       <div class="stitch"></div>
-      <h3 style="margin:0 0 8px;font-size:14px;">🧾 الفوترة الإلكترونية (فاتورة — ZATCA)</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">الفوترة الإلكترونية (فاتورة — ZATCA)</h3>
       <p class="sub" style="margin-bottom:10px;">جاهزية للربط المستقبلي بمنظومة "فاتورة". فعّلها بس بعد ما تسجّل بضريبة القيمة المضافة فعلياً — قبل التفعيل، الفواتير تشتغل عادي بدون أي تأثير. تستخدم نفس الرقم الضريبي ونسبة الضريبة من قسم "💰 ضريبة القيمة المضافة" أعلاه.</p>
       <div class="embro-toggle"><input type="checkbox" id="setEinvoiceEnabled"><label style="margin:0;">تفعيل الفوترة الإلكترونية على الفواتير الجديدة</label></div>
       <div class="field" style="margin-top:10px;"><label>الاسم النظامي للمنشأة (كما بالسجل التجاري)</label><input type="text" id="setShopLegalName" placeholder="زي ما هو مسجّل بالسجل التجاري"></div>
       <p class="sub">✅ جاهز الآن: توليد XML بصيغة UBL 2.1 + QR code + تسلسل وربط الفواتير (Hash Chaining) لكل فاتورة، تلقائياً بمجرد التفعيل.<br>⚠ يحتاج تسجيلك الرسمي بمنصة "فاتورة" لاحقاً: الختم التشفيري (التوقيع الإلكتروني) والربط المباشر بأنظمة الهيئة (المرحلة الثانية) — هذا يحتاج شهادة CSID تصدرها الهيئة نفسها بعد إتمامك للتسجيل والربط، وما نقدر نولّدها من هنا.</p>
       <div class="stitch"></div>
-      <h3 style="margin:0 0 8px;font-size:14px;">🏦 عمولة البنك (الشبكة)</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">عمولة البنك (الشبكة)</h3>
       <div class="field"><label>نسبة العمولة % (تُخصم تلقائياً من كل دفعة شبكة قبل إضافتها لصندوق الشبكة)</label><input type="number" id="setBankFee" min="0" step="0.01"></div>
       <div class="stitch"></div>
-      <h3 style="margin:0 0 8px;font-size:14px;">📂 تصنيفات المصروفات</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">تصنيفات المصروفات</h3>
       <p class="sub" style="margin-bottom:10px;">التصنيف المرتبط برصيد إرشادي يُخصم منه تلقائياً عند تسجيل مصروف بنفس التصنيف.</p>
       <div id="expenseCategoriesList"></div>
       <div class="row-3">
@@ -657,20 +657,20 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-settingsUsers">
 <div class="panel">
-  <h2>🔐 المستخدمين والصلاحيات</h2>
+  <h2>المستخدمين والصلاحيات</h2>
   <div id="adminOnly_settingsUsers">
-      <h3 style="margin:0 0 8px;font-size:14px;">🏷 صلاحية الخصم</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">صلاحية الخصم</h3>
       <p class="sub" style="margin-top:0;">صلاحية الخصم صارت فردية لكل مستخدم — تُدار من قسم «👥 إدارة المستخدمين» بالأسفل، لكل مستخدم حد أقصى خاص فيه (مبلغ أو نسبة).</p>
       <div class="stitch"></div>
-      <h3 style="margin:0 0 8px;font-size:14px;">🔐 صلاحيات المجموعات</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">صلاحيات المجموعات</h3>
       <p class="sub" style="margin-bottom:10px;">حدد أي تبويب يظهر لكل دور. لتبويب «البحث والتقارير» تقدر كمان تحدد أي قسم فرعي بالضبط يظهر لكل دور. حساب الخياط ثابت دائماً على شاشة المسح بس، ما يدخل ضمن هذي الإعدادات.</p>
       <div id="permissionsEditor"></div>
       <div class="stitch"></div>
-      <h3 style="margin:0 0 8px;font-size:14px;">⚡ القائمة السريعة</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">القائمة السريعة</h3>
       <p class="sub" style="margin-bottom:10px;">لكل دور اختصاراته الخاصة تظهر بشريط أفقي أعلى الشاشة (زر ⚡). حدد بالضبط أي شاشات يشوفها كل دور — يفضّل حتى 5-6 اختصارات بس عشان تناسب عرض الشاشة.</p>
       <div id="quickMenuEditor"></div>
       <div class="stitch"></div>
-      <h3 style="margin:0 0 8px;font-size:14px;">👥 إدارة المستخدمين</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">إدارة المستخدمين</h3>
       <div id="usersList"></div>
       <div class="row-3" style="margin-top:12px;">
         <div class="field"><label>اسم المستخدم الجديد</label><input type="text" id="newUserName"></div>
@@ -684,9 +684,9 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-settingsProducts">
 <div class="panel">
-  <h2>🧵 التفصيل والمنتجات</h2>
+  <h2>التفصيل والمنتجات</h2>
   <div id="adminOnly_settingsProducts">
-      <h3 style="margin:0 0 8px;font-size:14px;">🧵 الملحقات والخدمات</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">الملحقات والخدمات</h3>
       <p class="sub" style="margin-bottom:10px;">تُختار لكل ثوب بفاتورة التفصيل (زي التطريز). الفعلية (أزرار، كبكات) تُشترى من المشتريات ولها مخزون. الخدمات الثابتة (غسيل قماش) بدون مخزون، سعرها ثابت.</p>
       <div id="addonsList"></div>
       <div class="row-2">
@@ -701,11 +701,11 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
         <div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-ghost btn-sm" id="addAddonBtn" style="width:100%;">➕ إضافة</button></div>
       </div>
       <div class="stitch"></div>
-      <h3 style="margin:0 0 8px;font-size:14px;">📐 قوائم كرت المقاسات (مع صور)</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">قوائم كرت المقاسات (مع صور)</h3>
       <p class="sub" style="margin-bottom:10px;">أضف أو احذف خيارات لكل قائمة تظهر بكرت المقاسات — كل خيار له رقم كود واسم وصورة اختيارية توضحه.</p>
       <div id="optionListsContainer"></div>
       <div class="stitch"></div>
-      <h3 style="margin:0 0 8px;font-size:14px;">🌍 بلدان صناعة القماش</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">بلدان صناعة القماش</h3>
       <p class="sub" style="margin-bottom:10px;">القائمة المستخدمة عند إضافة صنف قماش جديد (بالمشتريات أو الإضافة اليدوية).</p>
       <div id="fabricOriginsList"></div>
       <div class="row-2">
@@ -714,7 +714,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
       </div>
       <label style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:13px;"><input type="checkbox" id="setPrintOriginOnLabel"> طباعة الصناعة (بلد المنشأ) في ملصق كرت الصنف الحراري</label>
       <div class="stitch"></div>
-      <h3 style="margin:0 0 8px;font-size:14px;">🔄 ثياب معادة للتعديل — الإعدادات</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">ثياب معادة للتعديل — الإعدادات</h3>
       <p class="sub" style="margin-bottom:10px;">القوائم المستخدمة بشاشة «استلام ثوب معاد للتعديل».</p>
       <div class="row-2">
         <div class="field">
@@ -735,7 +735,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
         </div>
       </div>
       <div class="stitch"></div>
-      <h3 style="margin:0 0 8px;font-size:14px;">🖼️ صورة كرت القصاص (مواضع القياسات)</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">صورة كرت القصاص (مواضع القياسات)</h3>
       <p class="sub" style="margin-bottom:10px;">ارفع صورة حقيقية للثوب من الأمام ومن الخلف، وحدد مكان كل قياس بنفسك بالضغط عليه بالصورة — بدل الرسمة التخطيطية الافتراضية.</p>
       <div class="row-2">
         <div class="field"><label>صورة الأمام</label><input type="file" id="cuttingImgFrontInput" accept="image/*"></div>
@@ -760,9 +760,9 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-settingsMarketing">
 <div class="panel">
-  <h2>🎁 التسويق والولاء</h2>
+  <h2>التسويق والولاء</h2>
   <div id="adminOnly_settingsMarketing">
-      <h3 style="margin:0 0 8px;font-size:14px;">🎁 باقات العروض</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">باقات العروض</h3>
       <p class="sub" style="margin-bottom:10px;">صمّم أي عرض تبيه — خصم على الكمية (مثلاً: 3 ثياب من نفس الصناعة، أقلهم سعراً بنصف السعر)، أو هدية مجانية (كوبون/عطر/أي صنف) عند تحقق شرط معيّن. الكاشير يختار العرض المناسب وقت الفاتورة.</p>
       <div id="offersList"></div>
       <div class="field"><label>اسم الباقة</label><input type="text" id="newOfferName" placeholder="مثلاً: عرض القماش الياباني"></div>
@@ -789,7 +789,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
       </div>
       <button class="btn btn-gold btn-sm" id="addOfferBtn">➕ إنشاء الباقة</button>
       <div class="stitch"></div>
-      <h3 style="margin:0 0 8px;font-size:14px;">🏷 أكواد الخصم والهدايا</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">أكواد الخصم والهدايا</h3>
       <p class="sub" style="margin-bottom:10px;">أنشئ كود خصم بفترة صلاحية محددة — نسبة مئوية، قسيمة بمبلغ ثابت، أو هدية عينية. الموظف يدخل الكود بشاشة الفاتورة ويتحقق النظام تلقائياً.</p>
       <div id="promoCodesListView"></div>
       <div class="row-2">
@@ -810,7 +810,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
       </div>
       <button class="btn btn-gold btn-sm" id="addPromoCodeBtn">➕ إنشاء الكود</button>
       <div class="stitch"></div>
-      <h3 style="margin:0 0 8px;font-size:14px;">🎁 نظام الولاء والنقاط</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">نظام الولاء والنقاط</h3>
       <div class="row-3">
         <div class="field"><label>معدل الكسب (ريال = نقطة)</label><input type="number" id="setLoyEarnRate" min="1" step="0.5"></div>
         <div class="field"><label>معدل الاستبدال (نقطة = كم ريال خصم)</label><input type="number" id="setLoyRedeemRate" min="0" step="0.5"></div>
@@ -830,7 +830,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
       </div>
       <p class="sub">عملاء VIP (تُدار من تقرير العملاء بتبويب التقارير) يخرجون تماماً من نظام النقاط، ويُسمح لأي موظف بخصم حر بدون حد أقصى لفواتيرهم.</p>
       <div class="stitch"></div>
-      <h3 style="margin:0 0 8px;font-size:14px;">📱 رسائل واتساب</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">رسائل واتساب</h3>
       <div class="embro-toggle"><input type="checkbox" id="setWaWelcome"><label style="margin:0;">تفعيل رسالة واتساب ترحيبية عند إصدار فاتورة جديدة</label></div>
       <p class="sub" style="margin:6px 0 12px;">إذا فُعّلت، يظهر زر جاهز لفتح واتساب برسالة معبّأة فيها تفاصيل الفاتورة بعد كل حفظ.</p>
       <div class="field"><label>نص إعلان/عرض خاص (يُستخدم لرسائل العملاء الخاملين)</label><textarea id="setWaPromo" rows="3" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px;color:var(--ivory);font-family:inherit;font-size:14px;"></textarea></div>
@@ -842,7 +842,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-invoice">
 <div class="panel">
-  <h2>🧾 <span id="formTitle">فاتورة جديدة</span></h2>
+  <h2><span id="formTitle">فاتورة جديدة</span></h2>
   <p class="sub">أدخل بيانات الفاتورة والعميل. اسم الخياط والحالة يُحدّدان لاحقاً من "توزيع العمل والمتعثرة".</p>
   <div class="row-3">
     <div class="field"><label>رقم الفاتورة (تلقائي — غير قابل للتعديل)</label><input type="text" id="invNumber" readonly style="opacity:0.75;cursor:not-allowed;"></div>
@@ -875,7 +875,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   <div class="stitch"></div>
   <div class="field"><label>📝 ملاحظات على الفاتورة (اختياري)</label><textarea id="invNotes" rows="2" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 11px;color:var(--ivory);font-family:inherit;font-size:14px;" placeholder="أي ملاحظة عامة على الفاتورة كاملة..."></textarea></div>
   <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">💵 الدفعات</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">الدفعات</h3>
   <div id="paymentsList"></div>
   <div class="row-3">
     <div class="field"><label>كاش (ريال)</label><input type="number" id="newPayCash" min="0" placeholder="0"></div>
@@ -889,8 +889,10 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   </div>
   <div id="liveDiscountNote" style="display:none;color:var(--gold-soft);font-weight:700;font-size:12px;margin-top:-8px;margin-bottom:8px;"></div>
   <div class="actions-row">
-    <button class="btn btn-gold" id="saveInvoiceBtn">💾 حفظ الفاتورة</button>
-    <button class="btn btn-ghost" id="resetFormBtn">تفريغ النموذج</button>
+    <button class="btn btn-gold" id="saveInvoiceBtn">حفظ</button>
+    <button class="btn btn-ghost" id="saveAndPrintBtn">حفظ وطباعة</button>
+    <button class="btn btn-ghost" id="saveAndSendBtn">حفظ وإرسال</button>
+    <button class="btn btn-ghost" id="resetFormBtn">إلغاء</button>
   </div>
   <div id="waWelcomeBanner" style="display:none;margin-top:14px;"></div>
   <div id="printReceiptBanner" style="display:none;margin-top:10px;"></div>
@@ -899,7 +901,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-salesInvoice">
 <div class="panel">
-  <h2>🛍 فاتورة مبيعات — أصناف جاهزة</h2>
+  <h2>فاتورة مبيعات — أصناف جاهزة</h2>
   <p class="sub">لبيع المنتجات الجاهزة (شماغ، عطر، مسبحة...) — منفصلة تماماً عن فاتورة التفصيل، بدون خياط أو توزيع أو تسليم. تُدفع بالكامل وقت الحفظ.</p>
   <div class="row-3">
     <div class="field"><label>رقم الفاتورة (تلقائي — غير قابل للتعديل)</label><input type="text" id="saleNumber" readonly style="opacity:0.75;cursor:not-allowed;"></div>
@@ -927,7 +929,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   </div>
   <button class="btn btn-gold" id="saveSaleBtn">💾 حفظ فاتورة المبيعات</button>
   <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">📑 سجل فواتير المبيعات</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">سجل فواتير المبيعات</h3>
   <div class="table-wrap"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>العميل</th><th>الإجمالي</th></tr></thead><tbody id="salesInvoicesBody"></tbody></table></div>
 </div>
 </div>
@@ -938,7 +940,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   <div id="overdueDashboard"></div>
 </div>
 <div class="panel">
-  <h2>✂ توزيع العمل والثياب المتعثرة</h2>
+  <h2>توزيع العمل والثياب المتعثرة</h2>
   <p class="sub">ابحث برقم الفاتورة (أو امسحه بالباركود)، أو باسم العميل، أو رقم جواله، أو فلتر بالحالة.</p>
   <div class="row-3">
     <div class="field"><label>رقم الفاتورة / اسم العميل / الجوال</label><input type="text" id="distInvNumber" placeholder="امسح الباركود أو اكتب أي شي..."></div>
@@ -948,7 +950,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   <div id="distResultsList"></div>
   <div id="distArea"></div>
   <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">📋 كل الثياب غير المسلّمة (كل الفترات)</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">كل الثياب غير المسلّمة (كل الفترات)</h3>
   <div class="table-wrap">
     <table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>نوع القماش</th><th>الحالة</th><th>شهر الإصدار</th><th></th></tr></thead><tbody id="pendingBody"></tbody></table>
   </div>
@@ -957,7 +959,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-debts">
 <div class="panel">
-  <h2>📋 مديونية الثياب</h2>
+  <h2>مديونية الثياب</h2>
   <p class="sub">قائمة تراكمية بكل ثوب تم تسليمه بدين (بصلاحية المدير) ولسا عليه مبلغ متبقٍ. أي مستخدم يقدر يسدد الدين من هنا — أول ما ينسدد كامل المبلغ، الثوب يختفي تلقائياً من هذي القائمة.</p>
   <div id="debtsList"><p class="sub">ما فيه ديون مسجّلة حالياً.</p></div>
 </div>
@@ -965,7 +967,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-customerDebts">
 <div class="panel">
-  <h2>💳 مديونيات العملاء</h2>
+  <h2>مديونيات العملاء</h2>
   <p class="sub">العملاء اللي استلموا كل ثيابهم فعلياً ولسا عليهم مبلغ متبقٍ غير مسدّد. العملاء اللي لسا ما استلموا ثيابهم ما يظهرون هنا.</p>
   <div id="customerDebtsList"><p class="sub">ما فيه مديونيات حالياً.</p></div>
 </div>
@@ -973,7 +975,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-scan">
 <div class="panel" id="scanPanelTailor" style="display:none;">
-  <h2>📷 مسح باركود — تسجيل التفصيل</h2>
+  <h2>مسح باركود — تسجيل التفصيل</h2>
   <p class="sub">امسح باركود الفاتورة (بالكاميرا أو قارئ باركود خارجي) أو اكتب رقمها يدوياً. كل ثوب لسا ما وصل "تم التفصيل" ينسب لك تلقائياً.</p>
   <div class="row-2">
     <div class="field"><label>رقم الفاتورة</label><input type="text" id="tailorScanInput" placeholder="امسح الباركود أو اكتب الرقم..."></div>
@@ -985,15 +987,15 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
     <button class="btn btn-ghost btn-sm" id="tailorCameraCloseBtn" style="margin-top:8px;">إغلاق الكاميرا</button>
   </div>
   <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">📜 آخر الفواتير اللي مسحتها</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">آخر الفواتير اللي مسحتها</h3>
   <div id="tailorScanHistory"><p class="sub">ما مسحت أي فاتورة بعد.</p></div>
   <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">📊 تقريري الشهري</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">تقريري الشهري</h3>
   <div id="myTailorMonthlyReport"></div>
 </div>
 
 <div class="panel" id="scanPanelGeneral" style="display:none;">
-  <h2>📷 مسح سريع — ترحيل الحالة</h2>
+  <h2>مسح سريع — ترحيل الحالة</h2>
   <p class="sub">امسح باركود الفاتورة لترحيل حالة الثوب خطوة وحدة للقدام (مثلاً جديد ← قص). ملاحظة: الانتقال لـ"تم التفصيل" يخص حساب الخياط بس.</p>
   <div class="row-2">
     <div class="field"><label>رقم الفاتورة</label><input type="text" id="quickScanInput" placeholder="امسح الباركود أو اكتب الرقم..."></div>
@@ -1010,7 +1012,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-alteration">
 <div class="panel">
-  <h2>🔄 استلام ثوب معاد للتعديل</h2>
+  <h2>استلام ثوب معاد للتعديل</h2>
   <p class="sub">للثياب اللي سُلّمت من قبل ورجعت تحتاج تعديل. الحالة تبقى "تسليم" — هذا سجل إضافي بجنبها بس.</p>
   <div class="row-2">
     <div class="field"><label>رقم الفاتورة</label><input type="text" id="alterInvNumber" placeholder="اكتب رقم الفاتورة..."></div>
@@ -1018,7 +1020,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   </div>
   <div id="alterArea"></div>
   <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">📋 سجل الثياب المعادة للتعديل</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">سجل الثياب المعادة للتعديل</h3>
   <div class="field"><label>بحث بالمتسبب أو باسم الخياط</label><input type="text" id="alterLogSearch" placeholder="مثلاً: خالد، أو الخياط، أو القصاص..."></div>
   <div id="alterationsLog"><p class="sub">ما فيه ثياب معادة للتعديل مسجّلة بعد.</p></div>
 </div>
@@ -1026,7 +1028,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 <div class="tab-panel" id="tab-report-broadcastCampaign">
 <div class="panel">
 
-  <h3 style="margin:0 0 10px;font-size:14px;">📢 قوائم البث والعروض الخاصة</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">قوائم البث والعروض الخاصة</h3>
   <p class="sub" style="margin-bottom:10px;">اعرض عملاءك حسب التصنيف والنشاط والتعثر، وابعث لهم عرض واتساب فردي مع تتبع من استلم الرسالة. القائمة تُبنى من الكود الرئيسي للعميل (رقم الجوال)، ما تكرر الأفراد المشتركين بنفس الرقم.</p>
   <div class="row-3">
     <div class="field"><label>تصنيف العميل</label><select id="bcTierFilter"><option value="all">الكل</option><option value="bronze">🥉 برونزي</option><option value="silver">🥈 فضي</option><option value="gold">🥇 ذهبي</option></select></div>
@@ -1055,7 +1057,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 <div class="tab-panel" id="tab-report-tailorMonthly">
 <div class="panel">
 
-  <h3 style="margin:0 0 10px;font-size:14px;">👷 تقرير الخياط الشهري</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">تقرير الخياط الشهري</h3>
   <p class="sub" style="margin-bottom:10px;">كل الفواتير وعدد الثياب اللي فصّلها أي خياط بالشهر الحالي.</p>
   <div class="field" style="max-width:260px;"><label>اختر الخياط</label><select id="tailorReportSelect"></select></div>
   <div id="tailorReportView" style="margin-top:10px;"></div>
@@ -1066,7 +1068,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 <div class="tab-panel" id="tab-report-fullLog">
 <div class="panel">
 
-  <h3 style="margin:0 0 10px;font-size:14px;">📜 السجل الشامل لكل الحركات</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">السجل الشامل لكل الحركات</h3>
   <p class="sub" style="margin-bottom:10px;">كل حركة صارت بأي قسم بالنظام (فواتير، دفعات، توزيع، مشتريات، مصروفات، تحويلات، رواتب، تعديلات، إتلاف، نقاط ولاء) بمكان واحد.</p>
   <div id="fullLogPeriodWrap"></div>
   <div class="field"><label>فلترة حسب القسم (اختياري)</label><select id="fullLogSectionFilter">
@@ -1111,7 +1113,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 <div class="tab-panel" id="tab-report-undelivered">
 <div class="panel">
 
-  <h3 style="margin:0 0 10px;font-size:14px;">🖨 تقرير الثياب غير المسلّمة</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">تقرير الثياب غير المسلّمة</h3>
   <div id="undelPeriodWrap"></div>
   <button class="btn btn-ghost btn-sm" id="printUndeliveredBtn">👁 عرض التقرير</button>
   <div id="undeliveredReportView" style="margin-top:12px;"></div>
@@ -1122,7 +1124,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 <div class="tab-panel" id="tab-report-garmentInventory">
 <div class="panel">
 
-  <h3 style="margin:0 0 10px;font-size:14px;">📊 جرد الثياب حسب الحالة</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">جرد الثياب حسب الحالة</h3>
   <div class="row-2">
     <div class="field"><label>فلترة بالحالة</label><select id="garmentInventoryStatus">
       <option value="">كل الحالات</option>
@@ -1145,7 +1147,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 <div class="tab-panel" id="tab-report-salesRanking">
 <div class="panel">
 
-  <h3 style="margin:0 0 10px;font-size:14px;">📈 الأكثر والأقل مبيعاً</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">الأكثر والأقل مبيعاً</h3>
   <p class="sub" style="margin-bottom:10px;">يعتمد على كل ثياب تم تفصيلها فعلياً (تم القص فأكثر) وكل فواتير المبيعات — كل الفترات من أول يوم.</p>
   <button class="btn btn-ghost btn-sm" id="showSalesRankingBtn">👁 عرض التقرير</button>
   <div id="salesRankingView" style="margin-top:12px;"></div>
@@ -1156,12 +1158,12 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 <div class="tab-panel" id="tab-report-vatCalc">
 <div class="panel">
 
-  <h3 style="margin:0 0 10px;font-size:14px;">🧮 حاسبة الضريبة</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">حاسبة الضريبة</h3>
   <div id="vatCalcPeriodWrap"></div>
   <button class="btn btn-ghost btn-sm" id="showVatCalcBtn">👁 احسب</button>
   <div id="vatCalcView" style="margin-top:12px;"></div>
   <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">🏛 السجل الضريبي الرسمي — تسوية الهيئة (ZATCA)</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">السجل الضريبي الرسمي — تسوية الهيئة (ZATCA)</h3>
   <p class="sub" style="margin-bottom:10px;">سجّل هنا كل دفعة ضريبة فعلية تحوّلها للهيئة، للأثر الكامل عند التسوية.</p>
   <div id="vatLedgerSummary"></div>
   <div class="row-3" style="margin-top:10px;">
@@ -1171,7 +1173,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   </div>
   <button class="btn btn-gold btn-sm" id="addVatPaymentBtn">💾 تسجيل دفعة للهيئة</button>
   <div class="stitch"></div>
-  <h4 style="margin:12px 0 8px;font-size:13px;">📜 سجل الدفعات</h4>
+  <h4 style="margin:12px 0 8px;font-size:13px;">سجل الدفعات</h4>
   <div id="vatPaymentsHistory"></div>
 
 </div>
@@ -1180,7 +1182,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 <div class="tab-panel" id="tab-report-returns">
 <div class="panel">
 
-  <h3 style="margin:0 0 10px;font-size:14px;">🔄 المرتجعات</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">المرتجعات</h3>
   <p class="sub" style="margin-bottom:10px;">تسجيل مرتجع يعكس المحاسبة وحالة الثوب فوراً. لو حددت متسبباً، يُفتح تلقائياً طلب قرار للمدير بشاشة البريد لتحديد المسؤولية.</p>
   <div class="row-2">
     <div class="field"><label>رقم الفاتورة</label><input type="text" id="returnInvNumber"></div>
@@ -1201,7 +1203,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 <div class="tab-panel" id="tab-report-customers">
 <div class="panel">
 
-  <h3 style="margin:0 0 10px;font-size:14px;">👥 تقرير العملاء (نشط / خامل)</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">تقرير العملاء (نشط / خامل)</h3>
   <p class="sub">خامل = ما سجّل له فاتورة جديدة من أكثر من 6 أشهر.</p>
   <p class="sub" id="totalCustomersCount" style="font-weight:700;"></p>
   <div class="row-2">
@@ -1221,7 +1223,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 <div class="tab-panel" id="tab-report-daily">
 <div class="panel">
 
-  <h3 style="margin:0 0 10px;font-size:14px;">📆 التقرير اليومي</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">التقرير اليومي</h3>
   <p class="sub" style="margin-bottom:10px;">ملخص مالي سريع (فواتير جديدة + تسليمات + كاش/شبكة) بس. لكل حركة بأي قسم ثاني (مشتريات، مصروفات، رواتب...)، استخدم «📜 السجل الشامل لكل الحركات» بأعلى الصفحة.</p>
   <div class="row-2">
     <div class="field"><label>اليوم</label><input type="date" id="dailyDate"></div>
@@ -1236,7 +1238,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 <div class="tab-panel" id="tab-report-missingReceipt">
 <div class="panel">
 
-  <h3 style="margin:0 0 10px;font-size:14px;">🔍 فواتير بدون رقم سند</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">فواتير بدون رقم سند</h3>
   <p class="sub">يبحث عن أي دفعة (كاش أو شبكة) مسجّلة بمبلغ أكبر من صفر بدون رقم سند مرفق.</p>
   <div class="actions-row" style="margin-top:0;">
     <button class="btn btn-ghost btn-sm" id="findMissingReceiptBtn">🔍 بحث</button>
@@ -1249,7 +1251,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 <div class="tab-panel" id="tab-report-topExpenses">
 <div class="panel">
 
-  <h3 style="margin:0 0 10px;font-size:14px;">💸 أعلى المصاريف (الشهر الحالي)</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">أعلى المصاريف (الشهر الحالي)</h3>
   <p class="sub">كل مصاريف الشهر الحالي (المرتبطة برصيد إرشادي وغير المرتبطة) مجمّعة حسب التصنيف، بحسب تاريخ المصروف نفسه.</p>
   <div id="topExpensesView"></div>
 
@@ -1259,7 +1261,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 <div class="tab-panel" id="tab-report-auditLog">
 <div class="panel">
 
-  <h3 style="margin:0 0 10px;font-size:14px;">📜 سجل التدقيق</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">سجل التدقيق</h3>
   <p class="sub">سجل بكل العمليات الحساسة (مصاريف، إقفال شهر، تعديل سعر، تحويل أموال، مرتجعات، تغييرات المستخدمين والصلاحيات) — للقراءة فقط، مخزّن بمجموعة Firestore منفصلة تماماً عن بيانات المحل، لا يتأثر بأي تعديل على الحالة العامة.</p>
   <div class="row-3">
     <div class="field"><label>المستخدم</label><input type="text" id="auditFilterUser" placeholder="اكتب اسم المستخدم..."></div>
@@ -1286,7 +1288,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-invoicesList">
 <div class="panel">
-  <h2>📊 سجل الفواتير — الشهر الحالي</h2>
+  <h2>سجل الفواتير — الشهر الحالي</h2>
   <div class="actions-row" style="margin-top:0;margin-bottom:16px;">
     <button class="btn btn-ghost btn-sm" id="exportCsvBtn">⬇ تصدير Excel (CSV)</button>
     <button class="btn btn-danger btn-sm adminOnly" id="closeMonthBtn">🔒 إقفال الشهر الحالي وبدء شهر جديد</button>
@@ -1304,7 +1306,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-legacy">
 <div class="panel">
-  <h2>📦 الجرد الافتتاحي — ثياب جاهزة قديمة</h2>
+  <h2>الجرد الافتتاحي — ثياب جاهزة قديمة</h2>
   <p class="sub">سجّل هنا الثياب الجاهزة للتسليم من قبل بداية استخدام البرنامج (بدون تفاصيل تكلفة أو ربح — فقط لمتابعة تسليمها للعملاء).</p>
   <div class="row-2">
     <div class="field"><label>اسم العميل</label><input type="text" id="legName"></div>
@@ -1318,7 +1320,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   <div class="field"><label>ملاحظات</label><input type="text" id="legNotes"></div>
   <button class="btn btn-gold btn-sm" id="addLegacyBtn">➕ إضافة للجرد</button>
   <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">📋 قائمة الجرد الافتتاحي</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">قائمة الجرد الافتتاحي</h3>
   <div class="table-wrap">
     <table><thead><tr><th>العميل</th><th>الجوال</th><th>الوصف</th><th>العدد</th><th>متبقٍ</th><th>الحالة</th><th></th></tr></thead><tbody id="legacyBody"></tbody></table>
   </div>
@@ -1328,7 +1330,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-archive">
 <details class="panel" id="archivePanel" open>
-  <summary>🗄 تقارير الإقفال المجمّدة <span class="chev">▾</span></summary>
+  <summary>تقارير الإقفال المجمّدة <span class="chev">▾</span></summary>
   <div class="inner" id="archiveList"><p class="sub">ما فيه أشهر مقفلة بعد.</p></div>
 </details>
 
@@ -1336,32 +1338,32 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-growth">
 <div class="panel">
-  <h2>📈 تقرير النمو</h2>
+  <h2>تقرير النمو</h2>
   <p class="sub">يقارن كل شهر مقفل بالشهر اللي قبله (نمو شهري) وبنفس الشهر بالسنة اللي قبلها (نمو سنوي) — بناءً على أرقام الإقفال المجمّدة فقط.</p>
   <div id="inventoryGrowthCard"></div>
   <div class="stitch"></div>
-  <h3 style="margin:18px 0 10px;font-size:14px;">📦 نمو حجم الشغل (مبيعات وثياب)</h3>
+  <h3 style="margin:18px 0 10px;font-size:14px;">نمو حجم الشغل (مبيعات وثياب)</h3>
   <div id="monthlyGrowthList"><p class="sub">ما فيه أشهر مقفلة بعد.</p></div>
   <div class="stitch"></div>
-  <h3 style="margin:18px 0 10px;font-size:14px;">💰 نمو صافي المحل (بعد الثابت والتشغيلية)</h3>
+  <h3 style="margin:18px 0 10px;font-size:14px;">نمو صافي المحل (بعد الثابت والتشغيلية)</h3>
   <div id="monthlyProfitGrowthList"><p class="sub">ما فيه أشهر مقفلة بعد.</p></div>
   <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">📊 النمو الربعي — حجم الشغل</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">النمو الربعي — حجم الشغل</h3>
   <p class="sub">كل ربع = 3 أشهر مقفلة (يناير-مارس، أبريل-يونيو، يوليو-سبتمبر، أكتوبر-ديسمبر). يقارن كل ربع بالربع اللي قبله وبنفس الربع بالسنة الماضية.</p>
   <div id="quarterlyGrowthList"><p class="sub">ما فيه أرباع مكتملة بعد.</p></div>
   <div class="stitch"></div>
-  <h3 style="margin:18px 0 10px;font-size:14px;">📊 النمو الربعي — صافي المحل</h3>
+  <h3 style="margin:18px 0 10px;font-size:14px;">النمو الربعي — صافي المحل</h3>
   <div id="quarterlyProfitGrowthList"><p class="sub">ما فيه أرباع مكتملة بعد.</p></div>
 </div>
 </div>
 
 <div class="tab-panel" id="tab-balances">
 <div class="panel">
-  <h2>💰 صناديقي</h2>
+  <h2>صناديقي</h2>
   <p class="sub">لكل مستخدم صندوق كاش رئيسي وصندوق شبكة رئيسي خاصين فيه، ويقدر ينشئ صناديق فرعية تحت صندوقه.</p>
   <div id="myBoxesList"></div>
   <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">➕ إنشاء صندوق فرعي جديد</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">إنشاء صندوق فرعي جديد</h3>
   <div class="row-3">
     <div class="field" id="subBoxOwnerWrap" style="display:none;"><label>لأي مستخدم — اكتب واختر</label><input type="text" id="newSubBoxOwnerSearch" list="newSubBoxOwnerDatalist" autocomplete="off"><datalist id="newSubBoxOwnerDatalist"></datalist><input type="hidden" id="newSubBoxOwner"></div>
     <div class="field"><label>اسم الصندوق الفرعي</label><input type="text" id="newSubBoxName" placeholder="مثلاً: صندوق التوفير"></div>
@@ -1369,13 +1371,13 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   </div>
   <div id="adminAllBoxesWrap" style="display:none;">
     <div class="stitch"></div>
-    <h3 style="margin:0 0 10px;font-size:14px;">📂 كل الصناديق (كل المستخدمين)</h3>
+    <h3 style="margin:0 0 10px;font-size:14px;">كل الصناديق (كل المستخدمين)</h3>
     <div class="table-wrap"><table><thead><tr><th>المستخدم</th><th>الصندوق</th><th>النوع</th><th>الرصيد</th></tr></thead><tbody id="allBoxesBody"></tbody></table></div>
   </div>
 </div>
 
 <div class="panel">
-  <h2>🔁 تحويل الأموال</h2>
+  <h2>تحويل الأموال</h2>
   <div class="row-2">
     <div class="field"><label>من صندوقي</label><select id="transferFromBox"></select></div>
     <div class="field"><label>إلى</label><select id="transferToKind">
@@ -1391,17 +1393,17 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   <div class="field"><label>الغرض (اختياري)</label><input type="text" id="transferPurpose"></div>
   <button class="btn btn-gold btn-sm" id="doTransferBtn">🔁 تنفيذ التحويل</button>
   <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">🔔 طلبات تحويل واردة بانتظار الرد</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">طلبات تحويل واردة بانتظار الرد</h3>
   <div id="incomingTransfersList"><p class="sub">ما فيه طلبات معلّقة.</p></div>
   <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">📜 سجل التحويلات</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">سجل التحويلات</h3>
   <div id="transferHistoryList"><p class="sub">ما فيه تحويلات بعد.</p></div>
 </div>
 </div>
 
 <div class="tab-panel" id="tab-expenses">
 <div class="panel">
-  <h2>🧾 مصروف جديد</h2>
+  <h2>مصروف جديد</h2>
   <div class="row-2">
     <div class="field"><label>رقم الفاتورة</label><input type="text" id="expInvNumber"></div>
     <div class="field"><label>الرقم الضريبي</label><input type="text" id="expTaxNumber"></div>
@@ -1422,20 +1424,20 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   <div class="field"><label>الضريبة على هذا المصروف</label><select id="expVatStatus"><option value="شاملة">شاملة الضريبة (يُحتسب كضريبة مدخلات)</option><option value="بدون">بدون ضريبة</option></select></div>
   <button class="btn btn-gold btn-sm" id="addExpenseBtn">💾 حفظ المصروف</button>
   <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">📑 سجل المصروفات</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">سجل المصروفات</h3>
   <div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>التصنيف</th><th>المبلغ</th><th>دفع لمن</th><th>المحل</th><th>مصدر الدفع</th></tr></thead><tbody id="expensesBody"></tbody></table></div>
 </div>
 </div>
 
 <div class="tab-panel" id="tab-itemCards">
 <div class="panel">
-  <h2>🗂 كروت الأصناف</h2>
+  <h2>كروت الأصناف</h2>
   <p class="sub">كل نوع قماش أو منتج جاهز له كرت مستقل بتكلفته الفعلية ومخزونه. أي نوع جديد يُنشأ تلقائياً أول ما تسجّل له فاتورة شراء، أو أضفه يدوياً بدون فاتورة (مثلاً لبضاعة عندك أصلاً قبل استخدام النظام).</p>
   <div id="inventoryValuationView" style="margin-bottom:14px;"></div>
   <div class="field"><label>🔍 بحث بالاسم</label><input type="text" id="itemCardSearchInput" placeholder="اكتب اسم الصنف..."></div>
   <div id="itemCardsList"></div>
   <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">➕ إضافة صنف يدوياً (بدون فاتورة شراء)</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">إضافة صنف يدوياً (بدون فاتورة شراء)</h3>
   <p class="sub" style="margin-bottom:10px;">لبضاعة موجودة عندك فعلاً من قبل ما تبدأ تستخدم النظام — تعرف كميتها وسعرها بس ما فيه فاتورة شراء ولا مورد مسجّل لها.</p>
   <div class="row-3">
     <div class="field"><label>نوع الصنف</label><select id="manualCardType"><option value="fabric">قماش (تفصيل)</option><option value="product">منتج جاهز (بيع)</option><option value="addon">ملحق فعلي</option></select></div>
@@ -1457,7 +1459,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
     <div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-gold btn-sm" id="addManualCardBtn" style="width:100%;">➕ إضافة الصنف</button></div>
   </div>
   <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">📊 تقرير رصيد المخزون الكامل</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">تقرير رصيد المخزون الكامل</h3>
   <p class="sub" style="margin-bottom:10px;">تقرير لحظي بكل الأصناف — مختصر (إجمالي لكل نوع) ومفصّل (كل صنف لحاله)، مع إمكانية الطباعة أو الحفظ PDF من نفس نافذة الطباعة.</p>
   <button class="btn btn-ghost btn-sm" id="showStockReportBtn">👁 عرض تقرير المخزون</button>
   <div id="stockReportView" style="margin-top:12px;"></div>
@@ -1466,7 +1468,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-suppliers">
 <div class="panel">
-  <h2>🏭 الموردين</h2>
+  <h2>الموردين</h2>
   <div class="row-3">
     <div class="field"><label>اسم المورد</label><input type="text" id="newSupplierName"></div>
     <div class="field"><label>رقم الجوال</label><input type="text" id="newSupplierPhone"></div>
@@ -1478,7 +1480,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-purchases">
 <div class="panel">
-  <h2>🧾 فاتورة مشتريات جديدة</h2>
+  <h2>فاتورة مشتريات جديدة</h2>
   <p class="sub">رقم فاتورتك الخاصة يُصدر تلقائياً — تقدر تضيف رقم فاتورة المورد وصورتها لو حبيت.</p>
   <div class="row-2">
     <div class="field"><label>المورد — اكتب واختر من الاقتراحات</label><input type="text" id="purchSupplierSearch" list="purchSupplierDatalist" placeholder="اكتب اسم المورد..." autocomplete="off"><datalist id="purchSupplierDatalist"></datalist><input type="hidden" id="purchSupplier"></div>
@@ -1518,14 +1520,14 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   </div>
   <button class="btn btn-gold btn-sm" id="addPurchaseBtn">💾 حفظ فاتورة الشراء</button>
   <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">📑 سجل المشتريات</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">سجل المشتريات</h3>
   <div class="table-wrap"><table><thead><tr><th>رقم فاتورتي</th><th>رقم فاتورة المورد</th><th>التاريخ</th><th>المورد</th><th>الصنف</th><th>الكمية</th><th>الإجمالي</th><th>الحالة</th><th></th></tr></thead><tbody id="purchasesBody"></tbody></table></div>
 </div>
 </div>
 
 <div class="tab-panel" id="tab-purchaseReturns">
 <div class="panel">
-  <h2>↩ مرتجع مشتريات</h2>
+  <h2>مرتجع مشتريات</h2>
   <div class="row-2">
     <div class="field"><label>الصنف</label><select id="returnCard"></select></div>
     <div class="field"><label>الكمية المرتجعة</label><input type="number" id="returnQty" min="0" step="0.1" placeholder="0"></div>
@@ -1539,7 +1541,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   <p class="sub" id="returnInfoNote"></p>
   <button class="btn btn-ghost btn-sm" id="addReturnBtn">💾 تسجيل المرتجع</button>
   <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">📑 سجل المرتجعات</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">سجل المرتجعات</h3>
   <div class="row-2">
     <div class="field"><label>بحث (اسم المورد / رقم فاتورة المورد / رقم فاتورتي)</label><input type="text" id="returnSearch" placeholder="اكتب أي شي..."></div>
   </div>
@@ -1551,10 +1553,10 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-payroll">
 <div class="panel">
-  <h2>💵 الرواتب — حساب كل موظف</h2>
+  <h2>الرواتب — حساب كل موظف</h2>
   <p class="sub">الاستحقاق يُحسب تلقائياً عند إقفال كل شهر (أساسي + عمولة إن فُعّلت). الدفعات والسلف والخصومات تُسجَّل هنا وتُخصم فوراً من الرصيد التراكمي المستحق.</p>
   <div class="stitch"></div>
-  <h3 style="margin:0 0 8px;font-size:14px;">📊 معاينة استحقاق الشهر الحالي (قبل الإقفال)</h3>
+  <h3 style="margin:0 0 8px;font-size:14px;">معاينة استحقاق الشهر الحالي (قبل الإقفال)</h3>
   <p class="sub" style="margin-bottom:10px;">هذا حساب حي لما استحقه كل موظف لين الآن هذا الشهر — يتحدث تلقائياً، ويُسجَّل رسمياً بسجل الرواتب بس عند إقفال الشهر.</p>
   <div id="entitlementPreviewView"></div>
   <div class="stitch"></div>
@@ -1564,7 +1566,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-mail">
 <div class="panel">
-  <h2>📬 البريد والطلبات</h2>
+  <h2>البريد والطلبات</h2>
   <p class="sub">صندوق طلبات داخلي: فواتير مرتجعة بسبب خلل موظف، طلبات سلفة، طلبات إجازة — ترسل للمدير ويتخذ فيها قرار، وتنفّذ مالياً تلقائياً.</p>
   <div class="row-2">
     <button class="btn btn-gold btn-sm" id="mailComposeReturnBtn">🔄 طلب فاتورة مرتجعة (خلل موظف)</button>
@@ -1577,7 +1579,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
   <div id="mailAdminToolsWrap" style="display:none;">
     <div class="stitch"></div>
-    <h3 style="margin:0 0 8px;font-size:14px;">🎖 خصم ومكافآت (مباشر من المدير)</h3>
+    <h3 style="margin:0 0 8px;font-size:14px;">خصم ومكافآت (مباشر من المدير)</h3>
     <p class="sub" style="margin-bottom:10px;">قرار مباشر بدون انتظار — يُنفَّذ فوراً وتوصل رسالة للموظف برقم القرار.</p>
     <div class="row-3">
       <div class="field"><label>الموظف — اكتب واختر</label><input type="text" id="bonusEmployeeSearch" list="bonusEmployeeDatalist" autocomplete="off"><datalist id="bonusEmployeeDatalist"></datalist><input type="hidden" id="bonusEmployee"></div>
@@ -1589,12 +1591,12 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   </div>
 
   <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">📩 إشعاراتي</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">إشعاراتي</h3>
   <div id="myNotificationsList"></div>
 
   <div id="mailComposeReturnForm" style="display:none;margin-top:14px;">
     <div class="stitch"></div>
-    <h3 style="margin:0 0 8px;font-size:14px;">🔄 طلب فاتورة مرتجعة بسبب خلل</h3>
+    <h3 style="margin:0 0 8px;font-size:14px;">طلب فاتورة مرتجعة بسبب خلل</h3>
     <div class="row-2">
       <div class="field"><label>رقم الفاتورة</label><input type="text" id="mailReturnInvNumber"></div>
       <div class="field"><label>الموظف المتسبّب — اكتب واختر</label><input type="text" id="mailReturnResponsibleSearch" list="mailReturnResponsibleDatalist" autocomplete="off"><datalist id="mailReturnResponsibleDatalist"></datalist><input type="hidden" id="mailReturnResponsible"></div>
@@ -1605,7 +1607,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
   <div id="mailComposeAdvanceForm" style="display:none;margin-top:14px;">
     <div class="stitch"></div>
-    <h3 style="margin:0 0 8px;font-size:14px;">💰 طلب سلفة</h3>
+    <h3 style="margin:0 0 8px;font-size:14px;">طلب سلفة</h3>
     <div class="row-2">
       <div class="field"><label>الموظف — اكتب واختر</label><input type="text" id="mailAdvanceEmployeeSearch" list="mailAdvanceEmployeeDatalist" autocomplete="off"><datalist id="mailAdvanceEmployeeDatalist"></datalist><input type="hidden" id="mailAdvanceEmployee"></div>
       <div class="field"><label>المبلغ (ريال)</label><input type="number" id="mailAdvanceAmount" min="0"></div>
@@ -1616,7 +1618,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
   <div id="mailComposeLeaveForm" style="display:none;margin-top:14px;">
     <div class="stitch"></div>
-    <h3 style="margin:0 0 8px;font-size:14px;">🌴 طلب إجازة</h3>
+    <h3 style="margin:0 0 8px;font-size:14px;">طلب إجازة</h3>
     <div class="row-2">
       <div class="field"><label>من تاريخ</label><input type="date" id="mailLeaveFrom"></div>
       <div class="field"><label>إلى تاريخ</label><input type="date" id="mailLeaveTo"></div>
@@ -1629,7 +1631,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   <h3 style="margin:0 0 10px;font-size:14px;">⏳ الطلبات قيد الانتظار</h3>
   <div id="mailPendingList"></div>
   <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">📜 الطلبات المنتهية</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">الطلبات المنتهية</h3>
   <div id="mailResolvedList"></div>
 </div>
 </div>
@@ -1640,7 +1642,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div id="mailDecisionModalOverlay" class="modal-overlay hidden">
   <div class="modal-box" style="text-align:right;">
-    <h3 style="margin:0 0 4px;text-align:center;">🔄 قرار الفاتورة المرتجعة</h3>
+    <h3 style="margin:0 0 4px;text-align:center;">قرار الفاتورة المرتجعة</h3>
     <p id="mailDecisionSummary" class="sub" style="text-align:center;margin:0 0 14px;"></p>
     <div class="field" id="mailDecisionBoxWrap"><label>الصندوق اللي يُخصم منه مبلغ الاسترداد</label><select id="mailDecisionBox"></select></div>
     <div class="field">
@@ -1663,7 +1665,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div id="printLabelModalOverlay" class="modal-overlay hidden">
   <div class="modal-box" style="text-align:right;">
-    <h3 style="margin:0 0 4px;text-align:center;">🖨 طباعة ملصق الصنف</h3>
+    <h3 style="margin:0 0 4px;text-align:center;">طباعة ملصق الصنف</h3>
     <p id="printLabelCardName" class="sub" style="text-align:center;margin:0 0 14px;"></p>
     <div class="field"><label>عدد النسخ</label><input type="number" id="printLabelCopies" min="1" step="1" value="6"></div>
     <div class="actions-row" style="margin-top:6px;justify-content:center;">
@@ -1700,7 +1702,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div id="legacyDeliverModalOverlay" class="modal-overlay hidden">
   <div class="modal-box" style="text-align:right;">
-    <h3 style="margin:0 0 4px;text-align:center;">✅ تسليم قطعة من الجرد الافتتاحي</h3>
+    <h3 style="margin:0 0 4px;text-align:center;">تسليم قطعة من الجرد الافتتاحي</h3>
     <p id="legDeliverItemLabel" class="sub" style="text-align:center;margin:0 0 14px;"></p>
     <div class="field"><label>الكمية المسلَّمة الآن</label><input type="number" id="legDeliverQtyInput" min="1"></div>
     <div class="field"><label>المبلغ المستلم الآن (ريال)</label><input type="number" id="legDeliverAmountInput" min="0"></div>
@@ -2366,7 +2368,7 @@ async function shareReceiptViaWhatsApp(invId){
 async function showEinvoiceDetails(invId){
   const inv = state.invoices.find(i=>i.id===invId);
   if(!inv || !inv.einvoice){ showToast("ما فيه بيانات فوترة إلكترونية لهذي الفاتورة"); return; }
-  const html = `<div class="stitch"></div><h3 style="font-size:14px;margin:0 0 10px;">🧾 بيانات الفوترة الإلكترونية — فاتورة ${esc(inv.number)}</h3>
+  const html = `<div class="stitch"></div><h3 style="font-size:14px;margin:0 0 10px;">بيانات الفوترة الإلكترونية — فاتورة ${esc(inv.number)}</h3>
     <div id="einvoiceQrHolder" style="background:#fff;padding:12px;border-radius:10px;width:fit-content;margin-bottom:10px;"></div>
     <p class="sub">UUID: ${inv.einvoice.uuid}</p>
     <p class="sub">بصمة الفاتورة (Hash): ${inv.einvoice.hash.slice(0,24)}...</p>
@@ -4662,11 +4664,11 @@ function renderReturnsLog(){
   $("returnSourceBox").innerHTML = `<option value="">-- بدون خصم مالي --</option>` + userBoxes(currentUser.username).map(b=>`<option value="${b.id}">${b.name} (${typeLabel(b.type)})</option>`).join("");
   const returns = state.invoiceReturns.slice().reverse();
   const deleted = state.deletedInvoicesLog.slice().reverse();
-  let html = `<h4 style="margin:0 0 8px;font-size:14px;">🔄 سجل المرتجعات (${returns.length})</h4>`;
+  let html = `<h4 style="margin:0 0 8px;font-size:14px;">سجل المرتجعات (${returns.length})</h4>`;
   html += returns.length ? `<div class="table-wrap"><table><thead><tr><th>الفاتورة</th><th>السبب</th><th>المبلغ المرتجع</th><th>خسارة قماش/تصنيع</th><th>التاريخ</th><th>بواسطة</th></tr></thead><tbody>` +
     returns.map(r=>`<tr><td>${r.invoiceNumber}</td><td>${esc(r.reason)}</td><td>${r.refundAmount?r.refundAmount.toFixed(0)+" ﷼":"—"}</td><td>${r.lostCost?`<span style="color:var(--loss);">${r.lostCost.toFixed(0)} ﷼</span>`:"—"}</td><td>${r.date}</td><td>${r.recordedBy}</td></tr>`).join("") +
     `</tbody></table></div>` : `<p class="sub">ما فيه مرتجعات مسجّلة بعد.</p>`;
-  html += `<div class="stitch"></div><h4 style="margin:0 0 8px;font-size:14px;">🗑 سجل الفواتير المحذوفة (${deleted.length})</h4>`;
+  html += `<div class="stitch"></div><h4 style="margin:0 0 8px;font-size:14px;">سجل الفواتير المحذوفة (${deleted.length})</h4>`;
   html += deleted.length ? `<div class="table-wrap"><table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>الإجمالي</th><th>تاريخ الحذف</th><th>بواسطة</th></tr></thead><tbody>` +
     deleted.map(d=>`<tr><td>${esc(d.invoiceSnapshot.number)}</td><td>${esc(d.invoiceSnapshot.customerName||"—")}</td><td>${invoiceSaleTotal(d.invoiceSnapshot).toFixed(0)} ﷼</td><td>${new Date(d.deletedAt).toLocaleString("ar-SA")}</td><td>${d.deletedBy}</td></tr>`).join("") +
     `</tbody></table></div>` : `<p class="sub">ما فيه فواتير محذوفة.</p>`;
@@ -4879,6 +4881,7 @@ async function saveInvoice(){
         invData.garments.map((g,i)=>`<button class="btn btn-ghost btn-sm" style="width:100%;margin-top:6px;" onclick="printCuttingCard('${invData.id}', ${i})">🖨 طباعة كرت القصاص — ثوب ${i+1}</button>`).join("");
     }
     resetForm(); renderAll();
+    return invData.id;
   } else {
     // the cloud save failed — roll back every local mutation (advisory credits, fabric
     // reservation, loyalty points, cash box balances, the invoice itself...) instead of
@@ -4888,7 +4891,16 @@ async function saveInvoice(){
     $("printReceiptBanner").innerHTML = `<p class="sub" style="text-align:center;color:var(--loss);">⚠ تعذّر حفظ الفاتورة بالسحابة — ما انحفظ شي، البيانات لسا موجودة بالفورم. تأكد من الاتصال بالإنترنت وجرّب "حفظ" مرة ثانية.</p>`;
     $("printReceiptBanner").style.display = "";
     renderAll();
+    return null;
   }
+}
+async function saveInvoiceAndPrint(){
+  const id = await saveInvoice();
+  if(id) printCustomerReceipt(id);
+}
+async function saveInvoiceAndSend(){
+  const id = await saveInvoice();
+  if(id) shareReceiptViaWhatsApp(id);
 }
 
 // ---------------- unified work distribution + overdue ----------------
@@ -5006,7 +5018,7 @@ function searchInvoiceForDistribution(){
   area.innerHTML=""; resultsList.innerHTML="";
   if(!q && !statusFilter) return;
   const legacyMatches = q ? state.legacyItems.filter(x=> x.status!=="تم التسليم" && (x.name.toLowerCase().includes(q.toLowerCase()) || x.mobile.includes(q))) : [];
-  const legacyHtml = legacyMatches.length ? `<div class="stitch"></div><h4 style="font-size:13px;margin:10px 0;color:var(--gold-soft);">📦 أمانات قديمة من الجرد الافتتاحي (لسا ما تسلّمت)</h4>
+  const legacyHtml = legacyMatches.length ? `<div class="stitch"></div><h4 style="font-size:13px;margin:10px 0;color:var(--gold-soft);">أمانات قديمة من الجرد الافتتاحي (لسا ما تسلّمت)</h4>
     <div class="table-wrap"><table><thead><tr><th>العميل</th><th>الجوال</th><th>الوصف</th><th>المتبقي تسليمه</th><th></th></tr></thead><tbody>
     ${legacyMatches.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.mobile)}</td><td>${esc(x.desc)}</td><td>${x.count-(x.deliveredCount||0)} من ${x.count}</td><td><button class="btn btn-ghost btn-sm" onclick="openLegacyDeliverModal('${x.id}')">✅ تسليم</button></td></tr>`).join("")}
     </tbody></table></div>` : "";
@@ -5099,7 +5111,7 @@ function renderDistributionArea(inv){
       </div>`;
     }).join("") +
     `<div class="stitch"></div>
-    <h4 style="margin:0 0 10px;font-size:14px;">💵 تسوية الدفع والتسليم</h4>
+    <h4 style="margin:0 0 10px;font-size:14px;">تسوية الدفع والتسليم</h4>
     <div id="distPaymentsList">${paymentsHtml}</div>
     <div class="remaining-box">
       <span>الإجمالي: ${total.toFixed(0)} ﷼ — المدفوع: ${paid.toFixed(0)} ﷼${discountTotal?` — الخصم: ${discountTotal.toFixed(0)} ﷼`:""}</span>
@@ -5694,7 +5706,7 @@ function renderCustomerDebts(){
     `<div class="actions-row" style="margin-top:10px;"><button class="btn btn-ghost btn-sm" id="printCustomerDebtsBtn">🖨 طباعة / حفظ PDF</button></div>`;
   const printBtn = $("printCustomerDebtsBtn");
   if(printBtn) printBtn.addEventListener("click", ()=>{
-    const html = `<h2>💳 مديونيات العملاء — ${todayStr()}</h2><p>عدد العملاء: ${debts.length} — إجمالي المتبقي: ${totalOwed.toFixed(0)} ريال</p>
+    const html = `<h2>مديونيات العملاء — ${todayStr()}</h2><p>عدد العملاء: ${debts.length} — إجمالي المتبقي: ${totalOwed.toFixed(0)} ريال</p>
       <table style="width:100%;border-collapse:collapse;"><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>الجوال</th><th>التاريخ</th><th>المبلغ المتبقي</th></tr></thead><tbody>` +
       debts.map(inv=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${inv.date}</td><td>${invoiceRemaining(inv).toFixed(0)} ريال</td></tr>`).join("") +
       `</tbody></table>`;
@@ -7058,7 +7070,7 @@ function showVatCalculator(){
   const netAbs = Math.abs(s.net);
   const netLabel = s.net > 0.01 ? `عليك دفعه للهيئة` : s.net < -0.01 ? `لك استرداد منها` : `متعادل — لا شي عليك ولا لك`;
   const priceTypeNote = state.settings.pricesIncludeVat!==false ? "الأسعار المسجّلة بالفواتير شاملة الضريبة" : "الأسعار المسجّلة بالفواتير بدون ضريبة (تُضاف الضريبة فوقها بالحساب)";
-  let html = `<h3 style="margin:0 0 10px;font-size:14px;">🧮 حاسبة الضريبة — ${label}</h3>`;
+  let html = `<h3 style="margin:0 0 10px;font-size:14px;">حاسبة الضريبة — ${label}</h3>`;
   html += `<p class="sub" style="margin-bottom:10px;">حساب تقديري مبني على أرقام النظام (${priceTypeNote}، بنسبة ${s.rate}%). يشمل ضريبة مدخلات المشتريات والمصاريف المؤشّرة "شاملة الضريبة" فقط. للفوترة الرسمية راجع محاسبك أو بوابة "فاتورة".</p>`;
   html += `<div class="remaining-box"><span>إجمالي ضريبة المبيعات (مخرجات)</span><span class="amt">${s.outputVat.toFixed(2)} ريال</span></div>`;
   html += `<div class="remaining-box" style="margin-top:6px;"><span>إجمالي ضريبة المشتريات والمصاريف (مدخلات)</span><span class="amt">${s.inputVat.toFixed(2)} ريال</span></div>`;
@@ -7088,18 +7100,18 @@ function showSalesRankingReport(){
   const dormant = rows.filter(r=>r.qty<=0);
   const unitOf = c=> c.type==="fabric" ? unitLabel() : "قطعة";
   const typeLbl = t=> t==="fabric"?"قماش":t==="product"?"منتج جاهز":"ملحق فعلي";
-  let html = `<h2>📈 تقرير الأصناف الأكثر والأقل مبيعاً</h2>`;
-  html += `<h3 style="margin:14px 0 8px;font-size:14px;">🥇 الأكثر مبيعاً (أعلى 10)</h3>`;
+  let html = `<h2>تقرير الأصناف الأكثر والأقل مبيعاً</h2>`;
+  html += `<h3 style="margin:14px 0 8px;font-size:14px;">الأكثر مبيعاً (أعلى 10)</h3>`;
   html += `<table><thead><tr><th>الصنف</th><th>النوع</th><th>الكمية المباعة</th><th>الإيراد</th></tr></thead><tbody>`;
   sold.slice(0,10).forEach(r=> html+=`<tr><td>${r.card.name}</td><td>${typeLbl(r.card.type)}</td><td>${r.qty.toFixed(1)} ${unitOf(r.card)}</td><td>${r.revenue.toFixed(0)} ريال</td></tr>`);
   if(!sold.length) html+=`<tr><td colspan="4" style="text-align:center;">ما فيه مبيعات مسجّلة بعد</td></tr>`;
   html += `</tbody></table>`;
-  html += `<h3 style="margin:18px 0 8px;font-size:14px;">🥉 الأقل مبيعاً (أدنى 10، ولها مبيعات فعلاً)</h3>`;
+  html += `<h3 style="margin:18px 0 8px;font-size:14px;">الأقل مبيعاً (أدنى 10، ولها مبيعات فعلاً)</h3>`;
   html += `<table><thead><tr><th>الصنف</th><th>النوع</th><th>الكمية المباعة</th><th>الإيراد</th></tr></thead><tbody>`;
   sold.slice(-10).reverse().forEach(r=> html+=`<tr><td>${r.card.name}</td><td>${typeLbl(r.card.type)}</td><td>${r.qty.toFixed(1)} ${unitOf(r.card)}</td><td>${r.revenue.toFixed(0)} ريال</td></tr>`);
   if(!sold.length) html+=`<tr><td colspan="4" style="text-align:center;">لا يوجد</td></tr>`;
   html += `</tbody></table>`;
-  html += `<h3 style="margin:18px 0 8px;font-size:14px;">💤 الأصناف الخاملة (ما لها أي مبيعات إطلاقاً)</h3>`;
+  html += `<h3 style="margin:18px 0 8px;font-size:14px;">الأصناف الخاملة (ما لها أي مبيعات إطلاقاً)</h3>`;
   html += `<table><thead><tr><th>الصنف</th><th>النوع</th><th>الحالة</th></tr></thead><tbody>`;
   dormant.forEach(r=> html+=`<tr><td>${r.card.name}</td><td>${typeLbl(r.card.type)}</td><td>${r.card.active?"نشط":"متوقف"}</td></tr>`);
   if(!dormant.length) html+=`<tr><td colspan="3" style="text-align:center;">ما فيه أصناف خاملة — كل الأصناف عليها مبيعات</td></tr>`;
@@ -7115,7 +7127,7 @@ function showStockReport(){
     const val = avail*(c.currentCost||0);
     if(groups[c.type]){ groups[c.type].qty += avail; groups[c.type].value += val; }
   });
-  let html = `<h2>📊 تقرير رصيد المخزون الكامل — ${todayStr()}</h2>`;
+  let html = `<h2>تقرير رصيد المخزون الكامل — ${todayStr()}</h2>`;
   html += `<h3 style="margin:14px 0 8px;font-size:14px;">ملخص مختصر</h3>`;
   html += `<table><thead><tr><th>النوع</th><th>الكمية الإجمالية</th><th>القيمة الإجمالية</th></tr></thead><tbody>`;
   ["fabric","product","addon"].forEach(t=>{
@@ -7139,7 +7151,7 @@ function showStockReport(){
 function showItemStatement(cardId){
   const card = findItemCard(cardId);
   if(!card) return;
-  $("itemStatementView").innerHTML = `<div class="stitch"></div><h3 style="font-size:14px;margin:0 0 10px;">📇 كشف حساب — ${card.name}</h3>${periodPickerHtml("itemStmt")}<button class="btn btn-ghost btn-sm" id="itemStmtShowBtn">👁 عرض الكشف</button><div id="itemStmtBody" style="margin-top:12px;"></div>`;
+  $("itemStatementView").innerHTML = `<div class="stitch"></div><h3 style="font-size:14px;margin:0 0 10px;">كشف حساب — ${card.name}</h3>${periodPickerHtml("itemStmt")}<button class="btn btn-ghost btn-sm" id="itemStmtShowBtn">👁 عرض الكشف</button><div id="itemStmtBody" style="margin-top:12px;"></div>`;
   bindPeriodPicker("itemStmt");
   $("itemStmtShowBtn").addEventListener("click", ()=> renderItemStatementBody(cardId));
   renderItemStatementBody(cardId);
@@ -7204,7 +7216,7 @@ function renderInventoryValuation(){
   const productCount = productCards.reduce((a,c)=>a+cardAvailableQty(c),0);
   const addonCount = addonCards.reduce((a,c)=>a+cardAvailableQty(c),0);
   el.innerHTML = `<div class="garment-card">
-    <h3 style="margin:0 0 10px;font-size:15px;">📦 قيمة المخزون الكلي: <span style="color:var(--gold-soft);">${totalValue.toFixed(0)} ريال</span></h3>
+    <h3 style="margin:0 0 10px;font-size:15px;">قيمة المخزون الكلي: <span style="color:var(--gold-soft);">${totalValue.toFixed(0)} ريال</span></h3>
     <div class="row-3">
       <div><p class="sub" style="margin:0;">🧵 أقمشة</p><p style="margin:2px 0;font-weight:700;">${fabricValue.toFixed(0)} ريال</p><p class="sub" style="margin:0;font-size:11px;">يعادل ${equivGarments} ثوب (محسوبة على ثوب رجال)</p></div>
       <div><p class="sub" style="margin:0;">🛍 منتج جاهز</p><p style="margin:2px 0;font-weight:700;">${productValue.toFixed(0)} ريال</p><p class="sub" style="margin:0;font-size:11px;">${productCount} قطعة</p></div>
@@ -7662,7 +7674,7 @@ function showCustomerReport(mobile, filterName){
       </div>
     </div>`;
   let html = profileHtml + measurementsHtml;
-  html += `<div class="stitch"></div><h3 style="font-size:14px;margin:0 0 10px;">📋 الطلبات السابقة</h3>`;
+  html += `<div class="stitch"></div><h3 style="font-size:14px;margin:0 0 10px;">الطلبات السابقة</h3>`;
   invs.slice().sort((a,b)=> (a.date||"").localeCompare(b.date||"")).forEach(inv=>{
     const s=invoiceSaleTotal(inv), paid=invoicePaid(inv), disc=invoiceDiscountTotal(inv);
     totalSale+=s; totalPaid+=paid; totalDiscount+=disc;
@@ -7922,7 +7934,7 @@ function showFullActivityLog(){
   if(sectionFilter) rows = rows.filter(r=>r.section===sectionFilter);
   const bySection = {};
   rows.forEach(r=>{ bySection[r.section] = (bySection[r.section]||0)+1; });
-  let html = `<h2>📜 السجل الشامل لكل الحركات — ${label}${sectionFilter?` — قسم: ${esc(sectionFilter)}`:""}</h2>`;
+  let html = `<h2>السجل الشامل لكل الحركات — ${label}${sectionFilter?` — قسم: ${esc(sectionFilter)}`:""}</h2>`;
   html += `<p>إجمالي الحركات: <b>${rows.length}</b> — ${Object.entries(bySection).map(([k,v])=>`${k}: ${v}`).join(" | ")}</p>`;
   html += `<table><thead><tr><th>التاريخ</th><th>القسم</th><th>التفاصيل</th><th>المبلغ</th></tr></thead><tbody>`;
   rows.forEach(r=> html += `<tr><td>${r.date||"—"}</td><td>${esc(r.section)}</td><td>${esc(r.desc)}</td><td>${r.amount?r.amount.toFixed(2)+" ريال":"—"}</td></tr>`);
@@ -8279,6 +8291,8 @@ $("saleCustName").addEventListener("input", ()=>{
 $("addSaleLineBtn").addEventListener("click", ()=>{ renderSaleLine(); updateSaleTotal(); });
 $("saveSaleBtn").addEventListener("click", saveSaleInvoice);
 $("saveInvoiceBtn").addEventListener("click", saveInvoice);
+$("saveAndPrintBtn").addEventListener("click", saveInvoiceAndPrint);
+$("saveAndSendBtn").addEventListener("click", saveInvoiceAndSend);
 $("resetFormBtn").addEventListener("click", async ()=>{
   if(isInvoiceFormDirty()){
     const wantsSave = await showConfirm("عندك فاتورة لسا ما انحفظت. تبي تحفظها قبل ما تفرّغ النموذج؟");
