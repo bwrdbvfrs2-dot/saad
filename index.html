@@ -2525,6 +2525,16 @@ async function saveState(){
     return false;
   }
 }
+// Snapshot state before a local mutation that moves money or stock, then call this to persist
+// it. saveState() already surfaces a toast on failure; this additionally rolls the in-memory
+// state back to the pre-mutation snapshot so a failed cloud write doesn't leave a "ghost" change
+// that only lives in this tab until the next real sync silently erases it.
+async function saveStateWithRollback(snapshot){
+  const saved = await saveState();
+  if(!saved){ state = snapshot; }
+  renderAll();
+  return saved;
+}
 async function loadState(){
   await ensureAuth();
   return new Promise((resolve)=>{
@@ -3622,7 +3632,7 @@ function renderVouchersTab(){
   if(!$("voucherPeriodWrap").innerHTML){ $("voucherPeriodWrap").innerHTML = periodPickerHtml("voucher"); bindPeriodPicker("voucher"); }
   renderVouchersLog();
 }
-function submitVoucher(){
+async function submitVoucher(){
   const type = $("voucherType").value;
   const amount = parseFloat($("voucherAmount").value)||0;
   const party = $("voucherParty").value.trim();
@@ -3636,12 +3646,14 @@ function submitVoucher(){
   if(type==="payment" && box.balance < amount){
     showToast(`رصيد الصندوق (${box.balance.toFixed(0)} ريال) أقل من المبلغ المطلوب صرفه`); return;
   }
+  const snapshot = JSON.parse(JSON.stringify(state));
   box.balance += (type==="receipt" ? amount : -amount);
   const voucherNo = type==="receipt" ? nextReceiptVoucherNo() : nextPaymentVoucherNo();
   state.vouchers.push({id:Date.now()+"", voucherNo, type, amount, party, reason, boxId, boxName:box.name, date:todayStr(), recordedBy:currentUser.username});
-  saveState(); renderAll();
-  $("voucherAmount").value=""; $("voucherParty").value=""; $("voucherReason").value="";
-  showToast(`تم تسجيل سند ${type==="receipt"?"قبض":"صرف"} رقم ${voucherNo}`);
+  if(await saveStateWithRollback(snapshot)){
+    $("voucherAmount").value=""; $("voucherParty").value=""; $("voucherReason").value="";
+    showToast(`تم تسجيل سند ${type==="receipt"?"قبض":"صرف"} رقم ${voucherNo}`);
+  }
 }
 function renderVouchersLog(){
   const el = $("vouchersLog");
@@ -3713,20 +3725,22 @@ function transferFunds(fromBoxId, toOwnerUsername, toBoxId, amount, purpose){
     return {ok:true, instant:false};
   }
 }
-function acceptTransferRequest(id){
+async function acceptTransferRequest(id){
   const req = state.transferRequests.find(r=>r.id===id); if(!req || req.status!=="pending") return;
+  const snapshot = JSON.parse(JSON.stringify(state));
   const toBox = mainBoxOf(req.toOwner,"cash");
   if(toBox) toBox.balance += req.amount;
   req.status="accepted"; req.resolvedAt=todayStr(); req.voucherNumber=nextVoucherNo();
-  saveState(); renderAll(); showToast(`تم استلام المبلغ — سند رقم ${req.voucherNumber}`);
+  if(await saveStateWithRollback(snapshot)) showToast(`تم استلام المبلغ — سند رقم ${req.voucherNumber}`);
 }
 async function rejectTransferRequest(id){
   const req = state.transferRequests.find(r=>r.id===id); if(!req || req.status!=="pending") return;
   if(!await showConfirm("متأكد ترفض هذا التحويل؟ المبلغ يرجع للمرسل.")) return;
+  const snapshot = JSON.parse(JSON.stringify(state));
   const fromBox = findCashBox(req.fromBoxId);
   if(fromBox) fromBox.balance += req.amount;
   req.status="rejected"; req.resolvedAt=todayStr();
-  saveState(); renderAll(); showToast("تم رفض التحويل وإرجاع المبلغ للمرسل");
+  if(await saveStateWithRollback(snapshot)) showToast("تم رفض التحويل وإرجاع المبلغ للمرسل");
 }
 function addExpense(data){
   const box = findCashBox(data.sourceBoxId);
@@ -3900,7 +3914,9 @@ function updateLiveTotals(){
   const promoDiscount = currentPromoDiscountAmount(prices);
   const directDiscountInp = $("directDiscountInput");
   let directDiscount = directDiscountInp ? (parseFloat(directDiscountInp.value)||0) : 0;
-  const maxDirectDiscount = Math.max(0, prices - loyaltyDiscount - promoDiscount);
+  const directDiscountVip = isCustomerVip(($("custMobile")?.value||"").trim());
+  const remainingForDirectDiscount = Math.max(0, prices - loyaltyDiscount - promoDiscount);
+  const maxDirectDiscount = directDiscountVip ? remainingForDirectDiscount : Math.min(remainingForDirectDiscount, userMaxDiscountAmount(currentUser, prices));
   if(directDiscount > maxDirectDiscount){ directDiscount = maxDirectDiscount; if(directDiscountInp) directDiscountInp.value = maxDirectDiscount.toFixed(0); }
   const totalDiscount = loyaltyDiscount + promoDiscount + directDiscount;
   $("liveInvoiceTotal").textContent = prices.toFixed(0)+" ﷼";
@@ -4455,7 +4471,15 @@ async function saveInvoice(){
           invData.promoGiftDescription = appliedPromoCode.giftDescription;
         }
       }
-      const directDiscountVal = parseFloat($("directDiscountInput")?.value)||0;
+      let directDiscountVal = parseFloat($("directDiscountInput")?.value)||0;
+      if(directDiscountVal>0.01 && !vip){
+        // re-check the per-user discount cap here too — the live UI clamps it on input, but that
+        // must not be the only guard against a cashier saving more discount than they're allowed
+        const alreadyDiscounted = invData.payments.reduce((a,p)=>a+(p.discount||0),0);
+        const maxAllowed = userMaxDiscountAmount(currentUser, saleTotal);
+        const remainingAllowance = Math.max(0, maxAllowed - alreadyDiscounted);
+        if(directDiscountVal > remainingAllowance) directDiscountVal = remainingAllowance;
+      }
       if(directDiscountVal>0.01){
         invData.payments.push({id:Date.now()+"-direct", date, cash:0, network:0, receipt:"", discount:directDiscountVal, auto:true, note:"خصم مباشر", recordedBy:currentUser.username});
       }
@@ -4656,7 +4680,7 @@ function renderDistributionArea(inv){
   $("saveDistBtn").addEventListener("click", ()=> saveDistribution(inv));
   $("addDistPaymentBtn").addEventListener("click", ()=> addDistPayment(inv));
 }
-function addDistPayment(inv){
+async function addDistPayment(inv){
   const cash = parseFloat($("distPayCash").value)||0;
   const network = parseFloat($("distPayNetwork").value)||0;
   const networkReceiptNo = $("distPayReceipt").value.trim();
@@ -4668,6 +4692,7 @@ function addDistPayment(inv){
   if(network>0 && !networkReceiptNo){ showToast("أدخل رقم سند الشبكة"); return; }
   const remaining = invoiceRemaining(inv);
   if((cash+network+discount) - remaining > 0.01){ showToast(`المبلغ أكبر من المتبقي (${remaining.toFixed(0)} ريال)`); return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
   // capture any tailor values currently typed in the garment cards so they aren't lost on refresh
   const isAdmin = currentUser.role==="مدير";
   inv.garments.forEach((g,i)=>{
@@ -4688,7 +4713,7 @@ function addDistPayment(inv){
       g.status="تسليم"; if(!g.readyDate) g.readyDate=todayStr(); if(!g.deliveredDate) g.deliveredDate=todayStr(); autoDelivered++;
     });
   }
-  saveState(); renderAll();
+  if(!await saveStateWithRollback(snapshot)) return; // form (payment inputs) stays as-is so the cashier can just retry
   if(autoDelivered>0) showToast(`تم تسجيل الدفعة وتحويل ${autoDelivered} ثوب إلى "تم التسليم" تلقائياً`);
   else showToast(discount>0 ? "تم تسجيل الدفعة والخصم" : "تم تسجيل الدفعة");
   $("distInvNumber").value = inv.number;
@@ -5086,17 +5111,19 @@ function advanceGarmentStatus(inv, idx){
   }
   completeGarmentAdvance(inv, idx, next);
 }
-function completeGarmentAdvance(inv, idx, next){
+async function completeGarmentAdvance(inv, idx, next, snapshot){
   const g = inv.garments[idx];
   const old = g.status;
+  if(!snapshot) snapshot = JSON.parse(JSON.stringify(state)); // no snapshot passed in => nothing prior to protect, snapshot fresh here
   if(next==="قص" && g.itemCardId && g.stockApplied==="reserved") consumeFabricForGarment(g, g.qtyUsed||0);
   g.status = next;
   if(g.status==="قص" && !g.cutDate) g.cutDate = todayStr();
   if(g.status==="جاهز" && !g.readyDate) g.readyDate = todayStr();
   if(g.status==="تسليم" && !g.deliveredDate) g.deliveredDate = todayStr();
-  saveState(); renderAll();
+  if(!await saveStateWithRollback(snapshot)) return false;
   $("quickScanInput").value=""; $("quickScanPicker").innerHTML="";
   showToast(`تم التحويل من "${STATUSES.find(s=>s.v===old)?.label}" إلى "${STATUSES.find(s=>s.v===next)?.label}"`);
+  return true;
 }
 function showQuickDeliveryPayment(inv, idx, remaining){
   $("quickScanPicker").innerHTML = `<div class="garment-card">
@@ -5119,10 +5146,11 @@ function confirmQuickDeliveryPayment(invId, idx){
   if(network>0 && !receipt){ showToast("أدخل رقم سند الشبكة"); return; }
   const remaining = invoiceRemaining(inv);
   if(Math.abs((cash+network)-remaining)>0.01){ showToast(`المبلغ لازم يساوي المتبقي بالضبط (${remaining.toFixed(0)} ريال)`); return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
   const payment = {cash, network, discount:0, receiptNo:receipt||undefined, date:todayStr()};
   inv.payments = inv.payments||[]; inv.payments.push(payment);
   applyPaymentToBalances(payment);
-  completeGarmentAdvance(inv, idx, "تسليم");
+  completeGarmentAdvance(inv, idx, "تسليم", snapshot);
 }
 // best-effort camera QR scanning (needs live device testing — cannot verify camera in sandbox)
 let scanCameraStream = null;
@@ -5233,7 +5261,7 @@ function renderCustomerDebts(){
     printHtml(html);
   });
 }
-function settleCustomerDebt(invId){
+async function settleCustomerDebt(invId){
   const inv = state.invoices.find(i=>i.id===invId);
   if(!inv) return;
   const amountInp = document.querySelector(`.debt-settle-amount[data-inv="${invId}"]`);
@@ -5244,11 +5272,13 @@ function settleCustomerDebt(invId){
   if(amount - remaining > 0.01){ showToast(`المبلغ أكبر من المتبقي (${remaining.toFixed(0)} ريال)`); return; }
   const method = methodSel.value;
   if(!inv.payments) inv.payments=[];
-  inv.payments.push({id:Date.now()+"-settle", date:todayStr(), cash: method==="cash"?amount:0, network: method==="network"?amount:0, receipt:"", recordedBy: currentUser.username, note:"سداد من شاشة مديونيات العملاء"});
-  saveState(); renderAll();
-  showToast(`✅ تم تسجيل سداد ${amount.toFixed(0)} ريال لفاتورة ${inv.number}`);
+  const snapshot = JSON.parse(JSON.stringify(state));
+  const payment = {id:Date.now()+"-settle", date:todayStr(), cash: method==="cash"?amount:0, network: method==="network"?amount:0, receipt:"", recordedBy: currentUser.username, note:"سداد من شاشة مديونيات العملاء"};
+  inv.payments.push(payment);
+  applyPaymentToBalances(payment); // this was missing entirely before — the cash/network was never credited to any box
+  if(await saveStateWithRollback(snapshot)) showToast(`✅ تم تسجيل سداد ${amount.toFixed(0)} ريال لفاتورة ${inv.number}`);
 }
-function payCreditDebt(invId, idx){
+async function payCreditDebt(invId, idx){
   const inv = state.invoices.find(i=>i.id===invId); if(!inv) return;
   const g = inv.garments[idx]; if(!g || !g.creditDelivered) return;
   const cashInp = document.querySelector(`.debt-cash[data-inv="${invId}"][data-idx="${idx}"]`);
@@ -5261,12 +5291,13 @@ function payCreditDebt(invId, idx){
   if(network>0 && !receipt){ showToast("أدخل رقم السند لدفعة الشبكة"); return; }
   const owed = g.creditAmount - g.creditPaid;
   if((cash+network) - owed > 0.01){ showToast(`المبلغ أكبر من المتبقي على هذا الثوب (${owed.toFixed(0)} ريال)`); return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
   const payment = {id:Date.now()+"", date:todayStr(), cash, network, receipt, discount:0};
   inv.payments = inv.payments || [];
   inv.payments.push(payment);
   applyPaymentToBalances(payment);
   g.creditPaid += (cash+network);
-  saveState(); renderAll(); showToast("تم تسجيل السداد");
+  if(await saveStateWithRollback(snapshot)) showToast("تم تسجيل السداد");
 }
 async function saveDistribution(inv){
   const isAdmin = currentUser.role==="مدير";
@@ -6089,11 +6120,11 @@ async function writeOffItemCard(id){
   if(avail<=0){ showToast("ما فيه رصيد متبقٍ يحتاج إتلاف"); return; }
   const unitTxt = card.type==="fabric" ? unitLabel() : "قطعة";
   if(!await confirmWithPassword(`تأكيد إتلاف "${card.name}"؟ سيتم تصفير الرصيد المتاح (${avail.toFixed(1)} ${unitTxt}) وإيقاف الصنف عن الظهور بالمشتريات والفواتير الجديدة. الصنف يبقى بسجل التاريخ ولا ينحذف — أي فاتورة سابقة استخدمته يفضل اسمه ظاهر فيها بدون تغيير.\nهذا إجراء حساس — أدخل كلمة مرورك للتأكيد.`)) return;
+  const snapshot = JSON.parse(JSON.stringify(state));
   card.stockQty = (card.stockQty||0) - avail; // brings cardAvailableQty(card) to exactly 0
   card.active = false;
   state.stockWriteOffs.push({id:Date.now()+"", itemCardId:id, date:todayStr(), qty:avail, recordedBy:currentUser.username});
-  saveState(); renderAll();
-  showToast("تم إتلاف الصنف وتصفير رصيده");
+  if(await saveStateWithRollback(snapshot)) showToast("تم إتلاف الصنف وتصفير رصيده");
 }
 
 function renderSuppliers(){
@@ -6117,7 +6148,7 @@ function addSupplier(){
   $("newSupplierName").value=""; $("newSupplierPhone").value="";
   saveState(); renderAll(); showToast("تم إضافة المورد");
 }
-function paySupplier(supId){
+async function paySupplier(supId){
   const s = state.suppliers.find(x=>x.id===supId); if(!s) return;
   const amtInp = document.querySelector(`.supplier-pay-amount[data-sup="${supId}"]`);
   const boxSel = document.querySelector(`.supplier-pay-box[data-sup="${supId}"]`);
@@ -6127,8 +6158,9 @@ function paySupplier(supId){
   const box = findCashBox(boxSel.value);
   if(!box){ showToast("اختر صندوق الدفع"); return; }
   if(boxTotal(box) < amount){ showToast(`الرصيد غير كافٍ بالصندوق (المتاح ${boxTotal(box).toFixed(0)} ريال)`); return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
   box.balance -= amount; s.balance -= amount;
-  saveState(); renderAll(); showToast("تم تسديد المورد");
+  if(await saveStateWithRollback(snapshot)) showToast("تم تسديد المورد");
 }
 
 function refreshPurchaseForm(){
@@ -6222,6 +6254,7 @@ async function addPurchase(){
       salePrice: (type==="product"||type==="fabric") ? 0 : undefined };
     state.itemCards.push(card);
   }
+  const purchaseSnapshot = JSON.parse(JSON.stringify(state));
   const total = qty*unitPrice;
   if(payStatus==="paid"){
     const box = findCashBox(sourceBoxId);
@@ -6238,7 +6271,7 @@ async function addPurchase(){
   const imageFile = $("purchImageFile").files[0];
   let imageData = null;
   if(imageFile){
-    if(imageFile.size > 1024*1024){ showToast("حجم الصورة أكبر من 1 ميجا — اختر صورة أصغر"); state.settings.nextPurchaseInvoiceNumber--; return; }
+    if(imageFile.size > 1024*1024){ showToast("حجم الصورة أكبر من 1 ميجا — اختر صورة أصغر"); state = purchaseSnapshot; return; }
     imageData = await new Promise(resolve=>{
       const reader = new FileReader();
       reader.onload = ()=> resolve(reader.result);
@@ -6248,9 +6281,10 @@ async function addPurchase(){
   }
   const vatStatus = $("purchVatStatus").value;
   state.purchases.push({id:Date.now()+"", invoiceNo, date:todayStr(), supplierId, itemCardId:card.id, quantity:qty, unitPrice, total, payStatus, sourceBoxId: payStatus==="paid"?sourceBoxId:null, recordedBy:currentUser.username, supplierInvoiceNo, imageData, vatStatus});
-  saveState(); renderAll();
-  $("purchQty").value=""; $("purchUnitPrice").value=""; $("purchItemName").value=""; $("purchTotal").value=""; $("purchItemStatus").textContent=""; $("purchOrigin").value=""; $("purchSeason").value=""; $("purchFabricExtraWrap").style.display="none"; $("purchSupplierInvNo").value=""; $("purchImageFile").value="";
-  showToast(`تم حفظ فاتورة الشراء رقم ${invoiceNo}`);
+  if(await saveStateWithRollback(purchaseSnapshot)){
+    $("purchQty").value=""; $("purchUnitPrice").value=""; $("purchItemName").value=""; $("purchTotal").value=""; $("purchItemStatus").textContent=""; $("purchOrigin").value=""; $("purchSeason").value=""; $("purchFabricExtraWrap").style.display="none"; $("purchSupplierInvNo").value=""; $("purchImageFile").value="";
+    showToast(`تم حفظ فاتورة الشراء رقم ${invoiceNo}`);
+  }
 }
 function nextPurchaseInvoiceNo(){ const n=state.settings.nextPurchaseInvoiceNumber||1; state.settings.nextPurchaseInvoiceNumber=n+1; return n; }
 function renderPurchases(){
@@ -6355,15 +6389,15 @@ function renderPayrollTab(){
   }));
   document.querySelectorAll(".submit-payroll-btn").forEach(btn=> btn.addEventListener("click", ()=> submitPayrollEntry(btn.dataset.username)));
 }
-function submitPayrollEntry(username){
+async function submitPayrollEntry(username){
   const type = document.querySelector(`.pr-type[data-user="${username}"]`).value;
   const amount = parseFloat(document.querySelector(`.pr-amount[data-user="${username}"]`).value)||0;
   const boxId = document.querySelector(`.pr-box[data-user="${username}"]`).value;
   const note = document.querySelector(`.pr-note[data-user="${username}"]`).value.trim();
+  const snapshot = JSON.parse(JSON.stringify(state));
   const result = addPayrollEntry(username, type, amount, boxId, note);
   if(!result.ok){ showToast(result.msg); return; }
-  saveState(); renderAll();
-  showToast("تم تسجيل الحركة");
+  if(await saveStateWithRollback(snapshot)) showToast("تم تسجيل الحركة");
 }
 
 function addPurchaseReturn(){
@@ -6451,7 +6485,7 @@ function resetSaleForm(){
   $("saleCash").value=""; $("saleNetwork").value=""; $("saleReceipt").value="";
   updateSaleTotal();
 }
-function saveSaleInvoice(){
+async function saveSaleInvoice(){
   const number = $("saleNumber").value.trim();
   if(!number){ showToast("أدخل رقم الفاتورة"); return; }
   if(state.salesInvoices.some(s=>s.number===number)){ showToast(`رقم الفاتورة ${number} مستخدم مسبقاً — اختر رقم ثاني`); return; }
@@ -6480,13 +6514,15 @@ function saveSaleInvoice(){
   if(Math.abs((cash+network)-total) > 0.01){ showToast(`المبلغ المدخل (${(cash+network).toFixed(0)}) لازم يساوي الإجمالي (${total.toFixed(0)})`); return; }
   // check stock availability (warn only, don't block)
   const lowStock = items.filter(it=>{ const c=findItemCard(it.itemCardId); return c && cardAvailableQty(c) < it.qty; });
+  const snapshot = JSON.parse(JSON.stringify(state));
   items.forEach(it=>{ const c=findItemCard(it.itemCardId); if(c) c.stockQty -= it.qty; });
   const payment = {id:Date.now()+"", date, cash, network, receipt};
   applyPaymentToBalances(payment);
   ensureCustomerIndividual(custMobile, custName);
   state.salesInvoices.push({id:Date.now()+"", number, date, customerName:custName, customerMobile:custMobile, items, payment, recordedBy:currentUser.username});
   state.settings.nextSalesInvoiceNumber++;
-  saveState(); renderAll(); resetSaleForm();
+  if(!await saveStateWithRollback(snapshot)) return; // form stays filled in so the cashier can just retry
+  resetSaleForm();
   showToast(lowStock.length? "تم الحفظ — تنبيه: بعض الأصناف تجاوزت المخزون المتاح" : "تم حفظ فاتورة المبيعات");
 }
 function renderSalesInvoicesList(){
@@ -7880,11 +7916,14 @@ $("doTransferBtn").addEventListener("click", ()=>{
     if(!toOwner){ showToast("اختر المستخدم المستلم"); return; }
     toBoxId = null;
   }
+  const transferSnapshot = JSON.parse(JSON.stringify(state));
   const result = transferFunds(fromBoxId, toOwner, toBoxId, amount, purpose);
   if(!result.ok){ showToast(result.msg); return; }
-  saveState(); renderAll();
-  $("transferAmount").value=""; $("transferPurpose").value="";
-  showToast(result.instant ? "تم التحويل بنجاح" : "تم إرسال طلب التحويل، بانتظار تأكيد الاستلام");
+  saveStateWithRollback(transferSnapshot).then(saved=>{
+    if(!saved) return;
+    $("transferAmount").value=""; $("transferPurpose").value="";
+    showToast(result.instant ? "تم التحويل بنجاح" : "تم إرسال طلب التحويل، بانتظار تأكيد الاستلام");
+  });
 });
 $("addExpenseBtn").addEventListener("click", ()=>{
   const invoiceNumber = $("expInvNumber").value.trim();
@@ -7899,11 +7938,14 @@ $("addExpenseBtn").addEventListener("click", ()=>{
   const vatStatus = $("expVatStatus").value;
   if(amount<=0){ showToast("أدخل مبلغ صحيح"); return; }
   if(!sourceBoxId){ showToast("اختر مصدر الدفع"); return; }
+  const expenseSnapshot = JSON.parse(JSON.stringify(state));
   const result = addExpense({invoiceNumber, taxNumber, date, categoryId, amount, paidTo, storeName, notes, sourceBoxId, vatStatus});
   if(!result.ok){ showToast(result.msg); return; }
-  saveState(); renderAll();
-  $("expInvNumber").value=""; $("expTaxNumber").value=""; $("expAmount").value=""; $("expPaidTo").value=""; $("expStoreName").value=""; $("expNotes").value="";
-  showToast("تم حفظ المصروف");
+  saveStateWithRollback(expenseSnapshot).then(saved=>{
+    if(!saved) return;
+    $("expInvNumber").value=""; $("expTaxNumber").value=""; $("expAmount").value=""; $("expPaidTo").value=""; $("expStoreName").value=""; $("expNotes").value="";
+    showToast("تم حفظ المصروف");
+  });
 });
 
 $("addSupplierBtn").addEventListener("click", addSupplier);
