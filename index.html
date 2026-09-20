@@ -1791,6 +1791,18 @@ async function sha256Hex(text){
   const buf = await crypto.subtle.digest("SHA-256", enc);
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
 }
+function genPasswordSalt(){ return genUUID(); }
+async function hashPassword(password, salt){ return sha256Hex(salt + ":" + password); }
+async function checkPassword(user, attempt){
+  if(!user) return false;
+  if(user.passwordHash) return (await hashPassword(attempt, user.passwordSalt)) === user.passwordHash;
+  return user.password === attempt; // legacy plaintext account, not migrated yet
+}
+async function setUserPassword(user, newPassword){
+  user.passwordSalt = genPasswordSalt();
+  user.passwordHash = await hashPassword(newPassword, user.passwordSalt);
+  delete user.password;
+}
 function genUUID(){
   if(crypto.randomUUID) return crypto.randomUUID();
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c=>{ const r=Math.random()*16|0; return (c==="x"?r:(r&0x3|0x8)).toString(16); });
@@ -2559,10 +2571,11 @@ async function loadState(){
   });
 }
 
-function tryLogin(){
+async function tryLogin(){
   const u=$("loginUser").value.trim(), p=$("loginPass").value;
-  const found = state.users.find(x=>x.username===u && x.password===p);
-  if(!found){ $("loginErr").textContent="اسم المستخدم أو كلمة المرور غير صحيحة"; return; }
+  const found = state.users.find(x=>x.username===u);
+  if(!found || !(await checkPassword(found, p))){ $("loginErr").textContent="اسم المستخدم أو كلمة المرور غير صحيحة"; return; }
+  if(!found.passwordHash){ await setUserPassword(found, p); saveState(); } // migrate this account off plaintext storage on successful login
   currentUser=found;
   $("loginScreen").classList.add("hidden"); $("app").classList.remove("hidden");
   $("curUserLbl").textContent = currentUser.username+" ("+currentUser.role+")";
@@ -7563,8 +7576,8 @@ function confirmWithPassword(message){
       yesBtn.removeEventListener("click", onYes); noBtn.removeEventListener("click", onNo); input.removeEventListener("keydown", onKey);
       resolve(v);
     }
-    function onYes(){
-      if(input.value === currentUser.password){ cleanup(true); }
+    async function onYes(){
+      if(await checkPassword(currentUser, input.value)){ cleanup(true); }
       else { $("passwordModalError").style.display = ""; input.value=""; input.focus(); }
     }
     function onNo(){ cleanup(false); }
@@ -7580,7 +7593,7 @@ function renderUsers(){
     const isLastManager = u.role==="مدير" && managerCount<=1;
     return `<div class="user-row"><div class="row-3" style="margin-bottom:0;align-items:end;">
         <div class="field" style="margin-bottom:0;"><label>اسم المستخدم</label><input type="text" class="edit-username" data-idx="${i}" value="${u.username}"></div>
-        <div class="field" style="margin-bottom:0;"><label>كلمة المرور</label><input type="text" class="edit-password" data-idx="${i}" value="${u.password}"></div>
+        <div class="field" style="margin-bottom:0;"><label>كلمة مرور جديدة</label><input type="text" class="edit-password" data-idx="${i}" value="" placeholder="اتركه فارغاً لعدم تغيير كلمة المرور"></div>
         <div class="field" style="margin-bottom:0;"><label>الدور</label><select class="edit-role" data-idx="${i}"><option value="محاسب" ${u.role==="محاسب"?"selected":""}>محاسب</option><option value="كاشير" ${u.role==="كاشير"?"selected":""}>كاشير</option><option value="خياط" ${u.role==="خياط"?"selected":""}>خياط</option><option value="مدير" ${u.role==="مدير"?"selected":""}>مدير</option></select></div>
       </div>
       ${u.role==="خياط" ? `<div class="row-2" style="margin-top:8px;">
@@ -7652,11 +7665,11 @@ function renderPermissionsEditor(){
     showToast("تم تحديث الصلاحيات");
   }));
 }
-function saveUserEdit(i){
+async function saveUserEdit(i){
   const username=document.querySelector(`.edit-username[data-idx="${i}"]`).value.trim();
-  const password=document.querySelector(`.edit-password[data-idx="${i}"]`).value;
+  const newPassword=document.querySelector(`.edit-password[data-idx="${i}"]`).value; // blank = keep the existing password
   const role=document.querySelector(`.edit-role[data-idx="${i}"]`).value;
-  if(!username||!password){ showToast("أدخل اسم المستخدم وكلمة المرور"); return; }
+  if(!username){ showToast("أدخل اسم المستخدم"); return; }
   if(state.users.some((u,idx)=>idx!==i&&u.username===username)){ showToast("اسم المستخدم مستخدم من قبل"); return; }
   const managerCount = state.users.filter((u,idx)=>idx!==i&&u.role==="مدير").length + (role==="مدير"?1:0);
   if(managerCount<1){ showToast("لازم يبقى مدير واحد على الأقل"); return; }
@@ -7680,7 +7693,11 @@ function saveUserEdit(i){
   const wageChild = wageChildInp ? (parseFloat(wageChildInp.value)||0) : 0;
   const wageChildSmallInp = document.querySelector(`.edit-wage-childsmall[data-idx="${i}"]`);
   const wageChildSmall = wageChildSmallInp ? (parseFloat(wageChildSmallInp.value)||0) : 0;
-  state.users[i]={username,password,role,baseSalary,commissionEnabled,commissionRate,discountEnabled,discountType,discountValue,dailyCapacity,productionCapacity,wageMen,wageChild,wageChildSmall};
+  const prevUser = state.users[i];
+  const updatedUser = {username,role,baseSalary,commissionEnabled,commissionRate,discountEnabled,discountType,discountValue,dailyCapacity,productionCapacity,wageMen,wageChild,wageChildSmall};
+  if(newPassword){ await setUserPassword(updatedUser, newPassword); }
+  else { updatedUser.passwordHash = prevUser.passwordHash; updatedUser.passwordSalt = prevUser.passwordSalt; if(!updatedUser.passwordHash) updatedUser.password = prevUser.password; }
+  state.users[i]=updatedUser;
   if(currentUser && currentUser.username===oldUsername){ currentUser=state.users[i]; $("curUserLbl").textContent=currentUser.username+" ("+currentUser.role+")"; applyRolePermissions(); }
   saveState(); showToast("تم حفظ التعديل"); // no renderAll() here on purpose — re-rendering the whole list would wipe unsaved edits typed into OTHER users' rows
 }
@@ -7695,11 +7712,13 @@ async function removeUser(i){
   logAudit("user_removed", {removedUsername, removedRole});
   showToast(wasCapacity>0 ? `تم حذف المستخدم — انخفضت الطاقة الإنتاجية للمواسم بمقدار ${wasCapacity} قطعة تلقائياً` : "تم حذف المستخدم");
 }
-function addUser(){
+async function addUser(){
   const username=$("newUserName").value.trim(), password=$("newUserPass").value, role=$("newUserRole").value;
   if(!username||!password){ showToast("أدخل اسم المستخدم وكلمة المرور"); return; }
   if(state.users.some(u=>u.username===username)){ showToast("اسم المستخدم موجود مسبقاً"); return; }
-  state.users.push({username,password,role,baseSalary:0,commissionEnabled:false,commissionRate:0,commissionThreshold:0,discountEnabled:false,discountType:"amount",discountValue:0,dailyCapacity:0,productionCapacity:0}); ensureUserBoxes(username); saveState(); renderAll();
+  const newUser = {username,role,baseSalary:0,commissionEnabled:false,commissionRate:0,commissionThreshold:0,discountEnabled:false,discountType:"amount",discountValue:0,dailyCapacity:0,productionCapacity:0};
+  await setUserPassword(newUser, password);
+  state.users.push(newUser); ensureUserBoxes(username); saveState(); renderAll();
   logAudit("user_added", {newUsername:username, role});
   $("newUserName").value=""; $("newUserPass").value=""; showToast("تم إضافة المستخدم");
 }
