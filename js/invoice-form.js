@@ -452,8 +452,11 @@ function renderGarmentFields(prefill=null){
     div.querySelector(".meas-toggle-btn").addEventListener("click", ()=> openMeasPanel(i));
     div.querySelectorAll(".meas-close-btn").forEach(btn=> btn.addEventListener("click", closeMeasPanel));
     div.querySelectorAll(".meas-save-btn").forEach(btn=> btn.addEventListener("click", ()=>{
-      showToast("تم حفظ مقاسات الثوب");
+      saveMeasurementSnapshotToHistory(i);
       closeMeasPanel();
+    }));
+    div.querySelectorAll(".meas-fetch-season-btn").forEach(btn=> btn.addEventListener("click", ()=>{
+      loadMeasurementSnapshotIntoGarment(parseInt(btn.dataset.idx), btn.dataset.season);
     }));
     div.querySelectorAll(".meas-choice").forEach(sel=> sel.addEventListener("change", ()=>{
       const idx = parseInt(sel.dataset.idx);

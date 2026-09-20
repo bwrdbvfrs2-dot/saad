@@ -185,6 +185,80 @@ function closeMeasPanel(){
   $("measModalBackdrop").classList.add("hidden");
   openMeasPanelIdx = null;
 }
+function garmentMeasurementSeasonFromItemCardId(itemCardId){
+  if(!itemCardId || itemCardId==="__none__") return null;
+  const card = findItemCard(itemCardId);
+  if(!card || !card.season) return null;
+  return card.season==="شتوي" ? "winter" : "summer";
+}
+function seasonLabelAr(key){ return key==="winter" ? "شتوي" : "صيفي"; }
+function findIndividualRecord(mobile, name){
+  const cust = findCustomerByMobile(mobile);
+  if(!cust) return null;
+  return cust.individuals.find(i=>i.name===name) || null;
+}
+function measurementSnapshotFromPanel(idx){
+  const card = $("garmentsHolder").children[idx];
+  if(!card) return null;
+  const measurements = {};
+  card.querySelectorAll(".meas-field").forEach(inp=>{ if(inp.value!=="") measurements[inp.dataset.key] = parseFloat(inp.value)||0; });
+  card.querySelectorAll(".meas-choice").forEach(sel=>{ if(sel.value) measurements[sel.dataset.key] = sel.value; });
+  const categorySel = card.querySelector(".g-category");
+  return { date: todayStr(), measurements, category: categorySel ? categorySel.value : undefined };
+}
+function saveMeasurementSnapshotToHistory(idx){
+  const mobile = $("custMobile").value.trim();
+  const name = $("custName").value.trim();
+  if(!/^[0-9]{10}$/.test(mobile) || !name){
+    showToast("أدخل اسم العميل ورقم جواله كامل أول عشان يُحفظ المقاس بسجله");
+    return;
+  }
+  const card = $("garmentsHolder").children[idx];
+  const itemCardId = card ? card.querySelector(".g-itemCard").value : "";
+  const seasonKey = garmentMeasurementSeasonFromItemCardId(itemCardId);
+  ensureCustomerIndividual(mobile, name);
+  const individual = findIndividualRecord(mobile, name);
+  if(!individual.measurementHistory) individual.measurementHistory = {summer:[], winter:[]};
+  if(seasonKey){
+    const list = individual.measurementHistory[seasonKey] || [];
+    list.unshift(measurementSnapshotFromPanel(idx));
+    individual.measurementHistory[seasonKey] = list.slice(0,3);
+  }
+  saveState();
+  showToast(seasonKey ? `تم حفظ المقاس (${seasonLabelAr(seasonKey)}) بسجل العميل` : "تم الحفظ — بدون تصنيف موسمي لأن القماش المختار ما له موسم محدد بكرت الصنف");
+}
+function loadMeasurementSnapshotIntoGarment(idx, seasonKey){
+  const mobile = $("custMobile").value.trim();
+  const name = $("custName").value.trim();
+  const individual = findIndividualRecord(mobile, name);
+  const snapshot = individual && individual.measurementHistory && individual.measurementHistory[seasonKey] && individual.measurementHistory[seasonKey][0];
+  if(!snapshot){ showToast(`ما فيه مقاس ${seasonLabelAr(seasonKey)} محفوظ سابقاً لهذا العميل`); return; }
+  const current = readGarmentFields();
+  current[idx] = {...current[idx], measurements: {...snapshot.measurements}, category: snapshot.category||current[idx].category};
+  renderGarmentFields(current);
+  openMeasPanel(idx);
+  showToast(`تم تحميل آخر مقاس ${seasonLabelAr(seasonKey)} (${snapshot.date})`);
+}
+function buildMeasurementHistoryBoxHtml(idx, itemCardId){
+  const mobile = $("custMobile") ? $("custMobile").value.trim() : "";
+  const name = $("custName") ? $("custName").value.trim() : "";
+  const individual = findIndividualRecord(mobile, name);
+  const hist = individual && individual.measurementHistory;
+  const summerCount = hist && hist.summer ? hist.summer.length : 0;
+  const winterCount = hist && hist.winter ? hist.winter.length : 0;
+  if(!summerCount && !winterCount) return "";
+  const currentSeason = garmentMeasurementSeasonFromItemCardId(itemCardId);
+  const seasonBtn = (seasonKey, count)=>{
+    if(!count) return "";
+    const date = hist[seasonKey][0].date;
+    const highlighted = seasonKey===currentSeason;
+    return `<button type="button" class="btn ${highlighted?"btn-gold":"btn-ghost"} btn-sm meas-fetch-season-btn" data-idx="${idx}" data-season="${seasonKey}" style="width:100%;margin-bottom:4px;">تحميل آخر مقاس ${seasonLabelAr(seasonKey)} — ${date}</button>`;
+  };
+  return `<div style="margin-bottom:8px;">
+    <p class="sub" style="font-size:10px;margin:0 0 4px;">مقاسات محفوظة سابقاً لهذا العميل:</p>
+    ${seasonBtn("summer", summerCount)}${seasonBtn("winter", winterCount)}
+  </div>`;
+}
 function buildMannequinPreviewHtml(m){
   const garmentTypeItem = (state.garmentTypes||[]).find(o=>o.code===m.garmentType);
   if(!garmentTypeItem || !garmentTypeItem.image || !garmentTypeItem.imageBack){
@@ -230,6 +304,7 @@ function renderMeasurementPanelHtml(g, idx){
     <div style="display:flex;gap:14px;padding:14px;flex-wrap:wrap;">
       <div style="width:210px;flex-shrink:0;">
         <div style="background:var(--surface3);border:1px solid var(--gold);border-radius:8px;padding:8px;margin-bottom:8px;">${garmentTypeFieldHtml}</div>
+        ${buildMeasurementHistoryBoxHtml(idx, g.itemCardId)}
         ${buildMannequinPreviewHtml(m)}
       </div>
       <div style="flex:1;min-width:280px;">
@@ -362,14 +437,16 @@ function renderLoyaltyInfo(){
 function refreshMeasurementsForCustomer(mobile, name){
   if(!/^[0-9]{10}$/.test(mobile) || !name || editingId) return;
   const lastGarment = findLastGarmentDataForCustomer(mobile, name);
-  if(lastGarment){
-    const current = readGarmentFields();
-    if(current[0] && Object.keys(current[0].measurements||{}).length===0){
-      current[0] = {...current[0], measurements: {...lastGarment.measurements}, category: lastGarment.category||current[0].category};
-      renderGarmentFields(current);
-      showToast("جبنا مقاسات هذا العميل من آخر فاتورة له — تقدر تعدّلها قبل الحفظ");
-    }
+  const current = readGarmentFields();
+  let autoFilled = false;
+  if(lastGarment && current[0] && Object.keys(current[0].measurements||{}).length===0){
+    current[0] = {...current[0], measurements: {...lastGarment.measurements}, category: lastGarment.category||current[0].category};
+    autoFilled = true;
   }
+  const wasOpenIdx = openMeasPanelIdx;
+  renderGarmentFields(current);
+  if(wasOpenIdx!==null) openMeasPanel(wasOpenIdx);
+  if(autoFilled) showToast("جبنا مقاسات هذا العميل من آخر فاتورة له — تقدر تعدّلها قبل الحفظ");
 }
 function renderCustomerPicker(mobileInputId, nameInputId, pickerWrapId){
   const mobile = $(mobileInputId).value.trim();
