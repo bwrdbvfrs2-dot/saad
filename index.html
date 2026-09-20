@@ -408,7 +408,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   <div id="sensitiveContent" style="display:none;">
     <div class="stats" id="sensitiveStatsGrid"></div>
     <div class="stitch"></div>
-    <h3 style="margin:0 0 10px;font-size:14px;">⏰ الثياب المتعثرة (7 أيام فأكثر من الجاهزية)</h3>
+    <h3 style="margin:0 0 10px;font-size:14px;">الثياب المتعثرة (7 أيام فأكثر من الجاهزية)</h3>
     <div id="sensitiveStuckInvoicesView"></div>
   </div>
 </div>
@@ -575,11 +575,11 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
       <p class="sub" style="margin-bottom:8px;">نص حر يظهر بأسفل كل فاتورة مطبوعة (مثلاً: شكراً لتعاملكم معنا، أو سياسة الاستبدال).</p>
       <textarea id="setInvoiceFooter" rows="3" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 11px;color:var(--ivory);font-family:inherit;font-size:14px;" placeholder="مثلاً: نشكركم على ثقتكم بنا 🌹"></textarea>
       <div class="stitch"></div>
-      <h3 style="margin:0 0 8px;font-size:14px;">⏰ تذكير حفظ الفاتورة الجديدة</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">تذكير حفظ الفاتورة الجديدة</h3>
       <p class="sub" style="margin-bottom:8px;">لو حد بدأ فاتورة جديدة وحاول يطلع منها أو يفرّغ النموذج بدون حفظ، يطلع له سؤال تأكيد. وبعد المدة المحددة أدناه بدون حفظ، يذكّره النظام تلقائياً حتى لو ما حاول يطلع.</p>
       <div class="field"><label>مدة التذكير التلقائي (دقائق)</label><input type="number" id="setSaveReminderMinutes" min="1" step="1"></div>
       <div class="stitch"></div>
-      <h3 style="margin:0 0 8px;font-size:14px;">⏰ إعدادات لوحة المتأخرات</h3>
+      <h3 style="margin:0 0 8px;font-size:14px;">إعدادات لوحة المتأخرات</h3>
       <div class="row-2">
         <div class="field"><label>مدة التسليم الافتراضية (لو ما فيه خياطين بقدرة محددة بعد)</label><input type="number" id="setDefaultDeliveryDays" min="1" step="1"></div>
         <div class="field"><label>القص لازم يخلص قبل التسليم بكم يوم؟</label><input type="number" id="setCuttingOverdueDays" min="1" step="1"></div>
@@ -869,7 +869,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
     <div class="field"><label>اسم العميل</label><input type="text" id="custName" list="custNameDatalist" autocomplete="off"><datalist id="custNameDatalist"></datalist></div>
     <div class="field"><label>رقم جوال العميل</label><input type="tel" id="custMobile" placeholder="05xxxxxxxx" maxlength="10" inputmode="numeric" autocomplete="off"></div>
   </div>
-  <p class="sub" id="custNewBadge" style="display:none;color:var(--gold-soft);margin:-6px 0 10px;">🆕 عميل جديد — هذا الرقم مو مسجّل بالنظام</p>
+  <p class="sub" id="custNewBadge" style="display:none;color:var(--gold-soft);margin:-6px 0 10px;">عميل جديد — هذا الرقم مو مسجّل بالنظام</p>
   <div id="custPickerWrap" style="display:none;margin-bottom:12px;"></div>
   <div id="loyaltyInfoWrap" style="display:none;margin-bottom:12px;"></div>
   <div id="customerAlertWrap" style="display:none;margin-bottom:12px;"></div>
@@ -925,7 +925,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
     <div class="field"><label>اسم العميل</label><input type="text" id="saleCustName" list="custNameDatalist" autocomplete="off"></div>
     <div class="field"><label>رقم جوال العميل</label><input type="tel" id="saleCustMobile" placeholder="05xxxxxxxx" maxlength="10" inputmode="numeric" autocomplete="off"></div>
   </div>
-  <p class="sub" id="saleCustNewBadge" style="display:none;color:var(--gold-soft);margin:-6px 0 10px;">🆕 عميل جديد — هذا الرقم مو مسجّل بالنظام</p>
+  <p class="sub" id="saleCustNewBadge" style="display:none;color:var(--gold-soft);margin:-6px 0 10px;">عميل جديد — هذا الرقم مو مسجّل بالنظام</p>
   <div id="salePickerWrap" style="display:none;margin-bottom:12px;"></div>
   <div class="stitch"></div>
   <h3 style="margin:0 0 10px;font-size:14px;">الأصناف</h3>
@@ -949,7 +949,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 <div class="tab-panel" id="tab-distribution">
 <div class="panel">
-  <h2>⏰ لوحة المتأخرات</h2>
+  <h2>لوحة المتأخرات</h2>
   <div id="overdueDashboard"></div>
 </div>
 <div class="panel">
@@ -1641,7 +1641,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   </div>
 
   <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">⏳ الطلبات قيد الانتظار</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">الطلبات قيد الانتظار</h3>
   <div id="mailPendingList"></div>
   <div class="stitch"></div>
   <h3 style="margin:0 0 10px;font-size:14px;">الطلبات المنتهية</h3>
@@ -4880,7 +4880,7 @@ async function saveInvoice(){
     state.settings.nextInvoiceNumber++;
   }
   if(!editingId && invData.customerMobile){
-    $("printReceiptBanner").innerHTML = `<p class="sub" style="text-align:center;">⏳ جاري حفظ الفاتورة بالسحابة...</p>`;
+    $("printReceiptBanner").innerHTML = `<p class="sub" style="text-align:center;">جاري حفظ الفاتورة بالسحابة...</p>`;
     $("printReceiptBanner").style.display = "";
   }
   if(isNewInvoice && state.settings.waWelcomeEnabled && invData.customerMobile){
@@ -5314,7 +5314,7 @@ function generalExpensesForMonth(monthLabel){
 async function loadAndRenderAuditLog(){
   const el = $("auditLogView");
   if(!el) return;
-  el.innerHTML = `<p class="sub">⏳ جاري التحميل...</p>`;
+  el.innerHTML = `<p class="sub">جاري التحميل...</p>`;
   const userFilter = $("auditFilterUser").value.trim();
   const actionFilter = $("auditFilterAction").value;
   const fromFilter = $("auditFilterFrom").value;
