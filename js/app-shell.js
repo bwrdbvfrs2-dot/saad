@@ -325,7 +325,7 @@ async function loadState(){
   await ensureAuth();
   return new Promise((resolve)=>{
     let firstLoad = true;
-    STATE_DOC.onSnapshot(snap=>{
+    STATE_DOC.onSnapshot(async snap=>{
       if(snap.exists){
         state = snap.data();
         typeLibrariesReseeded = false;
@@ -333,8 +333,24 @@ async function loadState(){
         normalizeState();
         if(typeLibrariesReseeded || addonSnapshotsBackfilled) saveState();
       } else if(firstLoad){
-        normalizeState();
-        STATE_DOC.set(JSON.parse(JSON.stringify(state))).catch(e=>console.error("Firestore init failed", e));
+        // A missing state document could mean genuine first-time setup, OR it could mean
+        // the document went missing after real data already existed (accidental deletion,
+        // a transient read glitch, etc). auditLog is a separate collection that is never
+        // touched by a state write, so any entries there prove this shop has real history —
+        // refuse to silently reinitialize in that case rather than risk overwriting
+        // recoverable data with a blank state.
+        let hasPriorHistory = false;
+        try{
+          const priorAudit = await AUDIT_LOG_COL.limit(1).get();
+          hasPriorHistory = !priorAudit.empty;
+        }catch(e){ console.error("audit history check failed", e); }
+        if(hasPriorHistory){
+          console.error("STATE_DOC missing but auditLog has prior entries — refusing to auto-reinitialize.");
+          showToast("تعذّر العثور على بيانات المحل رغم وجود سجل نشاط سابق — لن يتم إنشاء بيانات جديدة تلقائياً تجنباً لفقدان بياناتك. تواصل مع الدعم الفني فوراً.");
+        } else {
+          normalizeState();
+          STATE_DOC.set(JSON.parse(JSON.stringify(state))).catch(e=>console.error("Firestore init failed", e));
+        }
       }
       if(firstLoad){ firstLoad=false; resolve(); }
       else if(currentUser){ renderAll(); }
