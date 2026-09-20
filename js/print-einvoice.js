@@ -371,14 +371,20 @@ function buildFallbackDiagramSvg(val){
 async function printCuttingCard(invId, gIdx){
   const inv = state.invoices.find(i=>i.id===invId);
   if(!inv) return;
-  $("dynamicPageSize").textContent = "";
+  // an unset @page falls back to whatever margin the browser/OS/printer defaults to, which
+  // varies a lot across devices (measured 15-50mm+ combined vertical margin in the wild) --
+  // this card's content sits right at ~246mm tall, so on any device with generous default
+  // margins it silently overflows onto a second page. An explicit, tight, predictable margin
+  // removes that variable entirely and guarantees this always fits on one A4 page.
+  $("dynamicPageSize").textContent = "@media print{ @page{ size:A4; margin:8mm; } }";
   $("printArea").innerHTML = buildCuttingCardHtml(inv, gIdx);
-  try{
-    await loadBarcodeLib();
-    window.JsBarcode("#cuttingBarcodeHolder", inv.number, {format:"CODE128", width:1.6, height:36, fontSize:11, margin:2});
-    window.JsBarcode("#cuttingBarcodeHolderStub1", inv.number, {format:"CODE128", width:1.3, height:28, fontSize:10, margin:2});
-    window.JsBarcode("#cuttingBarcodeHolderStub2", inv.number, {format:"CODE128", width:1.3, height:28, fontSize:10, margin:2});
-  }catch(e){ /* barcode lib needs internet on first use — card still prints fine without it */ }
+  await loadBarcodeLib().catch(e=>{ /* barcode lib needs internet on first use — card still prints fine without it */ });
+  if(window.JsBarcode){
+    const drawBarcode = (id, opts)=>{ try{ window.JsBarcode(id, inv.number, opts); }catch(e){ console.error("barcode render failed for "+id, e); } };
+    drawBarcode("#cuttingBarcodeHolder", {format:"CODE128", width:1.6, height:36, fontSize:11, margin:2});
+    drawBarcode("#cuttingBarcodeHolderStub1", {format:"CODE128", width:1.3, height:28, fontSize:10, margin:2});
+    drawBarcode("#cuttingBarcodeHolderStub2", {format:"CODE128", width:1.3, height:28, fontSize:10, margin:2});
+  }
   setTimeout(()=> safePrint(), 250);
 }
 async function renderReceiptIntoPrintArea(inv){
