@@ -3566,7 +3566,26 @@ function computeShiftExpected(username, date){
     }
   });
   const sysTransfers = state.transferRequests.filter(r=>r.status==="accepted" && r.toOwner===username && r.resolvedAt===date).reduce((a,r)=>a+r.amount,0);
-  return {sysCash, sysNetwork, sysTransfers, total: sysCash+sysNetwork+sysTransfers, payRefs};
+  // a cross-user transfer this user SENT is deducted from their box the instant it's sent (see
+  // transferFunds()), not when it's accepted/rejected — so it must reduce today's expected cash too,
+  // whatever happens to it afterwards. If it's later rejected and the money is returned, that return
+  // is dated by resolvedAt, so it only offsets the expected total on the day it actually comes back.
+  const sysTransfersOut = state.transferRequests.filter(r=>r.fromOwner===username && r.createdAt===date).reduce((a,r)=>a+r.amount,0);
+  const sysTransfersReturned = state.transferRequests.filter(r=>r.status==="rejected" && r.fromOwner===username && r.resolvedAt===date).reduce((a,r)=>a+r.amount,0);
+  // expenses already formally recorded (شاشة المصروفات) and paid out of this user's own box(es) on this
+  // date — that cash/network amount legitimately left the box for a documented reason. Without this, the
+  // shift audit falsely reports a shortage equal to every such expense, since it only ever summed money
+  // coming IN (payments/transfers) and had no idea money could also legitimately go OUT via a real expense.
+  let recordedCashExpenses = 0, recordedNetworkExpenses = 0;
+  state.expenses.forEach(e=>{
+    if(e.date!==date) return;
+    const box = findCashBox(e.sourceBoxId);
+    if(!box || box.owner!==username) return;
+    if(box.type==="cash") recordedCashExpenses += e.amount;
+    else if(box.type==="network") recordedNetworkExpenses += e.amount;
+  });
+  const total = sysCash+sysNetwork+sysTransfers-sysTransfersOut+sysTransfersReturned-recordedCashExpenses-recordedNetworkExpenses;
+  return {sysCash, sysNetwork, sysTransfers, sysTransfersOut, sysTransfersReturned, recordedCashExpenses, recordedNetworkExpenses, total, payRefs};
 }
 function runShiftAudit(){
   const date = $("shiftAuditDate").value || todayStr();
@@ -3578,7 +3597,15 @@ function runShiftAudit(){
   const physicalTotal = actualCash + pettyExpenses + networkActual + transfersActual;
   const diff = physicalTotal - expected.total;
   window.__lastShiftAudit = {date, actualCash, networkActual, transfersActual, pettyExpenses, expected, physicalTotal, diff};
-  let html = `<div class="remaining-box"><span>المتوقع من النظام (كاش ${expected.sysCash.toFixed(0)} + شبكة ${expected.sysNetwork.toFixed(0)} + تحويلات ${expected.sysTransfers.toFixed(0)})</span><span class="amt">${expected.total.toFixed(2)} ريال</span></div>`;
+  const recordedExpTotal = expected.recordedCashExpenses + expected.recordedNetworkExpenses;
+  const netTransfersOut = expected.sysTransfersOut - expected.sysTransfersReturned;
+  let html = `<div class="remaining-box"><span>المتوقع من النظام (كاش ${expected.sysCash.toFixed(0)} + شبكة ${expected.sysNetwork.toFixed(0)} + تحويلات مستلمة ${expected.sysTransfers.toFixed(0)}${netTransfersOut>0?` − تحويلات مرسلة ${netTransfersOut.toFixed(0)}`:""}${recordedExpTotal>0?` − مصروفات مسجّلة ${recordedExpTotal.toFixed(0)}`:""})</span><span class="amt">${expected.total.toFixed(2)} ريال</span></div>`;
+  if(netTransfersOut>0){
+    html += `<p class="sub" style="margin:4px 0;">ℹ تم خصم ${netTransfersOut.toFixed(0)} ريال تحويلات أرسلتها من صندوقك اليوم لمستخدم آخر (ما رجعت لك حتى الآن).</p>`;
+  }
+  if(recordedExpTotal>0){
+    html += `<p class="sub" style="margin:4px 0;">ℹ تم خصم ${recordedExpTotal.toFixed(0)} ريال مصروفات مسجّلة رسمياً من صندوقك اليوم تلقائياً — لا تكتبها مرة ثانية بخانة "المصروفات النثرية" تحت، إلا لو فيه مصروف ثاني ما سجّلته رسمياً بعد.</p>`;
+  }
   html += `<div class="remaining-box" style="margin-top:6px;"><span>الإجمالي الفعلي (من واقع الدرج)</span><span class="amt">${physicalTotal.toFixed(2)} ريال</span></div>`;
   if(Math.abs(diff)<0.5){
     html += `<div class="remaining-box" style="margin-top:6px;border-color:var(--profit);"><span><b>✅ متوافق</b></span><span class="amt" style="color:var(--profit);">لا يوجد فرق</span></div>`;
@@ -3616,16 +3643,17 @@ function runInvestigation(){
   }).join("");
   $("investigationResults").innerHTML = results + `<p class="sub" style="margin-top:8px;">ℹ هذي أداة إرشادية بس — ما تعدّل أي شي بحسابات النظام تلقائياً. أي تصحيح تسويه بنفسك يدوياً (مصروف، دفعة ناقصة، إلخ).</p>`;
 }
-function saveShiftClosing(){
+async function saveShiftClosing(){
   const a = window.__lastShiftAudit;
   if(!a){ showToast("اضغط احسب أولاً"); return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
   state.shiftClosings.push({
     id: Date.now()+"", username: currentUser.username, date: a.date,
     actualCash:a.actualCash, networkActual:a.networkActual, transfersActual:a.transfersActual, pettyExpenses:a.pettyExpenses,
     systemCash:a.expected.sysCash, systemNetwork:a.expected.sysNetwork, systemTransfers:a.expected.sysTransfers,
     systemTotal:a.expected.total, physicalTotal:a.physicalTotal, diff:a.diff, timestamp:serverDate().toISOString(),
   });
-  saveState(); renderAll();
+  if(!await saveStateWithRollback(snapshot)) return; // don't claim success below if the closing record never actually made it to the cloud
   showToast("تم حفظ سجل الإقفال");
 }
 function renderShiftClosingsLog(){
