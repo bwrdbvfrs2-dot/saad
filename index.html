@@ -4739,11 +4739,13 @@ async function creditDeliverGarment(invId, idx){
   if(g.status==="تسليم" || g.status==="ملغي"){ showToast("لا يمكن تطبيق هذا على ثوب مُسلَّم أو ملغي"); return; }
   const amount = garmentSalePrice(g);
   if(!await showConfirm(`تأكيد: بيتم تسليم هذا الثوب الآن رغم وجود دين عليه بقيمة ${amount.toFixed(0)} ريال. الثوب بينتقل لقائمة "مديونية الثياب" حتى يُسدد المبلغ. متابعة؟`)) return;
+  const snapshot = JSON.parse(JSON.stringify(state));
   g.status="تسليم";
   if(!g.readyDate) g.readyDate=todayStr();
   if(!g.deliveredDate) g.deliveredDate=todayStr();
   if(!g.creditDelivered){ g.creditDelivered=true; g.creditAmount=amount; g.creditPaid=0; }
-  saveState(); renderAll(); showToast("تم التسليم بدين — انتقل الثوب لقائمة مديونية الثياب");
+  if(!await saveStateWithRollback(snapshot)) return;
+  showToast("تم التسليم بدين — انتقل الثوب لقائمة مديونية الثياب");
   searchInvoiceForDistribution();
 }
 // ---------------- barcode scanning (tailor claim + general quick-advance) ----------------
@@ -5341,6 +5343,7 @@ async function saveDistribution(inv){
     return `ثوب ${c.i+1}: ${oldLabel} ← ${newLabel}${tailorNote}`;
   }).join("\n");
   if(!await showConfirm(`تأكيد تحويل حالة فاتورة رقم ${esc(inv.number)}:\n\n${changeLines}\n\nمتابعة؟`)) return;
+  const snapshot = JSON.parse(JSON.stringify(state));
   inv.garments.forEach((g,i)=>{
     const newStatus = intents[i].newStatus;
     if(newStatus!==g.status){
@@ -5353,7 +5356,8 @@ async function saveDistribution(inv){
     if(g.status==="جاهز" && !g.readyDate) g.readyDate = todayStr();
     if(g.status==="تسليم" && !g.deliveredDate) g.deliveredDate = todayStr();
   });
-  saveState(); renderAll(); showToast("تم حفظ التوزيع");
+  if(!await saveStateWithRollback(snapshot)) return;
+  showToast("تم حفظ التوزيع");
   const becameReady = changes.some(c=>c.newStatus==="جاهز");
   if(becameReady && inv.customerMobile){
     const msg = `مرحباً ${inv.customerName||""} 👋\nنبشّرك إن ثوبك بفاتورة رقم ${inv.number} صار جاهز للاستلام من ${state.settings.shopName||"محلنا"} 🎉\nبانتظارك!`;
@@ -5954,12 +5958,17 @@ async function confirmLegacyDeliver(){
     closeLegacyDeliverModal(); // close first — two modal-overlay elements stacking at once makes the nested confirm unclickable
     if(!await showConfirm(`بعد استلام ${amountReceived.toFixed(0)} ريال، بيفضل متبقي ${newRemaining.toFixed(0)} ريال. تسليم بدين كمدير؟`)) return;
   }
+  const snapshot = JSON.parse(JSON.stringify(state));
   item.remaining = newRemaining;
   item.deliveredCount = (item.deliveredCount||0) + qty;
   item.lastDeliveryDate = todayStr();
-  if(amountReceived>0.01) state.legacyPayments.push({id:Date.now()+"", itemId:item.id, amount:amountReceived, date:todayStr()});
+  if(amountReceived>0.01){
+    state.legacyPayments.push({id:Date.now()+"", itemId:item.id, amount:amountReceived, date:todayStr()});
+    applyPaymentToBalances({cash:amountReceived, network:0}); // this screen has no cash/network split in its UI — treated as cash, same as the amount was previously tracked in reports but never actually credited to any box
+  }
   if(item.deliveredCount>=item.count){ item.status="تم التسليم"; item.deliveredDate=todayStr(); }
-  saveState(); renderAll(); closeLegacyDeliverModal();
+  if(!await saveStateWithRollback(snapshot)) return;
+  closeLegacyDeliverModal();
   showToast(item.status==="تم التسليم" ? "تم تسليم كامل القطع" : `تم تسليم ${qty} — متبقي ${item.count-item.deliveredCount}`);
 }
 function renderLegacyItems(){
