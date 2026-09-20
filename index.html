@@ -558,6 +558,7 @@ tr.invoice-row:hover{background:#ffffff06;}
         <div class="field" id="newAddonServicePriceWrap"><label>سعر الخدمة (ريال)</label><input type="number" id="newAddonServicePrice" min="0" placeholder="0"></div>
         <div class="field" id="newAddonCardWrap" style="display:none;"><label>الصنف من المخزون</label><select id="newAddonCard"></select></div>
         <div class="field" id="newAddonQtyWrap" style="display:none;"><label>الكمية لكل ثوب</label><input type="number" id="newAddonQty" min="1" value="1"></div>
+        <div class="field" id="newAddonMarkupWrap" style="display:none;"><label>نسبة هامش الربح (%)</label><input type="number" id="newAddonMarkup" min="0" value="0" placeholder="0"></div>
         <div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-ghost btn-sm" id="addAddonBtn" style="width:100%;">➕ إضافة</button></div>
       </div>
       <div class="stitch"></div>
@@ -3372,7 +3373,7 @@ function currentFixedShare(extra=0, monthLabel=state.settings.currentMonth){
   return n>0 ? effectiveFixed/n : 0;
 }
 function garmentAddonsInfo(g){ return (g.addons||[]).map(id=>state.addonDefs.find(a=>a.id===id)).filter(Boolean); }
-function addonUnitPrice(a){ return a.kind==="service" ? (a.servicePrice||0) : (findItemCard(a.itemCardId)?.currentCost||0)*(a.qtyPerGarment||1); }
+function addonUnitPrice(a){ return a.kind==="service" ? (a.servicePrice||0) : (findItemCard(a.itemCardId)?.currentCost||0)*(1+(a.markupPercent||0)/100)*(a.qtyPerGarment||1); }
 function garmentAddonsTotal(g){
   // once an invoice is saved, g.addonsSaleSnapshot freezes what the customer was actually charged
   // for addons — same treatment as g.price/g.embroideryPrice, so it can't drift after the fact.
@@ -3837,7 +3838,7 @@ function renderGarmentFields(prefill=null){
     const currentFabricName = currentCard ? currentCard.name : ((g.itemCardId==="__none__" || (editingId && !g.itemCardId)) ? NO_FABRIC_LABEL : "");
     const addonsHtml = state.addonDefs.filter(a=>a.active!==false).map(a=>{
       const checked = (g.addons||[]).includes(a.id);
-      return `<label style="display:flex;align-items:center;gap:6px;margin:4px 0;font-size:13px;"><input type="checkbox" class="g-addon" data-addon="${a.id}" ${checked?"checked":""}> ${esc(a.name)} (${a.kind==="service"?a.servicePrice:findItemCard(a.itemCardId)?.currentCost.toFixed(0)||0} ريال)</label>`;
+      return `<label style="display:flex;align-items:center;gap:6px;margin:4px 0;font-size:13px;"><input type="checkbox" class="g-addon" data-addon="${a.id}" ${checked?"checked":""}> ${esc(a.name)} (${addonUnitPrice(a).toFixed(0)} ريال)</label>`;
     }).join("");
     div.innerHTML=`
       <span class="tag">ثوب ${i+1}</span>
@@ -5716,7 +5717,7 @@ function renderAddonsList(){
   if(!el) return;
   if(!state.addonDefs.length){ el.innerHTML = `<p class="sub">ما فيه ملحقات أو خدمات مضافة بعد.</p>`; return; }
   el.innerHTML = state.addonDefs.map((a,i)=>{
-    const priceTxt = a.kind==="service" ? `${(a.servicePrice||0).toFixed(0)} ريال` : (()=>{ const c=findItemCard(a.itemCardId); return c? `${c.currentCost.toFixed(0)} ريال (${a.qtyPerGarment||1} قطعة/ثوب)` : "—"; })();
+    const priceTxt = a.kind==="service" ? `${(a.servicePrice||0).toFixed(0)} ريال` : (()=>{ const c=findItemCard(a.itemCardId); if(!c) return "—"; const unitPrice = c.currentCost*(1+(a.markupPercent||0)/100); return `${unitPrice.toFixed(0)} ريال (${a.qtyPerGarment||1} قطعة/ثوب)${a.markupPercent?` — هامش ${a.markupPercent}%`:""}`; })();
     return `<div class="item-row"><span>${esc(a.name)} — ${a.kind==="service"?"خدمة":"ملحق فعلي"} — ${priceTxt}</span>
       <button class="icon-btn" onclick="removeAddonDef(${i})">🗑 حذف</button></div>`;
   }).join("");
@@ -5735,9 +5736,10 @@ function addAddonDef(){
     const itemCardId = $("newAddonCard").value;
     if(!itemCardId){ showToast("اختر صنف من المخزون (أضف ملحق فعلي من المشتريات أول)"); return; }
     const qtyPerGarment = parseFloat($("newAddonQty").value)||1;
-    state.addonDefs.push({id:Date.now()+"", name, kind:"physical", itemCardId, qtyPerGarment, active:true});
+    const markupPercent = parseFloat($("newAddonMarkup").value)||0;
+    state.addonDefs.push({id:Date.now()+"", name, kind:"physical", itemCardId, qtyPerGarment, markupPercent, active:true});
   }
-  $("newAddonName").value=""; $("newAddonServicePrice").value="";
+  $("newAddonName").value=""; $("newAddonServicePrice").value=""; $("newAddonMarkup").value="0";
   saveState(); renderAll();
   showToast("تمت إضافة الملحق/الخدمة");
 }
@@ -8101,6 +8103,7 @@ $("newAddonKind").addEventListener("change", ()=>{
   $("newAddonServicePriceWrap").style.display = isService ? "" : "none";
   $("newAddonCardWrap").style.display = isService ? "none" : "";
   $("newAddonQtyWrap").style.display = isService ? "none" : "";
+  $("newAddonMarkupWrap").style.display = isService ? "none" : "";
 });
 $("addAddonBtn").addEventListener("click", addAddonDef);
 $("addAlterReasonBtn").addEventListener("click", addAlterReason);
