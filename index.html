@@ -173,7 +173,6 @@ h1,h2,h3{font-family:var(--font-main);letter-spacing:0;}
 .stepper-step.current .dot{background:var(--gold);border-color:var(--gold);color:#241c07;box-shadow:0 0 0 4px rgba(184,134,58,.18);}
 .stepper-step.current .lbl{color:var(--ivory);font-weight:700;}
 .stitch{border:none;border-top:2px dashed var(--border);margin:24px 0;position:relative;}
-.stitch::after{content:"✂";position:absolute;top:-11px;right:0;background:var(--bg);padding:0 8px;color:var(--muted);font-size:14px;}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
 @media(max-width:820px){.stats{grid-template-columns:repeat(2,1fr);}}
 .tabbar{display:flex;overflow-x:auto;gap:8px;padding:6px 2px 14px;margin-bottom:6px;-webkit-overflow-scrolling:touch;}
@@ -255,7 +254,8 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 .icon-btn svg{width:1.3em;height:1.3em;}
 .icon-btn:hover{color:var(--gold);}
 .empty{text-align:center;padding:40px 10px;color:var(--muted);}
-.empty .big{font-size:32px;margin-bottom:8px;opacity:.85;}
+.empty .big{margin-bottom:8px;opacity:.6;display:flex;align-items:center;justify-content:center;}
+.empty .big svg{width:36px;height:36px;stroke-width:1.5;}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--navy);border:1px solid var(--navy-border);color:#fff;
   padding:11px 20px;border-radius:var(--r-sm);font-size:14px;opacity:0;pointer-events:none;transition:opacity .25s var(--ease), bottom .25s var(--ease);z-index:400;max-width:90vw;text-align:center;box-shadow:0 10px 30px -10px rgba(0,0,0,.35);}
 .toast.show{opacity:1;bottom:30px;}
@@ -368,7 +368,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   <div id="navDrawer" style="background:var(--surface);width:280px;max-width:85vw;height:100%;overflow-y:auto;padding:18px 14px;border-left:1px solid var(--border);">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
       <h3 style="margin:0;font-family:var(--font-main);">القائمة</h3>
-      <button class="icon-btn" id="closeDrawerBtn" style="font-size:20px;">✖</button>
+      <button class="icon-btn" id="closeDrawerBtn" style="font-size:20px;"><i data-lucide="x"></i></button>
     </div>
     <div id="navDrawerContent"></div>
   </div>
@@ -450,7 +450,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   <h2>سندات القبض والصرف</h2>
   <p class="sub">سندات مستقلة تماماً عن الفواتير — لأي مبلغ يدخل أو يخرج من الصندوق لأي سبب.</p>
   <div class="row-2">
-    <div class="field"><label>نوع السند</label><select id="voucherType"><option value="receipt">🟢 سند قبض (مبلغ داخل)</option><option value="payment">🔴 سند صرف (مبلغ خارج)</option></select></div>
+    <div class="field"><label>نوع السند</label><select id="voucherType"><option value="receipt">سند قبض (مبلغ داخل)</option><option value="payment">سند صرف (مبلغ خارج)</option></select></div>
     <div class="field"><label>المبلغ (ريال)</label><input type="number" id="voucherAmount" min="0" placeholder="0"></div>
   </div>
   <div class="row-2">
@@ -479,7 +479,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   <div id="productionTrackingView"></div>
   <div class="stitch"></div>
   <h3 style="margin:0 0 8px;font-size:14px;">الطاقة الإنتاجية للمواسم</h3>
-  <p class="sub" style="margin-bottom:10px;">حدد فترة موسم (تاريخ بداية ونهاية مخصصين، مو بالضرورة نهاية شهر) — طاقتك الإنتاجية تُحسب تلقائياً من مجموع القدرة الإنتاجية الموسمية لكل خياطينك (تحددها من ⚙ المستخدمين والصلاحيات لكل خياط)، وتنخفض تلقائياً لو حذفت أي خياط.</p>
+  <p class="sub" style="margin-bottom:10px;">حدد فترة موسم (تاريخ بداية ونهاية مخصصين، مو بالضرورة نهاية شهر) — طاقتك الإنتاجية تُحسب تلقائياً من مجموع القدرة الإنتاجية الموسمية لكل خياطينك (تحددها من المستخدمين والصلاحيات لكل خياط)، وتنخفض تلقائياً لو حذفت أي خياط.</p>
   <div class="row-3">
     <div class="field"><label>اسم الموسم</label><input type="text" id="seasonName" placeholder="مثلاً: موسم رمضان"></div>
     <div class="field"><label>من تاريخ</label><input type="date" id="seasonStart"></div>
@@ -596,7 +596,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 <div class="tab-panel" id="tab-settingsFinance">
 <div class="panel">
   <h2>المالية والتكاليف</h2>
-    <p class="sub">تكلفة كل ثوب = تكلفة القماش الفعلية (من آخر شراء) + أجرة الخياط + الحشوات + (أجرة تطريز إن وجد) + حصة الثوب من التكاليف الثابتة وقت إصداره. تكلفة القماش تُدار من تبويب «📦 المخزون والمشتريات ← كروت الأصناف».</p>
+    <p class="sub">تكلفة كل ثوب = تكلفة القماش الفعلية (من آخر شراء) + أجرة الخياط + الحشوات + (أجرة تطريز إن وجد) + حصة الثوب من التكاليف الثابتة وقت إصداره. تكلفة القماش تُدار من تبويب «المخزون والمشتريات ← كروت الأصناف».</p>
     <div class="row-3">
       <div class="field"><label>أجرة الخياط الافتراضية (ريال/ثوب) — تُستخدم بس قبل تعيين خياط، أو لخياط ما حدّدت له سعر خاص</label><input type="number" id="setWage" min="0" step="0.5"></div>
       <div class="field"><label>قيمة الحشوات لكل ثوب (ريال)</label><input type="number" id="setPadding" min="0" step="0.5"></div>
@@ -622,7 +622,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
     </div>
     <div class="stitch"></div>
     <h3 style="margin:0 0 8px;font-size:14px;">بنود التكاليف الثابتة</h3>
-    <p class="sub" style="margin-bottom:10px;">أضف أو احذف بنود (إيجار، كهرباء، ماء...) — الإجمالي يتحدث تلقائياً ويُستخدم لحساب حصة كل ثوب جديد. ⚠ الرواتب الأساسية لموظفين غير الخياط (من إدارة المستخدمين أدناه) تُضاف تلقائياً لهذا الإجمالي — لا تدخلها هنا مرة ثانية.</p>
+    <p class="sub" style="margin-bottom:10px;">أضف أو احذف بنود (إيجار، كهرباء، ماء...) — الإجمالي يتحدث تلقائياً ويُستخدم لحساب حصة كل ثوب جديد. الرواتب الأساسية لموظفين غير الخياط (من إدارة المستخدمين أدناه) تُضاف تلقائياً لهذا الإجمالي — لا تدخلها هنا مرة ثانية.</p>
     <div id="fixedItemsList"></div>
     <div class="row-3">
       <div class="field"><label>اسم البند</label><input type="text" id="newItemLabel"></div>
@@ -641,10 +641,10 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
       <div class="field"><label>نوع أسعار البيع المُدخلة بالفاتورة</label><select id="setPricesIncludeVat"><option value="yes">شاملة الضريبة (السعر المُدخل هو الإجمالي النهائي)</option><option value="no">بدون ضريبة (الضريبة تُضاف فوق السعر المُدخل)</option></select></div>
       <div class="stitch"></div>
       <h3 style="margin:0 0 8px;font-size:14px;">الفوترة الإلكترونية (فاتورة — ZATCA)</h3>
-      <p class="sub" style="margin-bottom:10px;">جاهزية للربط المستقبلي بمنظومة "فاتورة". فعّلها بس بعد ما تسجّل بضريبة القيمة المضافة فعلياً — قبل التفعيل، الفواتير تشتغل عادي بدون أي تأثير. تستخدم نفس الرقم الضريبي ونسبة الضريبة من قسم "💰 ضريبة القيمة المضافة" أعلاه.</p>
+      <p class="sub" style="margin-bottom:10px;">جاهزية للربط المستقبلي بمنظومة "فاتورة". فعّلها بس بعد ما تسجّل بضريبة القيمة المضافة فعلياً — قبل التفعيل، الفواتير تشتغل عادي بدون أي تأثير. تستخدم نفس الرقم الضريبي ونسبة الضريبة من قسم "ضريبة القيمة المضافة" أعلاه.</p>
       <div class="embro-toggle"><input type="checkbox" id="setEinvoiceEnabled"><label style="margin:0;">تفعيل الفوترة الإلكترونية على الفواتير الجديدة</label></div>
       <div class="field" style="margin-top:10px;"><label>الاسم النظامي للمنشأة (كما بالسجل التجاري)</label><input type="text" id="setShopLegalName" placeholder="زي ما هو مسجّل بالسجل التجاري"></div>
-      <p class="sub">✅ جاهز الآن: توليد XML بصيغة UBL 2.1 + QR code + تسلسل وربط الفواتير (Hash Chaining) لكل فاتورة، تلقائياً بمجرد التفعيل.<br>⚠ يحتاج تسجيلك الرسمي بمنصة "فاتورة" لاحقاً: الختم التشفيري (التوقيع الإلكتروني) والربط المباشر بأنظمة الهيئة (المرحلة الثانية) — هذا يحتاج شهادة CSID تصدرها الهيئة نفسها بعد إتمامك للتسجيل والربط، وما نقدر نولّدها من هنا.</p>
+      <p class="sub">جاهز الآن: توليد XML بصيغة UBL 2.1 + QR code + تسلسل وربط الفواتير (Hash Chaining) لكل فاتورة، تلقائياً بمجرد التفعيل.<br>يحتاج تسجيلك الرسمي بمنصة "فاتورة" لاحقاً: الختم التشفيري (التوقيع الإلكتروني) والربط المباشر بأنظمة الهيئة (المرحلة الثانية) — هذا يحتاج شهادة CSID تصدرها الهيئة نفسها بعد إتمامك للتسجيل والربط، وما نقدر نولّدها من هنا.</p>
       <div class="stitch"></div>
       <h3 style="margin:0 0 8px;font-size:14px;">عمولة البنك (الشبكة)</h3>
       <div class="field"><label>نسبة العمولة % (تُخصم تلقائياً من كل دفعة شبكة قبل إضافتها لصندوق الشبكة)</label><input type="number" id="setBankFee" min="0" step="0.01"></div>
@@ -673,14 +673,14 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   <h2>المستخدمين والصلاحيات</h2>
   <div id="adminOnly_settingsUsers">
       <h3 style="margin:0 0 8px;font-size:14px;">صلاحية الخصم</h3>
-      <p class="sub" style="margin-top:0;">صلاحية الخصم صارت فردية لكل مستخدم — تُدار من قسم «👥 إدارة المستخدمين» بالأسفل، لكل مستخدم حد أقصى خاص فيه (مبلغ أو نسبة).</p>
+      <p class="sub" style="margin-top:0;">صلاحية الخصم صارت فردية لكل مستخدم — تُدار من قسم «إدارة المستخدمين» بالأسفل، لكل مستخدم حد أقصى خاص فيه (مبلغ أو نسبة).</p>
       <div class="stitch"></div>
       <h3 style="margin:0 0 8px;font-size:14px;">صلاحيات المجموعات</h3>
       <p class="sub" style="margin-bottom:10px;">حدد أي تبويب يظهر لكل دور. لتبويب «البحث والتقارير» تقدر كمان تحدد أي قسم فرعي بالضبط يظهر لكل دور. حساب الخياط ثابت دائماً على شاشة المسح بس، ما يدخل ضمن هذي الإعدادات.</p>
       <div id="permissionsEditor"></div>
       <div class="stitch"></div>
       <h3 style="margin:0 0 8px;font-size:14px;">القائمة السريعة</h3>
-      <p class="sub" style="margin-bottom:10px;">لكل دور اختصاراته الخاصة تظهر بشريط أفقي أعلى الشاشة (زر ⚡). حدد بالضبط أي شاشات يشوفها كل دور — يفضّل حتى 5-6 اختصارات بس عشان تناسب عرض الشاشة.</p>
+      <p class="sub" style="margin-bottom:10px;">لكل دور اختصاراته الخاصة تظهر بشريط أفقي أعلى الشاشة. حدد بالضبط أي شاشات يشوفها كل دور — يفضّل حتى 5-6 اختصارات بس عشان تناسب عرض الشاشة.</p>
       <div id="quickMenuEditor"></div>
       <div class="stitch"></div>
       <h3 style="margin:0 0 8px;font-size:14px;">إدارة المستخدمين</h3>
@@ -830,16 +830,16 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
         <div class="field"><label>الحد الأدنى لاستخدام النقاط</label><input type="number" id="setLoyMinRedeem" min="0"></div>
       </div>
       <div class="row-2">
-        <div class="field"><label>🥈 حد الترقية للفضي (إجمالي مصروف تراكمي)</label><input type="number" id="setLoySilverThreshold" min="0"></div>
-        <div class="field"><label>🥇 حد الترقية للذهبي (إجمالي مصروف تراكمي)</label><input type="number" id="setLoyGoldThreshold" min="0"></div>
+        <div class="field"><label>حد الترقية للفضي (إجمالي مصروف تراكمي)</label><input type="number" id="setLoySilverThreshold" min="0"></div>
+        <div class="field"><label>حد الترقية للذهبي (إجمالي مصروف تراكمي)</label><input type="number" id="setLoyGoldThreshold" min="0"></div>
       </div>
       <div class="row-2">
-        <div class="field"><label>🥈 مضاعف نقاط الفضي (1 = بدون مضاعفة)</label><input type="number" id="setLoySilverMultiplier" min="0" step="0.5"></div>
-        <div class="field"><label>🥈 خصم تلقائي فضي % (0 = بدون)</label><input type="number" id="setLoySilverDiscount" min="0" max="100" step="0.5"></div>
+        <div class="field"><label>مضاعف نقاط الفضي (1 = بدون مضاعفة)</label><input type="number" id="setLoySilverMultiplier" min="0" step="0.5"></div>
+        <div class="field"><label>خصم تلقائي فضي % (0 = بدون)</label><input type="number" id="setLoySilverDiscount" min="0" max="100" step="0.5"></div>
       </div>
       <div class="row-2">
-        <div class="field"><label>🥇 مضاعف نقاط الذهبي</label><input type="number" id="setLoyGoldMultiplier" min="0" step="0.5"></div>
-        <div class="field"><label>🥇 خصم تلقائي ذهبي % (0 = بدون)</label><input type="number" id="setLoyGoldDiscount" min="0" max="100" step="0.5"></div>
+        <div class="field"><label>مضاعف نقاط الذهبي</label><input type="number" id="setLoyGoldMultiplier" min="0" step="0.5"></div>
+        <div class="field"><label>خصم تلقائي ذهبي % (0 = بدون)</label><input type="number" id="setLoyGoldDiscount" min="0" max="100" step="0.5"></div>
       </div>
       <p class="sub">عملاء VIP (تُدار من تقرير العملاء بتبويب التقارير) يخرجون تماماً من نظام النقاط، ويُسمح لأي موظف بخصم حر بدون حد أقصى لفواتيرهم.</p>
       <div class="stitch"></div>
@@ -874,19 +874,19 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   <div id="loyaltyInfoWrap" style="display:none;margin-bottom:12px;"></div>
   <div id="customerAlertWrap" style="display:none;margin-bottom:12px;"></div>
   <div class="row-2" style="align-items:flex-end;">
-    <div class="field" style="margin-bottom:0;"><label>🏷 كود خصم / هدية (اختياري)</label><input type="text" id="promoCodeInput" placeholder="اكتب الكود..." style="text-transform:uppercase;"></div>
+    <div class="field" style="margin-bottom:0;"><label>كود خصم / هدية (اختياري)</label><input type="text" id="promoCodeInput" placeholder="اكتب الكود..." style="text-transform:uppercase;"></div>
     <button type="button" class="btn btn-ghost btn-sm" id="applyPromoCodeBtn" style="margin-bottom:2px;">تطبيق</button>
   </div>
   <div id="appliedPromoBanner" style="display:none;margin:8px 0;"></div>
-  <div class="field"><label>💰 خصم مباشر (ريال) — اختياري، منفصل عن الكود والعرض</label><input type="number" id="directDiscountInput" min="0" step="1" placeholder="0"></div>
+  <div class="field"><label>خصم مباشر (ريال) — اختياري، منفصل عن الكود والعرض</label><input type="number" id="directDiscountInput" min="0" step="1" placeholder="0"></div>
   <div class="stitch"></div>
   <h3 style="margin:0 0 10px;font-size:14px;">تفاصيل الثياب</h3>
-  <div id="priceLockNote" style="display:none;color:var(--gold-soft);font-weight:700;font-size:12px;margin-bottom:8px;">🔒 الأسعار مقفلة حالياً — يوجد كود خصم أو باقة عرض مفعّلة، وما يمكن تعديل السعر يدوياً حتى تُزال</div>
+  <div id="priceLockNote" style="display:none;color:var(--gold-soft);font-weight:700;font-size:12px;margin-bottom:8px;">الأسعار مقفلة حالياً — يوجد كود خصم أو باقة عرض مفعّلة، وما يمكن تعديل السعر يدوياً حتى تُزال</div>
   <div id="garmentsHolder"></div>
   <datalist id="fabricDatalist"></datalist>
   <div id="invoiceOffersWrap" style="margin-top:10px;"></div>
   <div class="stitch"></div>
-  <div class="field"><label>📝 ملاحظات على الفاتورة (اختياري)</label><textarea id="invNotes" rows="2" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 11px;color:var(--ivory);font-family:inherit;font-size:14px;" placeholder="أي ملاحظة عامة على الفاتورة كاملة..."></textarea></div>
+  <div class="field"><label>ملاحظات على الفاتورة (اختياري)</label><textarea id="invNotes" rows="2" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 11px;color:var(--ivory);font-family:inherit;font-size:14px;" placeholder="أي ملاحظة عامة على الفاتورة كاملة..."></textarea></div>
   <div class="stitch"></div>
   <h3 style="margin:0 0 10px;font-size:14px;">الدفعات</h3>
   <div id="paymentsList"></div>
@@ -1044,11 +1044,11 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   <h3 style="margin:0 0 10px;font-size:14px;">قوائم البث والعروض الخاصة</h3>
   <p class="sub" style="margin-bottom:10px;">اعرض عملاءك حسب التصنيف والنشاط والتعثر، وابعث لهم عرض واتساب فردي مع تتبع من استلم الرسالة. القائمة تُبنى من الكود الرئيسي للعميل (رقم الجوال)، ما تكرر الأفراد المشتركين بنفس الرقم.</p>
   <div class="row-3">
-    <div class="field"><label>تصنيف العميل</label><select id="bcTierFilter"><option value="all">الكل</option><option value="bronze">🥉 برونزي</option><option value="silver">🥈 فضي</option><option value="gold">🥇 ذهبي</option></select></div>
+    <div class="field"><label>تصنيف العميل</label><select id="bcTierFilter"><option value="all">الكل</option><option value="bronze">برونزي</option><option value="silver">فضي</option><option value="gold">ذهبي</option></select></div>
     <div class="field"><label>نشاط العميل</label><select id="bcActivityFilter"><option value="all">الكل</option><option value="active">نشط</option><option value="dormant">خامل</option></select></div>
     <div class="field"><label>تعثر العميل</label><select id="bcDebtFilter"><option value="all">الكل</option><option value="overdue">عليه متأخرات</option><option value="clean">ماعليه متأخرات</option></select></div>
   </div>
-  <div class="field"><label>🔍 بحث بالاسم أو الجوال</label><input type="text" id="bcSearchInput" placeholder="اكتب اسم أو رقم..."></div>
+  <div class="field"><label>بحث بالاسم أو الجوال</label><input type="text" id="bcSearchInput" placeholder="اكتب اسم أو رقم..."></div>
   <div class="field"><label>نص الرسالة (سيُضاف تلقائياً "مرحباً [اسم العميل]" في البداية)</label><input type="text" id="bcMessageInput" placeholder="اتركه فاضي لاستخدام رسالة العرض الافتراضية من الإعدادات"></div>
   <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0;">
     <span id="broadcastCountLabel" class="sub"></span>
@@ -1237,7 +1237,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 <div class="panel">
 
   <h3 style="margin:0 0 10px;font-size:14px;">التقرير اليومي</h3>
-  <p class="sub" style="margin-bottom:10px;">ملخص مالي سريع (فواتير جديدة + تسليمات + كاش/شبكة) بس. لكل حركة بأي قسم ثاني (مشتريات، مصروفات، رواتب...)، استخدم «📜 السجل الشامل لكل الحركات» بأعلى الصفحة.</p>
+  <p class="sub" style="margin-bottom:10px;">ملخص مالي سريع (فواتير جديدة + تسليمات + كاش/شبكة) بس. لكل حركة بأي قسم ثاني (مشتريات، مصروفات، رواتب...)، استخدم «السجل الشامل لكل الحركات» بأعلى الصفحة.</p>
   <div class="row-2">
     <div class="field"><label>اليوم</label><input type="date" id="dailyDate"></div>
     <div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-ghost" id="printDailyBtn" style="width:100%;">عرض/طباعة التقرير اليومي</button></div>
@@ -1312,7 +1312,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
       <tbody id="invoicesBody"></tbody>
     </table>
   </div>
-  <div class="empty" id="emptyState"><div class="big">🪡</div><div>ما فيه فواتير بهذا الشهر بعد.</div></div>
+  <div class="empty" id="emptyState"><div class="big"><i data-lucide="file-text"></i></div><div>ما فيه فواتير بهذا الشهر بعد.</div></div>
   <div id="einvoiceDetailsView"></div>
 </div>
 </div>
@@ -1337,7 +1337,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   <div class="table-wrap">
     <table><thead><tr><th>العميل</th><th>الجوال</th><th>الوصف</th><th>العدد</th><th>متبقٍ</th><th>الحالة</th><th></th></tr></thead><tbody id="legacyBody"></tbody></table>
   </div>
-  <div class="empty" id="legacyEmptyState"><div class="big">📦</div><div>ما فيه عناصر بالجرد الافتتاحي بعد.</div></div>
+  <div class="empty" id="legacyEmptyState"><div class="big"><i data-lucide="package"></i></div><div>ما فيه عناصر بالجرد الافتتاحي بعد.</div></div>
 </div>
 </div>
 
@@ -1447,7 +1447,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   <h2>كروت الأصناف</h2>
   <p class="sub">كل نوع قماش أو منتج جاهز له كرت مستقل بتكلفته الفعلية ومخزونه. أي نوع جديد يُنشأ تلقائياً أول ما تسجّل له فاتورة شراء، أو أضفه يدوياً بدون فاتورة (مثلاً لبضاعة عندك أصلاً قبل استخدام النظام).</p>
   <div id="inventoryValuationView" style="margin-bottom:14px;"></div>
-  <div class="field"><label>🔍 بحث بالاسم</label><input type="text" id="itemCardSearchInput" placeholder="اكتب اسم الصنف..."></div>
+  <div class="field"><label>بحث بالاسم</label><input type="text" id="itemCardSearchInput" placeholder="اكتب اسم الصنف..."></div>
   <div id="itemCardsList"></div>
   <div class="stitch"></div>
   <h3 style="margin:0 0 10px;font-size:14px;">إضافة صنف يدوياً (بدون فاتورة شراء)</h3>
@@ -1458,13 +1458,13 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
     <div class="field"><label id="manualCardQtyLabel">الكمية (رصيد أول المدة)</label><input type="number" id="manualCardQty" min="0" step="0.1" placeholder="0"></div>
   </div>
   <div class="row-2" id="manualFabricExtraWrap" style="display:none;">
-    <div class="field"><label>الصناعة (بلد المنشأ) ⚠ إلزامي للقماش</label><select id="manualCardOrigin">
+    <div class="field"><label>الصناعة (بلد المنشأ) — إلزامي للقماش</label><select id="manualCardOrigin">
       <option value="">-- اختر --</option>
     </select></div>
-    <div class="field"><label>الموسم ⚠ إلزامي للقماش</label><select id="manualCardSeason">
+    <div class="field"><label>الموسم — إلزامي للقماش</label><select id="manualCardSeason">
       <option value="">-- اختر --</option>
-      <option value="صيفي">☀ صيفي</option>
-      <option value="شتوي">❄ شتوي</option>
+      <option value="صيفي">صيفي</option>
+      <option value="شتوي">شتوي</option>
     </select></div>
   </div>
   <div class="row-2">
@@ -1506,13 +1506,13 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
     <p class="sub" id="purchItemStatus" style="margin-top:6px;"></p>
   </div>
   <div class="row-2" id="purchFabricExtraWrap" style="display:none;">
-    <div class="field"><label>الصناعة (بلد المنشأ) ⚠ إلزامي لصنف جديد</label><select id="purchOrigin">
+    <div class="field"><label>الصناعة (بلد المنشأ) — إلزامي لصنف جديد</label><select id="purchOrigin">
       <option value="">-- اختر --</option>
     </select></div>
-    <div class="field"><label>الموسم ⚠ إلزامي لصنف جديد</label><select id="purchSeason">
+    <div class="field"><label>الموسم — إلزامي لصنف جديد</label><select id="purchSeason">
       <option value="">-- اختر --</option>
-      <option value="صيفي">☀ صيفي</option>
-      <option value="شتوي">❄ شتوي</option>
+      <option value="صيفي">صيفي</option>
+      <option value="شتوي">شتوي</option>
     </select></div>
   </div>
   <div class="row-3">
@@ -1596,7 +1596,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
     <p class="sub" style="margin-bottom:10px;">قرار مباشر بدون انتظار — يُنفَّذ فوراً وتوصل رسالة للموظف برقم القرار.</p>
     <div class="row-3">
       <div class="field"><label>الموظف — اكتب واختر</label><input type="text" id="bonusEmployeeSearch" list="bonusEmployeeDatalist" autocomplete="off"><datalist id="bonusEmployeeDatalist"></datalist><input type="hidden" id="bonusEmployee"></div>
-      <div class="field"><label>النوع</label><select id="bonusType"><option value="bonus">🎁 مكافأة (إضافة)</option><option value="deduction">⚠ خصم</option></select></div>
+      <div class="field"><label>النوع</label><select id="bonusType"><option value="bonus">مكافأة (إضافة)</option><option value="deduction">خصم</option></select></div>
       <div class="field"><label>المبلغ (ريال)</label><input type="number" id="bonusAmount" min="0"></div>
     </div>
     <div class="field"><label>السبب</label><input type="text" id="bonusReason" placeholder="مثلاً: تميّز بالأداء هذا الشهر"></div>
@@ -1665,7 +1665,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
         <option value="cost_only">خصم التكاليف المباشرة فقط (قماش+أجرة+حشوة) من الموظف</option>
         <option value="partial">خصم مبلغ محدد (جزئي) من الموظف — والباقي يتحمّله المحل كخسارة تشغيلية</option>
         <option value="shop_absorbs">يتحمّلها المحل بالكامل (تجاوز)</option>
-        <option value="reject">❌ رفض الترجيع — بدون أي خصم من أي صندوق</option>
+        <option value="reject">رفض الترجيع — بدون أي خصم من أي صندوق</option>
       </select>
     </div>
     <div class="field" id="mailDecisionPartialWrap" style="display:none;"><label>المبلغ المحدد للخصم من الموظف (ريال)</label><input type="number" id="mailDecisionPartialAmount" min="0" step="1"></div>
@@ -2203,7 +2203,7 @@ function buildCuttingCardHtml(inv, gIdx){
       <div>
         <h3 style="margin:0;font-size:14px;">${esc(s.shopName||"—")}</h3>
         <p style="margin:1px 0;font-size:9.5px;">${esc(s.shopAddress||"")}</p>
-        <p style="margin:1px 0;font-size:9.5px;">☎ ${esc(s.shopPhone||"—")}</p>
+        <p style="margin:1px 0;font-size:9.5px;">${esc(s.shopPhone||"—")}</p>
         ${s.shopLogo?`<img src="${s.shopLogo}" style="max-height:30px;margin-top:2px;">`:""}
       </div>
       <div style="font-size:9.5px;">
@@ -2245,7 +2245,7 @@ function buildCuttingCardHtml(inv, gIdx){
     </div>
     <hr style="margin:4px 0;">
     <div style="border-top:2px dashed #000;padding-top:4px;">
-      <p style="margin:2px 0;font-size:10px;">${g.urgent?"⚡ مستعجل &nbsp;&nbsp;":""}${g.sample?"🔖 عينة &nbsp;&nbsp;":""}<b>ملاحظات / شغل خاص:</b> ${esc(g.measurementNotes||"—")}</p>
+      <p style="margin:2px 0;font-size:10px;">${g.urgent?"مستعجل &nbsp;&nbsp;":""}${g.sample?"عينة &nbsp;&nbsp;":""}<b>ملاحظات / شغل خاص:</b> ${esc(g.measurementNotes||"—")}</p>
     </div>
     <div style="display:flex;border-top:2px dashed #000;margin-top:6px;">
       <div style="flex:1;padding:6px 8px;border-left:2px dashed #000;text-align:center;">
@@ -2785,63 +2785,63 @@ function applyRolePermissions(){
 }
 const NAV_GROUPS = [
   {title:"الرئيسية", color:"#b8863a", items:[
-    {tab:"dashboard", icon:"📊", label:"لوحة التحكم"},
+    {tab:"dashboard", label:"لوحة التحكم"},
   ]},
   {title:"المبيعات", color:"#2f6fb0", items:[
-    {tab:"invoice", icon:"🧾", label:"فاتورة تفصيل جديدة"},
-    {tab:"salesInvoice", icon:"🛍", label:"فاتورة مبيعات"},
-    {tab:"report-returns", icon:"🔄", label:"المرتجعات"},
-    {tab:"report-missingReceipt", icon:"🧾", label:"فواتير بدون رقم سند"},
-    {tab:"invoicesList", icon:"📑", label:"سجل الفواتير"},
+    {tab:"invoice", label:"فاتورة تفصيل جديدة"},
+    {tab:"salesInvoice", label:"فاتورة مبيعات"},
+    {tab:"report-returns", label:"المرتجعات"},
+    {tab:"report-missingReceipt", label:"فواتير بدون رقم سند"},
+    {tab:"invoicesList", label:"سجل الفواتير"},
   ]},
   {title:"الخياطة", color:"#b08a4e", items:[
-    {tab:"distribution", icon:"✂", label:"التوزيع"},
-    {tab:"production", icon:"🧵", label:"متابعة الإنتاج"},
-    {tab:"scan", icon:"📷", label:"مسح الباركود"},
-    {tab:"alteration", icon:"🔄", label:"ثوب معاد للتعديل"},
-    {tab:"debts", icon:"💳", label:"مديونية الثياب"},
-    {tab:"report-undelivered", icon:"📦", label:"الثياب غير المسلّمة"},
-    {tab:"report-garmentInventory", icon:"🧾", label:"جرد الثياب حسب الحالة"},
+    {tab:"distribution", label:"التوزيع"},
+    {tab:"production", label:"متابعة الإنتاج"},
+    {tab:"scan", label:"مسح الباركود"},
+    {tab:"alteration", label:"ثوب معاد للتعديل"},
+    {tab:"debts", label:"مديونية الثياب"},
+    {tab:"report-undelivered", label:"الثياب غير المسلّمة"},
+    {tab:"report-garmentInventory", label:"جرد الثياب حسب الحالة"},
   ]},
   {title:"العملاء", color:"#1f9d5c", items:[
-    {tab:"customerDebts", icon:"💰", label:"مديونيات العملاء"},
-    {tab:"report-customers", icon:"👥", label:"تقرير العملاء"},
-    {tab:"report-broadcastCampaign", icon:"📢", label:"قوائم البث والعروض الخاصة"},
+    {tab:"customerDebts", label:"مديونيات العملاء"},
+    {tab:"report-customers", label:"تقرير العملاء"},
+    {tab:"report-broadcastCampaign", label:"قوائم البث والعروض الخاصة"},
   ]},
   {title:"المخزون", color:"#8a6d3b", items:[
-    {tab:"itemCards", icon:"🗂", label:"كروت الأصناف"},
-    {tab:"suppliers", icon:"🏭", label:"الموردين"},
-    {tab:"purchases", icon:"🧾", label:"فاتورة مشتريات جديدة"},
-    {tab:"purchaseReturns", icon:"↩", label:"مرتجع مشتريات"},
-    {tab:"legacy", icon:"🗂", label:"الجرد الافتتاحي"},
+    {tab:"itemCards", label:"كروت الأصناف"},
+    {tab:"suppliers", label:"الموردين"},
+    {tab:"purchases", label:"فاتورة مشتريات جديدة"},
+    {tab:"purchaseReturns", label:"مرتجع مشتريات"},
+    {tab:"legacy", label:"الجرد الافتتاحي"},
   ]},
   {title:"الحسابات", color:"#e0872e", items:[
-    {tab:"balances", icon:"💰", label:"صناديقي (وتحويل الأموال)"},
-    {tab:"expenses", icon:"🧾", label:"المصروفات"},
-    {tab:"vouchers", icon:"🧾", label:"سندات قبض وصرف"},
-    {tab:"shiftClose", icon:"🧮", label:"إقفال الوردية"},
-    {tab:"payroll", icon:"💵", label:"الرواتب — استحقاق ورواتب الموظفين"},
-    {tab:"archive", icon:"🗄", label:"الإقفال الشهري"},
-    {tab:"advisoryBalances", icon:"📋", label:"الأرصدة الإرشادية"},
-    {tab:"sensitiveFinancials", icon:"🔒", label:"الإحصائيات المالية الحساسة"},
-    {tab:"report-vatCalc", icon:"🧮", label:"حاسبة الضريبة"},
-    {tab:"report-topExpenses", icon:"💸", label:"أعلى المصاريف"},
+    {tab:"balances", label:"صناديقي (وتحويل الأموال)"},
+    {tab:"expenses", label:"المصروفات"},
+    {tab:"vouchers", label:"سندات قبض وصرف"},
+    {tab:"shiftClose", label:"إقفال الوردية"},
+    {tab:"payroll", label:"الرواتب — استحقاق ورواتب الموظفين"},
+    {tab:"archive", label:"الإقفال الشهري"},
+    {tab:"advisoryBalances", label:"الأرصدة الإرشادية"},
+    {tab:"sensitiveFinancials", label:"الإحصائيات المالية الحساسة"},
+    {tab:"report-vatCalc", label:"حاسبة الضريبة"},
+    {tab:"report-topExpenses", label:"أعلى المصاريف"},
   ]},
   {title:"التقارير", color:"#7d5fb0", items:[
-    {tab:"report-fullLog", icon:"📜", label:"السجل الشامل"},
-    {tab:"report-search", icon:"🔎", label:"البحث بحالة الفواتير والتطريز"},
-    {tab:"report-salesRanking", icon:"🏆", label:"الأكثر والأقل مبيعاً"},
-    {tab:"report-daily", icon:"📅", label:"التقرير اليومي"},
-    {tab:"report-tailorMonthly", icon:"👷", label:"تقرير الخياط الشهري"},
-    {tab:"report-auditLog", icon:"📜", label:"سجل التدقيق"},
-    {tab:"growth", icon:"📈", label:"النمو"},
+    {tab:"report-fullLog", label:"السجل الشامل"},
+    {tab:"report-search", label:"البحث بحالة الفواتير والتطريز"},
+    {tab:"report-salesRanking", label:"الأكثر والأقل مبيعاً"},
+    {tab:"report-daily", label:"التقرير اليومي"},
+    {tab:"report-tailorMonthly", label:"تقرير الخياط الشهري"},
+    {tab:"report-auditLog", label:"سجل التدقيق"},
+    {tab:"growth", label:"النمو"},
   ]},
   {title:"الإعدادات", color:"#dc3545", items:[
-    {tab:"settingsShop", icon:"🏪", label:"بيانات المحل والفاتورة"},
-    {tab:"settingsFinance", icon:"💰", label:"المالية والتكاليف"},
-    {tab:"settingsUsers", icon:"🔐", label:"المستخدمين والصلاحيات"},
-    {tab:"settingsProducts", icon:"🧵", label:"التفصيل والمنتجات"},
-    {tab:"settingsMarketing", icon:"🎁", label:"التسويق والولاء"},
+    {tab:"settingsShop", label:"بيانات المحل والفاتورة"},
+    {tab:"settingsFinance", label:"المالية والتكاليف"},
+    {tab:"settingsUsers", label:"المستخدمين والصلاحيات"},
+    {tab:"settingsProducts", label:"التفصيل والمنتجات"},
+    {tab:"settingsMarketing", label:"التسويق والولاء"},
   ]},
 ];
 function allNavItemsFlat(){ return NAV_GROUPS.flatMap(g=>g.items); }
@@ -2863,6 +2863,9 @@ const GROUP_ICONS = { "الرئيسية":"home", "المبيعات":"shopping-ba
   "المخزون":"warehouse", "الحسابات":"wallet", "التقارير":"bar-chart-3", "الإعدادات":"settings" };
 function navIcon(tab){ return TAB_ICONS[tab] || "circle"; }
 function refreshLucideIcons(){ if(window.lucide) window.lucide.createIcons(); }
+function emptyStateHtml(icon, message){
+  return `<div class="empty"><div class="big"><i data-lucide="${icon}"></i></div><div>${message}</div></div>`;
+}
 let sidebarOpenGroup = null;
 function renderSidebar(){
   const nav = $("sidebarNav");
@@ -2941,8 +2944,9 @@ function renderQuickMenuBar(){
   bar.innerHTML = picks.map(t=>{
     const item = flat.find(i=>i.tab===t);
     if(!item) return "";
-    return `<button class="btn btn-ghost btn-sm" style="display:inline-flex;flex-direction:column;align-items:center;gap:2px;margin-left:8px;min-width:64px;" onclick="switchTab('${t}')"><span style="font-size:20px;">${item.icon}</span><span style="font-size:11px;">${item.label}</span></button>`;
+    return `<button class="btn btn-ghost btn-sm" style="display:inline-flex;flex-direction:column;align-items:center;gap:2px;margin-left:8px;min-width:64px;" onclick="switchTab('${t}')"><i data-lucide="${navIcon(item.tab)}" style="width:20px;height:20px;"></i><span style="font-size:11px;">${item.label}</span></button>`;
   }).join("");
+  refreshLucideIcons();
 }
 function renderQuickMenuEditor(){
   const el = $("quickMenuEditor");
@@ -2955,10 +2959,11 @@ function renderQuickMenuEditor(){
       const item = flat.find(i=>i.tab===t);
       if(!item) return "";
       const checked = picks.includes(t);
-      return `<div class="embro-toggle" style="margin:4px 0;"><input type="checkbox" class="qm-pick" data-role="${role}" data-tab="${t}" ${checked?"checked":""}><label style="margin:0;font-size:13px;">${item.icon} ${item.label}</label></div>`;
+      return `<div class="embro-toggle" style="margin:4px 0;"><input type="checkbox" class="qm-pick" data-role="${role}" data-tab="${t}" ${checked?"checked":""}><label style="margin:0;font-size:13px;"><i data-lucide="${navIcon(item.tab)}" style="width:14px;height:14px;vertical-align:middle;"></i> ${item.label}</label></div>`;
     }).join("");
     return `<div class="garment-card"><span class="tag">${role} (${picks.length} اختصار محدد)</span><div style="margin-top:8px;">${itemsHtml||`<p class="sub">هذا الدور ما عنده أي تبويبات مفعّلة بالصلاحيات أصلاً.</p>`}</div></div>`;
   }).join("");
+  refreshLucideIcons();
   document.querySelectorAll(".qm-pick").forEach(cb=> cb.addEventListener("change", ()=>{
     const role = cb.dataset.role, tab = cb.dataset.tab;
     const list = state.quickMenus[role]||(state.quickMenus[role]=[]);
@@ -2985,11 +2990,12 @@ function renderNavDrawer(){
       const srcBtn = document.querySelector(`.tab-btn[data-tab="${it.tab}"]`);
       if(!srcBtn || srcBtn.style.display==="none") return "";
       const isActive = it.tab===activeTab;
-      return `<button type="button" class="drawer-item" data-tab="${it.tab}" style="display:flex;align-items:center;gap:10px;width:100%;text-align:right;padding:11px 12px;border-radius:10px;border-right:3px solid ${group.color};border-top:1px solid ${isActive?"var(--gold)":"transparent"};border-bottom:1px solid ${isActive?"var(--gold)":"transparent"};border-left:1px solid ${isActive?"var(--gold)":"transparent"};background:${isActive?"var(--surface2)":"transparent"};color:${isActive?"var(--gold-soft)":"var(--ivory)"};font-family:inherit;font-size:14px;cursor:pointer;margin-bottom:4px;"><span style="font-size:16px;">${it.icon}</span> ${it.label}</button>`;
+      return `<button type="button" class="drawer-item" data-tab="${it.tab}" style="display:flex;align-items:center;gap:10px;width:100%;text-align:right;padding:11px 12px;border-radius:10px;border-right:3px solid ${group.color};border-top:1px solid ${isActive?"var(--gold)":"transparent"};border-bottom:1px solid ${isActive?"var(--gold)":"transparent"};border-left:1px solid ${isActive?"var(--gold)":"transparent"};background:${isActive?"var(--surface2)":"transparent"};color:${isActive?"var(--gold-soft)":"var(--ivory)"};font-family:inherit;font-size:14px;cursor:pointer;margin-bottom:4px;"><i data-lucide="${navIcon(it.tab)}" style="width:16px;height:16px;"></i> ${it.label}</button>`;
     }).join("");
     container.innerHTML = `<button type="button" id="navDrawerBackBtn" style="display:flex;align-items:center;gap:6px;background:none;border:none;color:var(--gold-soft);font-family:inherit;font-size:14px;cursor:pointer;margin-bottom:14px;padding:4px 0;">رجوع لكل الأقسام</button>
       <div style="font-size:13px;color:${group.color};margin-bottom:8px;font-weight:700;padding:6px 10px;background:${group.color}22;border-radius:8px;">${group.title}</div>
       ${items || `<p class="sub">ما فيه شاشات متاحة بهذا القسم.</p>`}`;
+    refreshLucideIcons();
     $("navDrawerBackBtn").addEventListener("click", ()=>{ navDrawerActiveGroup=null; renderNavDrawer(); });
     container.querySelectorAll(".drawer-item").forEach(btn=> btn.addEventListener("click", async ()=>{
       if(btn.dataset.tab==="invoice" && editingId){
@@ -3141,7 +3147,7 @@ function renderCuttingImageEditor(){
   $("cuttingImgFieldsList").innerHTML = MEASUREMENT_FIELDS.map(f=>{
     const pos = positions[f.key];
     const isArmed = cuttingImgArmedField===f.key;
-    const statusIcon = pos ? "✅" : "⭕";
+    const statusIcon = pos ? "✅" : "○";
     return `<div style="display:flex;align-items:center;gap:6px;margin:3px 0;">
       <button type="button" class="btn btn-ghost btn-sm cutting-field-btn" data-key="${f.key}" style="flex:1;text-align:right;${isArmed?"border-color:var(--gold);color:var(--gold-soft);":""}">${statusIcon} ${f.label}${pos?` (${pos.view==="front"?"أمام":"خلف"})`:""}</button>
       ${pos?`<button type="button" class="icon-btn cutting-field-clear" data-key="${f.key}" title="إزالة الخط">حذف</button>`:""}
@@ -3227,7 +3233,7 @@ function buildMannequinPreviewHtml(m){
       <div style="position:absolute;bottom:2px;left:2px;background:rgba(0,0,0,.55);color:#fff;font-size:9px;padding:1px 5px;border-radius:4px;">${label}</div>
     </div>`;
   return `<div>${view(garmentTypeItem.image,true,"أمام")}${view(garmentTypeItem.imageBack,false,"خلف")}
-    <p class="sub" style="font-size:10px;margin:0;">🔖 الصور فوق المنكل تقريبية للمعاينة بس — الطباعة الفعلية بكرت القصاص.</p>
+    <p class="sub" style="font-size:10px;margin:0;">الصور فوق المنكل تقريبية للمعاينة بس — الطباعة الفعلية بكرت القصاص.</p>
   </div>`;
 }
 function renderMeasurementPanelHtml(g, idx){
@@ -3250,8 +3256,8 @@ function renderMeasurementPanelHtml(g, idx){
   const choiceFieldsHtml = MEASUREMENT_CHOICE_FIELDS.filter(f=>f.key!=="garmentType").map(buildChoiceFieldHtml).join("");
   return `<div class="meas-panel" data-idx="${idx}" style="display:none;margin-top:10px;background:var(--surface2);border-radius:10px;border:1px solid var(--border);overflow:hidden;">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface3);border-bottom:1px solid var(--border);">
-      <b style="font-size:14px;">📐 كرت المقاس — ثوب ${idx+1}</b>
-      <button type="button" class="icon-btn meas-close-btn" data-idx="${idx}" title="إغلاق">✕</button>
+      <b style="font-size:14px;">كرت المقاس — ثوب ${idx+1}</b>
+      <button type="button" class="icon-btn meas-close-btn" data-idx="${idx}" title="إغلاق"><i data-lucide="x"></i></button>
     </div>
     <div style="display:flex;gap:14px;padding:14px;flex-wrap:wrap;">
       <div style="width:210px;flex-shrink:0;">
@@ -3368,7 +3374,7 @@ function renderLoyaltyInfo(){
   if(expireOldPointsForCustomer(mobile)) saveState();
   wrap.style.display = "";
   if(cust.vip){
-    wrap.innerHTML = `<div class="note-box">👑 عميل VIP — خارج نظام النقاط، يسمح بخصم حر بدون حد أقصى وقت التوزيع.</div>`;
+    wrap.innerHTML = `<div class="note-box">عميل VIP — خارج نظام النقاط، يسمح بخصم حر بدون حد أقصى وقت التوزيع.</div>`;
     return;
   }
   const tier = customerTier(mobile);
@@ -3379,7 +3385,7 @@ function renderLoyaltyInfo(){
     const inp = $("loyaltyRedeemInput");
     if(appliedPromoCode && (parseInt(inp.value)||0)>0){
       inp.value = "";
-      showToast("⚠ لا يمكن الجمع بين نقاط الولاء وكود خصم بنفس الفاتورة — أزل الكود أولاً");
+      showToast("لا يمكن الجمع بين نقاط الولاء وكود خصم بنفس الفاتورة — أزل الكود أولاً");
       return;
     }
     updateLiveTotals();
@@ -3393,7 +3399,7 @@ function refreshMeasurementsForCustomer(mobile, name){
     if(current[0] && Object.keys(current[0].measurements||{}).length===0){
       current[0] = {...current[0], measurements: {...lastGarment.measurements}, category: lastGarment.category||current[0].category};
       renderGarmentFields(current);
-      showToast("📐 جبنا مقاسات هذا العميل من آخر فاتورة له — تقدر تعدّلها قبل الحفظ");
+      showToast("جبنا مقاسات هذا العميل من آخر فاتورة له — تقدر تعدّلها قبل الحفظ");
     }
   }
 }
@@ -3424,7 +3430,7 @@ function customerTier(mobile){
   if(spend >= state.settings.loyaltySilverThreshold) return "silver";
   return "bronze";
 }
-function tierLabel(tier){ return tier==="gold"?"🥇 ذهبي":tier==="silver"?"🥈 فضي":"🥉 برونزي"; }
+function tierLabel(tier){ return tier==="gold"?"ذهبي":tier==="silver"?"فضي":"برونزي"; }
 function tierMultiplier(tier){
   if(tier==="gold") return state.settings.loyaltyGoldMultiplier||1;
   if(tier==="silver") return state.settings.loyaltySilverMultiplier||1;
@@ -3550,15 +3556,15 @@ function applyPromoCodeInput(){
   if(!codeText){ showToast("أدخل كود الخصم أولاً"); return; }
   const redeemInp = $("loyaltyRedeemInput");
   const pointsEntered = redeemInp ? (parseInt(redeemInp.value)||0) : 0;
-  if(pointsEntered>0){ showToast("⚠ لا يمكن الجمع بين كود خصم ونقاط الولاء بنفس الفاتورة — أزل النقاط أولاً"); return; }
+  if(pointsEntered>0){ showToast("لا يمكن الجمع بين كود خصم ونقاط الولاء بنفس الفاتورة — أزل النقاط أولاً"); return; }
   const match = findActivePromoCode(codeText);
-  if(!match){ showToast("⚠ الكود غير صحيح أو منتهي الصلاحية أو غير مفعّل"); return; }
+  if(!match){ showToast("الكود غير صحيح أو منتهي الصلاحية أو غير مفعّل"); return; }
   resetGarmentPricesToBase();
   appliedPromoCode = match;
   renderAppliedPromoBanner();
   updatePriceFieldsLockState();
   updateLiveTotals();
-  showToast(`✅ تم تطبيق الكود: ${match.code} — تم ضبط الأسعار على السعر الأساسي بالكرت قبل الخصم، ولا يمكن تعديلها يدوياً بعد الآن`);
+  showToast(`تم تطبيق الكود: ${match.code} — تم ضبط الأسعار على السعر الأساسي بالكرت قبل الخصم، ولا يمكن تعديلها يدوياً بعد الآن`);
 }
 function removeAppliedPromoCode(){
   appliedPromoCode = null;
@@ -3575,8 +3581,8 @@ function renderAppliedPromoBanner(){
   let desc;
   if(appliedPromoCode.type==="percentage") desc = `خصم نسبة ${appliedPromoCode.value}%`;
   else if(appliedPromoCode.type==="fixed_voucher") desc = `قسيمة خصم ${appliedPromoCode.value} ﷼`;
-  else desc = `🎁 هدية عينية: ${appliedPromoCode.giftDescription} — تذكّر تسليمها للعميل!`;
-  wrap.innerHTML = `<div class="item-row" style="background:rgba(87,171,124,0.12);border:1px solid var(--profit);border-radius:8px;padding:8px 12px;"><span style="color:var(--profit);font-weight:700;">🏷 كود "${esc(appliedPromoCode.code)}" — ${desc}</span><button type="button" class="btn btn-ghost btn-sm" onclick="removeAppliedPromoCode()">إلغاء</button></div>`;
+  else desc = `هدية عينية: ${appliedPromoCode.giftDescription} — تذكّر تسليمها للعميل!`;
+  wrap.innerHTML = `<div class="item-row" style="background:rgba(87,171,124,0.12);border:1px solid var(--profit);border-radius:8px;padding:8px 12px;"><span style="color:var(--profit);font-weight:700;">كود "${esc(appliedPromoCode.code)}" — ${desc}</span><button type="button" class="btn btn-ghost btn-sm" onclick="removeAppliedPromoCode()">إلغاء</button></div>`;
 }
 function nextPromoCodeId(){ return Date.now()+"-"+Math.random().toString(36).slice(2,6); }
 function savePromoCodeForm(){
@@ -3620,8 +3626,8 @@ function renderPromoCodesAdmin(){
   const typeLabel = (p)=> p.type==="percentage" ? `نسبة ${p.value}%` : p.type==="fixed_voucher" ? `قسيمة ${p.value} ﷼` : `هدية: ${esc(p.giftDescription)}`;
   el.innerHTML = `<div class="table-wrap"><table><thead><tr><th>الكود</th><th>النوع</th><th>من</th><th>إلى</th><th>الحالة</th><th></th></tr></thead><tbody>
     ${state.promoCodes.map(p=>`<tr><td><b>${esc(p.code)}</b></td><td>${typeLabel(p)}</td><td>${p.startDate}</td><td>${p.endDate}</td>
-      <td><button class="btn btn-ghost btn-sm" onclick="togglePromoCodeActive('${p.id}')">${p.active?"✅ مفعّل":"⛔ معطّل"}</button></td>
-      <td><button class="btn btn-ghost btn-sm" style="color:var(--loss);border-color:var(--loss);" onclick="deletePromoCode('${p.id}')">🗑</button></td></tr>`).join("")}
+      <td><button class="btn btn-ghost btn-sm" onclick="togglePromoCodeActive('${p.id}')">${p.active?"مفعّل":"معطّل"}</button></td>
+      <td><button class="btn btn-ghost btn-sm" style="color:var(--loss);border-color:var(--loss);" onclick="deletePromoCode('${p.id}')"><i data-lucide="trash-2"></i></button></td></tr>`).join("")}
   </tbody></table></div>`;
 }
 function garmentsCutInMonth(monthLabel){
@@ -3785,7 +3791,7 @@ function renderSeasonsList(){
         <div style="background:${overCapacity?'var(--loss)':'var(--gold)'};height:100%;width:${pct}%;"></div>
       </div>
       <p style="margin:0;font-size:13px;${overCapacity?'color:var(--loss);font-weight:700;':''}">
-        ${used} / ${effCapacity} قطعة مستقبَلة ${overCapacity?`— ⚠ تجاوزت طاقتك بـ${Math.abs(remaining)} قطعة`:`— المتبقي: ${remaining} قطعة`}
+        ${used} / ${effCapacity} قطعة مستقبَلة ${overCapacity?`— تجاوزت طاقتك بـ${Math.abs(remaining)} قطعة`:`— المتبقي: ${remaining} قطعة`}
         <span class="sub" style="font-size:11px;">(محسوبة من قدرة ${state.users.filter(u=>u.role==="خياط" && (u.productionCapacity||0)>0).length} خياط نشط)</span>
       </p>
     </div>`;
@@ -3843,8 +3849,8 @@ function renderProductionTracking(){
     rows.map(r=>{
       let statusHtml;
       if(r.target<=0) statusHtml = `<span class="sub">ما حُدّدت له قدرة إنتاجية</span>`;
-      else if(r.diff>=0) statusHtml = `<span class="badge b-done">✅ حقق الهدف${r.diff>0?" (+"+r.diff+")":""}</span>`;
-      else statusHtml = `<span class="badge b-pending">⚠ ناقص ${Math.abs(r.diff)}</span>`;
+      else if(r.diff>=0) statusHtml = `<span class="badge b-done">حقق الهدف${r.diff>0?" (+"+r.diff+")":""}</span>`;
+      else statusHtml = `<span class="badge b-pending">ناقص ${Math.abs(r.diff)}</span>`;
       return `<tr><td>${esc(r.t.username)}</td><td>${r.target||"—"}</td><td>${r.todayCount}</td><td>${statusHtml}</td><td>${r.monthCount}</td><td>${r.target>0?r.rawRemainingCapacity+" ثوب":"—"}</td></tr>`;
     }).join("") +
     `</tbody></table></div>`;
@@ -3907,10 +3913,10 @@ function runShiftAudit(){
   }
   html += `<div class="remaining-box" style="margin-top:6px;"><span>الإجمالي الفعلي (من واقع الدرج)</span><span class="amt">${physicalTotal.toFixed(2)} ريال</span></div>`;
   if(Math.abs(diff)<0.5){
-    html += `<div class="remaining-box" style="margin-top:6px;border-color:var(--profit);"><span><b>✅ متوافق</b></span><span class="amt" style="color:var(--profit);">لا يوجد فرق</span></div>`;
+    html += `<div class="remaining-box" style="margin-top:6px;border-color:var(--profit);"><span><b>متوافق</b></span><span class="amt" style="color:var(--profit);">لا يوجد فرق</span></div>`;
   } else {
     const label = diff>0 ? "زيادة" : "عجز";
-    html += `<div class="remaining-box" style="margin-top:6px;border-color:var(--loss);"><span><b>⚠ يوجد ${label} بمبلغ</b></span><span class="amt" style="color:var(--loss);">${Math.abs(diff).toFixed(2)} ريال</span></div>`;
+    html += `<div class="remaining-box" style="margin-top:6px;border-color:var(--loss);"><span><b>يوجد ${label} بمبلغ</b></span><span class="amt" style="color:var(--loss);">${Math.abs(diff).toFixed(2)} ريال</span></div>`;
     html += `<button class="btn btn-ghost btn-sm" id="startInvestigationBtn" style="margin-top:8px;">هل تريد المساعدة في البحث عن ${label==="عجز"?"العجز":"الزيادة"}؟</button>`;
     html += `<div id="investigationTool" style="display:none;margin-top:10px;"></div>`;
   }
@@ -3936,9 +3942,9 @@ function runInvestigation(){
   const results = tokens.map(tok=>{
     const match = audit.expected.payRefs.find(r=> String(r.cashReceiptNo)===tok || String(r.networkReceiptNo)===tok || r.invNumber===tok);
     if(match){
-      return `<div class="item-row"><span>✅ ${tok} — موجود بالنظام (${match.source} #${match.invNumber} — كاش ${match.cash.toFixed(0)} / شبكة ${match.network.toFixed(0)})</span></div>`;
+      return `<div class="item-row"><span>${tok} — موجود بالنظام (${match.source} #${match.invNumber} — كاش ${match.cash.toFixed(0)} / شبكة ${match.network.toFixed(0)})</span></div>`;
     }
-    return `<div class="item-row" style="color:var(--loss);"><span>⚠ ${tok} — غير مسجّل بالنظام لهذا اليوم — محتمل يكون هو سبب الفرق، تأكد منه يدوياً</span></div>`;
+    return `<div class="item-row" style="color:var(--loss);"><span>${tok} — غير مسجّل بالنظام لهذا اليوم — محتمل يكون هو سبب الفرق، تأكد منه يدوياً</span></div>`;
   }).join("");
   $("investigationResults").innerHTML = results + `<p class="sub" style="margin-top:8px;">ℹ هذي أداة إرشادية بس — ما تعدّل أي شي بحسابات النظام تلقائياً. أي تصحيح تسويه بنفسك يدوياً (مصروف، دفعة ناقصة، إلخ).</p>`;
 }
@@ -4010,7 +4016,7 @@ function renderVouchersLog(){
     return true;
   }).slice().reverse();
   el.innerHTML = mine.length ? `<div class="table-wrap"><table><thead><tr><th>رقم السند</th><th>النوع</th><th>المبلغ</th><th>الطرف</th><th>السبب</th><th>التاريخ</th><th></th></tr></thead><tbody>` +
-    mine.map(v=>`<tr><td>${v.voucherNo}</td><td>${v.type==="receipt"?"🟢 قبض":"🔴 صرف"}</td><td>${v.amount.toFixed(0)} ﷼</td><td>${esc(v.party)}</td><td>${esc(v.reason)}</td><td>${v.date}</td><td><button class="icon-btn" onclick="printVoucher('${v.id}')" title="طباعة السند">🖨</button></td></tr>`).join("") +
+    mine.map(v=>`<tr><td>${v.voucherNo}</td><td>${v.type==="receipt"?"قبض":"صرف"}</td><td>${v.amount.toFixed(0)} ﷼</td><td>${esc(v.party)}</td><td>${esc(v.reason)}</td><td>${v.date}</td><td><button class="icon-btn" onclick="printVoucher('${v.id}')" title="طباعة السند"><i data-lucide="printer"></i></button></td></tr>`).join("") +
     `</tbody></table></div>` : `<p class="sub">ما فيه سندات مطابقة.</p>`;
 }
 function printVoucher(id){
@@ -4133,7 +4139,7 @@ function renderGarmentFields(prefill=null){
       <span class="tag">ثوب ${i+1}</span>
       <div class="row-2">
         <div class="field"><label>نوع القماش (من المشتريات)</label>
-          <input type="text" class="g-itemCard-search" list="fabricDatalist" value="${esc(currentFabricName)}" placeholder="⚠ اختر القماش من المخزون (أو بدون قماش)..." autocomplete="off">
+          <input type="text" class="g-itemCard-search" list="fabricDatalist" value="${esc(currentFabricName)}" placeholder="اختر القماش من المخزون (أو بدون قماش)..." autocomplete="off">
           <input type="hidden" class="g-itemCard" value="${g.itemCardId || (editingId ? "__none__" : "")}">
           <p class="g-avail-note sub" style="display:none;margin:4px 0 0;font-size:11px;"></p>
         </div>
@@ -4155,7 +4161,7 @@ function renderGarmentFields(prefill=null){
     div.querySelector(".meas-toggle-btn").addEventListener("click", ()=> openMeasPanel(i));
     div.querySelectorAll(".meas-close-btn").forEach(btn=> btn.addEventListener("click", closeMeasPanel));
     div.querySelectorAll(".meas-save-btn").forEach(btn=> btn.addEventListener("click", ()=>{
-      showToast("💾 تم حفظ مقاسات الثوب");
+      showToast("تم حفظ مقاسات الثوب");
       closeMeasPanel();
     }));
     div.querySelectorAll(".meas-choice").forEach(sel=> sel.addEventListener("change", ()=>{
@@ -4187,7 +4193,7 @@ function renderGarmentFields(prefill=null){
         if(availNote){
           const avail = (c.stockQty||0) - (c.reservedQty||0);
           availNote.style.display = "";
-          availNote.textContent = `📦 الرصيد المتاح من "${c.name}": ${avail.toFixed(2)} ${unitLabel()}`;
+          availNote.textContent = `الرصيد المتاح من "${c.name}": ${avail.toFixed(2)} ${unitLabel()}`;
           availNote.style.color = avail>0 ? "var(--profit)" : "var(--loss)";
         }
       } else if(availNote){
@@ -4202,7 +4208,7 @@ function renderGarmentFields(prefill=null){
       const val = parseFloat(qtyInp.value);
       if(val > maxAllowed){
         qtyInp.value = maxAllowed;
-        showToast(`⚠ ما تقدر تتجاوز ${maxAllowed.toFixed(2)} ${unitLabel()} لهذي الفئة (الأساسي ${standard} + هامش ${fabricQtyBuffer().toFixed(2)})`);
+        showToast(`ما تقدر تتجاوز ${maxAllowed.toFixed(2)} ${unitLabel()} لهذي الفئة (الأساسي ${standard} + هامش ${fabricQtyBuffer().toFixed(2)})`);
       }
     });
     itemSel.addEventListener("change", ()=>applyDefaults(true));
@@ -4218,6 +4224,7 @@ function renderGarmentFields(prefill=null){
     if(!prefill) applyDefaults();
   }
   updateFixedShareNote(); updateLiveTotals(); updatePriceFieldsLockState();
+  refreshLucideIcons();
 }
 function readGarmentFields(existing){
   return Array.from($("garmentsHolder").children).map((card,i)=>{
@@ -4300,13 +4307,13 @@ function renderInvoiceOffersSelector(){
   const activeOffers = state.offers.filter(o=>o.active);
   if(!activeOffers.length){ wrap.innerHTML=""; return; }
   const garments = readGarmentFields();
-  wrap.innerHTML = `<div class="stitch"></div><label style="font-size:12px;color:var(--muted);">🎁 باقات العروض المتاحة (اختر واحدة بحد أقصى — ما يمكن الجمع بين عرضين)</label>` +
+  wrap.innerHTML = `<div class="stitch"></div><label style="font-size:12px;color:var(--muted);">باقات العروض المتاحة (اختر واحدة بحد أقصى — ما يمكن الجمع بين عرضين)</label>` +
     activeOffers.map(o=>{
       const eligible = checkOfferEligibility(garments, o);
       const checked = selectedOfferIds.includes(o.id);
       return `<div class="embro-toggle" style="margin:6px 0;">
         <input type="radio" name="offer-select-radio" class="offer-select" data-offer="${o.id}" ${checked?"checked":""} ${!eligible?"disabled":""}>
-        <label style="margin:0;font-size:13px;${!eligible?"color:var(--muted);":""}">${esc(o.name)} ${eligible?"✅ ينطبق":"— ما ينطبق حالياً"}</label>
+        <label style="margin:0;font-size:13px;${!eligible?"color:var(--muted);":""}">${esc(o.name)} ${eligible?"ينطبق":"— ما ينطبق حالياً"}</label>
       </div>`;
     }).join("") + (selectedOfferIds.length ? `<button type="button" class="btn btn-ghost btn-sm" id="clearSelectedOfferBtn" style="margin-top:4px;">إلغاء اختيار العرض</button>` : "");
   document.querySelectorAll(".offer-select").forEach(cb=> cb.addEventListener("change", ()=>{
@@ -4325,8 +4332,8 @@ function renderPaymentsList(){
   if(paymentsListTemp.length===0){ el.innerHTML = `<p class="sub">ما فيه دفعات مسجّلة بعد.</p>`; }
   else {
     el.innerHTML = paymentsListTemp.map((p,i)=>`<div class="payment-row">
-      <span>💵 كاش: ${p.cash.toFixed(0)} ﷼${p.cashReceiptNo?` (سند ${p.cashReceiptNo})`:""}</span><span>💳 شبكة: ${p.network.toFixed(0)} ﷼${p.networkReceiptNo?` (سند ${p.networkReceiptNo})`:""}</span>
-      ${p.discount?`<span>🏷 خصم: ${p.discount.toFixed(0)} ﷼</span>`:""}
+      <span>كاش: ${p.cash.toFixed(0)} ﷼${p.cashReceiptNo?` (سند ${p.cashReceiptNo})`:""}</span><span>شبكة: ${p.network.toFixed(0)} ﷼${p.networkReceiptNo?` (سند ${p.networkReceiptNo})`:""}</span>
+      ${p.discount?`<span>خصم: ${p.discount.toFixed(0)} ﷼</span>`:""}
       <span style="color:var(--muted)">${p.date}</span>
       <button class="icon-btn" onclick="removePaymentTemp(${i})">حذف</button></div>`).join("");
   }
@@ -4455,7 +4462,7 @@ async function submitInvoiceReturn(){
   if(!await saveStateWithRollback(returnSnapshot)) return;
   logAudit("invoice_returned", {invoiceNumber:num, reason, refundAmount, lostCost, responsibleUsername: responsibleUsername||null});
   $("returnInvNumber").value=""; $("returnReason").value=""; $("returnAmount").value=""; $("returnResponsible").value=""; $("returnResponsibleSearch").value="";
-  showToast((lostCost>0 ? `تم تسجيل المرتجع — ⚠ خسارة قماش/تصنيع مقصوص فعلياً: ${lostCost.toFixed(0)} ريال (${wasCut.join("، ")})` : "تم تسجيل المرتجع") + requestMsg);
+  showToast((lostCost>0 ? `تم تسجيل المرتجع — خسارة قماش/تصنيع مقصوص فعلياً: ${lostCost.toFixed(0)} ريال (${wasCut.join("، ")})` : "تم تسجيل المرتجع") + requestMsg);
 }
 // ---------------- mail / internal requests inbox ----------------
 function nextMailRequestNo(){ const n=state.settings.nextMailRequestNumber||1; state.settings.nextMailRequestNumber=n+1; return n; }
@@ -4485,7 +4492,7 @@ function renderMailTab(){
   const pending = all.filter(r=>r.status==="pending" && (isAdmin || r.createdBy===currentUser.username));
   const resolved = all.filter(r=>r.status==="decided" && (isAdmin || r.createdBy===currentUser.username)).slice(0,30);
 
-  const typeLabel = t=> t==="invoice_return_defect"?"🔄 فاتورة مرتجعة (خلل)" : t==="advance"?"💰 طلب سلفة" : "🌴 طلب إجازة";
+  const typeLabel = t=> t==="invoice_return_defect"?"فاتورة مرتجعة (خلل)" : t==="advance"?"طلب سلفة" : "طلب إجازة";
   const detailLine = r=>{
     if(r.type==="invoice_return_defect") return `فاتورة ${esc(r.invoiceNumber)} — ${r.amount.toFixed(0)} ﷼ — المتسبّب: ${esc(r.responsibleUsername)} — السبب: ${esc(r.reason)}`;
     if(r.type==="advance") return `${esc(r.employeeUsername)} — ${r.amount.toFixed(0)} ﷼ — ${esc(r.reason||"—")}`;
@@ -4564,7 +4571,7 @@ async function decideSimpleMailRequest(reqId, approved){
     if(!result.ok){ showToast(result.msg); return; }
   }
   r.status = "decided"; r.decidedBy = currentUser.username; r.decidedAt = todayStr();
-  r.decisionLabel = approved ? "✅ تمت الموافقة" : "❌ مرفوض";
+  r.decisionLabel = approved ? "تمت الموافقة" : "مرفوض";
   if(!await saveStateWithRollback(snapshot)) return;
   logAudit("mail_request_decided", {type:r.type, seq:r.seq, approved, employeeUsername:r.employeeUsername, amount:r.amount||0});
   showToast(approved ? "تمت الموافقة على الطلب" : "تم رفض الطلب");
@@ -4592,7 +4599,7 @@ async function confirmMailDecision(){
     const seq = nextDecisionNo();
     const message = `تم رفض طلب الترجيع الخاص بفاتورة #${r.invoiceNumber} — لن يتم استرداد أي مبلغ ولا خصم عليك.`;
     state.decisions.push({id:Date.now()+"", seq, type:"return_defect", recipientUsername:r.responsibleUsername, amount:0, reason:r.reason, message, decidedBy:currentUser.username, date:todayStr()});
-    r.status="decided"; r.decidedBy=currentUser.username; r.decidedAt=todayStr(); r.decisionLabel=`قرار رقم ${seq} — ❌ رفض الترجيع، بدون أي خصم من أي صندوق`;
+    r.status="decided"; r.decidedBy=currentUser.username; r.decidedAt=todayStr(); r.decisionLabel=`قرار رقم ${seq} — رفض الترجيع، بدون أي خصم من أي صندوق`;
     if(!await saveStateWithRollback(rejectSnapshot)) return;
     logAudit("mail_decision_resolved", {seq, choice:"reject", invoiceNumber:r.invoiceNumber, responsibleUsername:r.responsibleUsername});
     closeMailDecisionModal();
@@ -4703,8 +4710,8 @@ async function saveInvoice(){
   const garmentCards = Array.from($("garmentsHolder").children);
   for(let i=0;i<garmentCards.length;i++){
     const rawVal = garmentCards[i].querySelector(".g-itemCard").value;
-    if(!rawVal){ showToast(`⚠ اختر القماش لثوب ${i+1} من المخزون (أو اختر "أجرة تفصيل بدون قماش" صراحة) قبل الحفظ`); return; }
-    if(rawVal!=="__none__" && !findItemCard(rawVal)){ showToast(`⚠ القماش المحدد لثوب ${i+1} غير موجود بالمخزون — اختر قماشاً حقيقياً من القائمة`); return; }
+    if(!rawVal){ showToast(`اختر القماش لثوب ${i+1} من المخزون (أو اختر "أجرة تفصيل بدون قماش" صراحة) قبل الحفظ`); return; }
+    if(rawVal!=="__none__" && !findItemCard(rawVal)){ showToast(`القماش المحدد لثوب ${i+1} غير موجود بالمخزون — اختر قماشاً حقيقياً من القائمة`); return; }
   }
   const redeemInp = $("loyaltyRedeemInput");
   const pointsToRedeem = (redeemInp && isNewInvoice) ? (parseInt(redeemInp.value)||0) : 0;
@@ -4716,7 +4723,7 @@ async function saveInvoice(){
   }
   const pendingCash = parseFloat($("newPayCash").value)||0;
   const pendingNetwork = parseFloat($("newPayNetwork").value)||0;
-  if(pendingCash>0 || pendingNetwork>0){ showToast("فيه دفعة لم تُضف بعد — اضغط '➕ إضافة دفعة' أو فرّغ حقول الدفعة قبل الحفظ"); return; }
+  if(pendingCash>0 || pendingNetwork>0){ showToast("فيه دفعة لم تُضف بعد — اضغط 'إضافة دفعة' أو فرّغ حقول الدفعة قبل الحفظ"); return; }
   const cards = Array.from($("garmentsHolder").children);
   if(!cards.length){ showToast("أضف ثوب واحد على الأقل"); return; }
   for(const [gi,card] of cards.entries()){
@@ -4878,7 +4885,7 @@ async function saveInvoice(){
   }
   if(isNewInvoice && state.settings.waWelcomeEnabled && invData.customerMobile){
     const link = waLink(invData.customerMobile, buildWelcomeMessage(invData));
-    $("waWelcomeBanner").innerHTML = `<div class="note-box" style="text-align:center;"><a href="${link}" target="_blank" class="btn btn-gold btn-sm" style="display:inline-block;text-decoration:none;">📱 إرسال رسالة واتساب ترحيبية للعميل</a></div>`;
+    $("waWelcomeBanner").innerHTML = `<div class="note-box" style="text-align:center;"><a href="${link}" target="_blank" class="btn btn-gold btn-sm" style="display:inline-block;text-decoration:none;">إرسال رسالة واتساب ترحيبية للعميل</a></div>`;
     $("waWelcomeBanner").style.display = "";
   } else {
     $("waWelcomeBanner").style.display = "none";
@@ -4901,7 +4908,7 @@ async function saveInvoice(){
     // leaving them applied only in this tab's memory, and keep the form filled in as-is
     // so the cashier can just retry instead of re-entering everything from scratch
     state = stateSnapshotBeforeSave;
-    $("printReceiptBanner").innerHTML = `<p class="sub" style="text-align:center;color:var(--loss);">⚠ تعذّر حفظ الفاتورة بالسحابة — ما انحفظ شي، البيانات لسا موجودة بالفورم. تأكد من الاتصال بالإنترنت وجرّب "حفظ" مرة ثانية.</p>`;
+    $("printReceiptBanner").innerHTML = `<p class="sub" style="text-align:center;color:var(--loss);">تعذّر حفظ الفاتورة بالسحابة — ما انحفظ شي، البيانات لسا موجودة بالفورم. تأكد من الاتصال بالإنترنت وجرّب "حفظ" مرة ثانية.</p>`;
     $("printReceiptBanner").style.display = "";
     renderAll();
     return null;
@@ -5009,10 +5016,10 @@ function renderDashboardWorkDistribution(){
 function renderPendingList(){
   const rows = allPendingGarments();
   const tbody = $("pendingBody"); tbody.innerHTML="";
-  if(rows.length===0){ tbody.innerHTML=`<tr><td colspan="6" class="sub" style="text-align:center;padding:20px;">ما فيه ثياب متعثرة 🎉</td></tr>`; return; }
+  if(rows.length===0){ tbody.innerHTML=`<tr><td colspan="6">${emptyStateHtml("check-circle-2","ما فيه ثياب متعثرة")}</td></tr>`; return; }
   rows.forEach(({inv,g,idx})=>{
     const st = STATUSES.find(s=>s.v===g.status);
-    const waBtn = inv.customerMobile ? `<a href="${waLink(inv.customerMobile, buildReminderMessage(inv,g))}" target="_blank" class="btn btn-ghost btn-sm" style="white-space:nowrap;" title="تذكير واتساب">📱 تذكير</a>` : "";
+    const waBtn = inv.customerMobile ? `<a href="${waLink(inv.customerMobile, buildReminderMessage(inv,g))}" target="_blank" class="btn btn-ghost btn-sm" style="white-space:nowrap;" title="تذكير واتساب">تذكير</a>` : "";
     tbody.innerHTML += `<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(g.fabricType)}</td>
       <td><span class="badge ${st.cls}">${st.label}</span></td><td>${monthDisplay(inv.originMonth)}</td>
       <td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm jump-to-invoice-btn" data-number="${inv.number.replace(/"/g,"&quot;")}">فتح</button> <button class="btn btn-ghost btn-sm" onclick="printCuttingCard('${inv.id}', ${idx})" title="طباعة كرت القصاص">كرت القصاص</button> ${waBtn}</td></tr>`;
@@ -5044,7 +5051,7 @@ function searchInvoiceForDistribution(){
     const statusMatch = !statusFilter || inv.garments.some(g=>g.status===statusFilter);
     return textMatch && statusMatch;
   }).slice(0,30);
-  if(!matches.length){ resultsList.innerHTML = legacyHtml || `<p class="sub">ما فيه نتائج مطابقة.</p>`; return; }
+  if(!matches.length){ resultsList.innerHTML = legacyHtml || emptyStateHtml("search-x","ما فيه نتائج مطابقة."); refreshLucideIcons(); return; }
   if(matches.length===1 && !legacyMatches.length){ openDistributionInvoice(matches[0]); return; }
   resultsList.innerHTML = `<div class="table-wrap"><table><thead><tr><th>الفاتورة</th><th>العميل</th><th>الجوال</th><th>التاريخ</th><th></th></tr></thead><tbody>` +
     matches.map(inv=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${inv.date}</td><td><button class="btn btn-ghost btn-sm open-dist-inv-btn" data-number="${inv.number.replace(/"/g,"&quot;")}">فتح</button></td></tr>`).join("") +
@@ -5084,7 +5091,7 @@ function renderDistributionArea(inv){
   const paid = invoicePaid(inv), discountTotal = invoiceDiscountTotal(inv), total = invoiceSaleTotal(inv), remaining = invoiceRemaining(inv);
   const activeGarmentCount = inv.garments.filter(g=>g.status!=="ملغي").length;
   const paymentsHtml = (inv.payments&&inv.payments.length) ? inv.payments.map(p=>`<div class="payment-row">
-      <span>💵 ${(p.cash||0).toFixed(0)} ﷼${p.cashReceiptNo?` (سند ${p.cashReceiptNo})`:""}</span><span>💳 ${(p.network||0).toFixed(0)} ﷼${(p.networkReceiptNo||p.receipt)?` (سند ${p.networkReceiptNo||p.receipt})`:""}</span>${p.discount?`<span>🏷 خصم: ${p.discount.toFixed(0)} ﷼</span>`:""}
+      <span>${(p.cash||0).toFixed(0)} ﷼${p.cashReceiptNo?` (سند ${p.cashReceiptNo})`:""}</span><span>${(p.network||0).toFixed(0)} ﷼${(p.networkReceiptNo||p.receipt)?` (سند ${p.networkReceiptNo||p.receipt})`:""}</span>${p.discount?`<span>خصم: ${p.discount.toFixed(0)} ﷼</span>`:""}
       <span style="color:var(--muted)">${p.date}</span></div>`).join("")
     : `<p class="sub">ما فيه دفعات مسجّلة بعد.</p>`;
   const summaryField = (lbl, val)=> `<div><div class="order-summary-lbl">${lbl}</div><div class="order-summary-val">${val}</div></div>`;
@@ -5101,14 +5108,14 @@ function renderDistributionArea(inv){
       ${summaryField("المتبقي", remaining.toFixed(0)+" ﷼")}
     </div>
   </div>`;
-  area.innerHTML = summaryHtml + `${inv.notes?`<p class="sub" style="margin:10px 0;">📝 ملاحظات الفاتورة: ${esc(inv.notes)}</p>`:""}${(inv.appliedOffers&&inv.appliedOffers.length)?`<p class="sub" style="margin-bottom:10px;color:var(--gold-soft);">🎁 عروض مطبّقة: ${inv.appliedOffers.join("، ")}</p>`:""}` +
+  area.innerHTML = summaryHtml + `${inv.notes?`<p class="sub" style="margin:10px 0;">ملاحظات الفاتورة: ${esc(inv.notes)}</p>`:""}${(inv.appliedOffers&&inv.appliedOffers.length)?`<p class="sub" style="margin-bottom:10px;color:var(--gold-soft);">عروض مطبّقة: ${inv.appliedOffers.join("، ")}</p>`:""}` +
     inv.garments.map((g,i)=>{
       const locked = (g.status==="تسليم"||g.status==="ملغي") && !isAdmin;
       const tailorLocked = g.status==="تفصيل"; // "تم التفصيل" is exclusively set via the tailor's own scan screen — no one edits it here, admin included
       const dis = (locked||tailorLocked)?"disabled":"";
       const availableStatuses = g.status==="تفصيل" ? STATUSES.filter(s=>s.v==="تفصيل") : availableStatusesBase.filter(s=> s.v!=="تسليم" || g.status==="جاهز" || g.status==="تسليم");
       const canCreditDeliver = isAdmin && g.status!=="تسليم" && g.status!=="ملغي";
-      const creditBadge = g.creditDelivered ? `<p class="locked-note" style="color:var(--loss);">🔴 مسلَّم بدين — متبقٍ عليه ${(g.creditAmount-g.creditPaid).toFixed(0)} ﷼ (تابعه من "مديونية الثياب")</p>` : "";
+      const creditBadge = g.creditDelivered ? `<p class="locked-note" style="color:var(--loss);">مسلَّم بدين — متبقٍ عليه ${(g.creditAmount-g.creditPaid).toFixed(0)} ﷼ (تابعه من "مديونية الثياب")</p>` : "";
       return `<div class="garment-card"><span class="tag">ثوب ${i+1} — ${esc(g.fabricType)}</span>
         ${buildStepperHtml(g.status)}
         <div class="row-2">
@@ -5116,9 +5123,9 @@ function renderDistributionArea(inv){
           <div class="field"><label>الحالة</label><select class="dist-status" data-idx="${i}" ${dis}>${availableStatuses.map(s=>`<option value="${s.v}" ${s.v===g.status?"selected":""}>${s.label}</option>`).join("")}</select></div>
         </div>
         <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="printCuttingCard('${inv.id}', ${i})">طباعة كرت القصاص</button>
-        ${g.measurementNotes?`<p class="sub">📝 ملاحظات المقاسات: ${esc(g.measurementNotes)}</p>`:""}
-        ${locked?`<p class="locked-note">🔒 ${g.status==="تسليم"?"تم التسليم":"ملغي"} — لا يمكن للمحاسب التغيير</p>`:""}
-        ${tailorLocked?`<p class="locked-note">🔒 تم التفصيل — يخص حساب الخياط فقط (يُعدَّل من شاشة المسح الخاصة به)</p>`:""}
+        ${g.measurementNotes?`<p class="sub">ملاحظات المقاسات: ${esc(g.measurementNotes)}</p>`:""}
+        ${locked?`<p class="locked-note">${g.status==="تسليم"?"تم التسليم":"ملغي"} — لا يمكن للمحاسب التغيير</p>`:""}
+        ${tailorLocked?`<p class="locked-note">تم التفصيل — يخص حساب الخياط فقط (يُعدَّل من شاشة المسح الخاصة به)</p>`:""}
         ${creditBadge}
         ${canCreditDeliver?`<button class="btn btn-ghost btn-sm" style="border-color:var(--loss);color:var(--loss);margin-top:8px;" onclick="creditDeliverGarment('${inv.id}', ${i})">تسليم بدين (تجاوز المتبقي)</button>`:""}
       </div>`;
@@ -5135,7 +5142,7 @@ function renderDistributionArea(inv){
       <div class="field"><label>شبكة (ريال)</label><input type="number" id="distPayNetwork" min="0" placeholder="0"></div>
       <div class="field"><label>رقم سند الشبكة (إلزامي لو فيه شبكة)</label><input type="text" id="distPayReceipt"></div>
     </div>
-    ${(userDiscountEnabled(currentUser)||isCustomerVip(inv.customerMobile))?`<div class="field"><label>خصم (ريال)${isCustomerVip(inv.customerMobile)?` — 👑 عميل VIP: بدون حد أقصى`:` — الحد الأقصى لك: ${userMaxDiscountAmount(currentUser,total).toFixed(0)} ريال`}</label><input type="number" id="distPayDiscount" min="0" placeholder="0"></div>`:""}
+    ${(userDiscountEnabled(currentUser)||isCustomerVip(inv.customerMobile))?`<div class="field"><label>خصم (ريال)${isCustomerVip(inv.customerMobile)?` — عميل VIP: بدون حد أقصى`:` — الحد الأقصى لك: ${userMaxDiscountAmount(currentUser,total).toFixed(0)} ريال`}</label><input type="number" id="distPayDiscount" min="0" placeholder="0"></div>`:""}
     <button class="btn btn-ghost btn-sm" id="addDistPaymentBtn">إضافة دفعة</button>
     <div class="stitch"></div>
     <button class="btn btn-gold btn-sm" id="saveDistBtn">حفظ التوزيع</button>`;
@@ -5319,7 +5326,7 @@ async function loadAndRenderAuditLog(){
     if(userFilter) rows = rows.filter(r=>(r.username||"").toLowerCase().includes(userFilter.toLowerCase()));
     if(fromFilter) rows = rows.filter(r=>(r.clientDate||"")>=fromFilter);
     if(!rows.length){ el.innerHTML = `<p class="sub">ما فيه سجلات مطابقة.</p>`; return; }
-    const actionLabels = {expense_recorded:"💸 مصروف", month_closed:"🔒 إقفال شهر", price_changed:"💰 تعديل سعر", funds_transferred:"🔁 تحويل أموال", invoice_returned:"🔄 مرتجع فاتورة", user_added:"➕ إضافة مستخدم", user_removed:"🗑 حذف مستخدم", permission_changed:"🔐 تغيير صلاحية"};
+    const actionLabels = {expense_recorded:"مصروف", month_closed:"إقفال شهر", price_changed:"تعديل سعر", funds_transferred:"تحويل أموال", invoice_returned:"مرتجع فاتورة", user_added:"إضافة مستخدم", user_removed:"حذف مستخدم", permission_changed:"تغيير صلاحية"};
     el.innerHTML = rows.map(r=>{
       const when = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate().toLocaleString("ar-SA") : (r.clientDate||"—");
       return `<div class="garment-card">
@@ -5495,9 +5502,9 @@ function renderSensitiveFinancials(){
     <div class="stat-card sales"><div class="lbl">إجمالي قيمة الفواتير الصادرة (هذا الشهر)</div><div class="val">${issued.total.toFixed(0)} ﷼</div></div>
     <div class="stat-card" style="border-color:var(--gold-soft);"><div class="lbl">عربون الفواتير الصادرة (هذا الشهر)</div><div class="val" style="color:var(--gold-soft);">${issued.paid.toFixed(0)} ﷼</div></div>
     <div class="stat-card cost"><div class="lbl">باقي الفواتير الصادرة (هذا الشهر)</div><div class="val">${issued.remaining.toFixed(0)} ﷼</div></div>
-    <div class="stat-card"><div class="lbl">🏷 جاهزة للبيع (لكل الفترات)</div><div class="val" style="font-size:16px;">${rfs.all.length} ثوب<br><span style="font-size:12px;color:var(--muted);">${rfs.allTotal.toFixed(0)} ﷼ مشطوبة</span></div></div>
-    <div class="stat-card"><div class="lbl">🏷 جاهزة للبيع (هذا الشهر)</div><div class="val" style="font-size:16px;">${rfs.thisMonth.length} ثوب<br><span style="font-size:12px;color:var(--muted);">${rfs.thisMonthTotal.toFixed(0)} ﷼</span></div></div>
-    <div class="stat-card" style="grid-column:span 2;"><div class="lbl">⚖ نقطة التعادل (الشهر الحالي)</div><div class="val" style="font-size:15px;color:${remainingToBreakEven>0?'var(--loss)':'var(--profit)'};">${remainingToBreakEven>0?`لسا محتاج ${remainingToBreakEven.toFixed(0)} ﷼`:`تجاوزتها بـ${Math.abs(remainingToBreakEven).toFixed(0)} ﷼`}</div></div>`;
+    <div class="stat-card"><div class="lbl">جاهزة للبيع (لكل الفترات)</div><div class="val" style="font-size:16px;">${rfs.all.length} ثوب<br><span style="font-size:12px;color:var(--muted);">${rfs.allTotal.toFixed(0)} ﷼ مشطوبة</span></div></div>
+    <div class="stat-card"><div class="lbl">جاهزة للبيع (هذا الشهر)</div><div class="val" style="font-size:16px;">${rfs.thisMonth.length} ثوب<br><span style="font-size:12px;color:var(--muted);">${rfs.thisMonthTotal.toFixed(0)} ﷼</span></div></div>
+    <div class="stat-card" style="grid-column:span 2;"><div class="lbl">نقطة التعادل (الشهر الحالي)</div><div class="val" style="font-size:15px;color:${remainingToBreakEven>0?'var(--loss)':'var(--profit)'};">${remainingToBreakEven>0?`لسا محتاج ${remainingToBreakEven.toFixed(0)} ﷼`:`تجاوزتها بـ${Math.abs(remainingToBreakEven).toFixed(0)} ﷼`}</div></div>`;
   renderStuckInvoicesReportInto("sensitiveStuckInvoicesView");
 }
 function renderStuckInvoicesReportInto(targetId){
@@ -5510,9 +5517,9 @@ function renderStuckInvoicesReportInto(targetId){
     if(!rows.length) return `<p class="sub">${emptyMsg}</p>`;
     const total = rows.reduce((a,r)=>a+r.remaining,0);
     return `<div class="table-wrap"><table><thead><tr><th>فاتورة</th><th>العميل</th><th>تاريخ الجاهزية</th><th>أيام التعثر</th><th>المتبقي</th><th></th></tr></thead><tbody>
-      ${rows.map(({inv,g,daysOverdue,remaining})=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")} ${inv.customerMobile?`<a href="${waLink(inv.customerMobile)}" target="_blank" class="icon-btn" title="فتح واتساب">📱</a>`:""}</td><td>${g.readyDate}</td><td style="color:var(--loss);font-weight:700;">${daysOverdue} يوم</td><td>${remaining.toFixed(0)} ﷼</td><td><button class="btn btn-ghost btn-sm" onclick="switchTab('distribution'); setTimeout(()=>openDistributionInvoiceByNumber('${inv.number.replace(/'/g,"\\'")}'),150);">↩ فتح للتسوية</button></td></tr>`).join("")}
+      ${rows.map(({inv,g,daysOverdue,remaining})=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")} ${inv.customerMobile?`<a href="${waLink(inv.customerMobile)}" target="_blank" class="icon-btn" title="فتح واتساب"><i data-lucide="message-circle"></i></a>`:""}</td><td>${g.readyDate}</td><td style="color:var(--loss);font-weight:700;">${daysOverdue} يوم</td><td>${remaining.toFixed(0)} ﷼</td><td><button class="btn btn-ghost btn-sm" onclick="switchTab('distribution'); setTimeout(()=>openDistributionInvoiceByNumber('${inv.number.replace(/'/g,"\\'")}'),150);">↩ فتح للتسوية</button></td></tr>`).join("")}
     </tbody></table></div>
-    <p style="margin-top:8px;font-weight:700;">📊 إجمالي: ${rows.length} ثوب متعثر — ${total.toFixed(0)} ﷼ متبقي</p>`;
+    <p style="margin-top:8px;font-weight:700;">إجمالي: ${rows.length} ثوب متعثر — ${total.toFixed(0)} ﷼ متبقي</p>`;
   };
   el.innerHTML = `
     <h4 style="margin:0 0 8px;font-size:13px;">لكل الفترات</h4>
@@ -5521,6 +5528,7 @@ function renderStuckInvoicesReportInto(targetId){
     <h4 style="margin:0 0 8px;font-size:13px;">لهذا الشهر</h4>
     ${table(thisMonthRows, "ما فيه ثياب دخلت حالة التعثر هذا الشهر.")}
   `;
+  refreshLucideIcons();
 }
 function buildTailorMonthlyReport(username, monthLabel){
   if(!username) return `<p class="sub">اختر خياط.</p>`;
@@ -5533,7 +5541,7 @@ function buildTailorMonthlyReport(username, monthLabel){
   if(!rows.length) return `<p class="sub">ما فيه ثياب فصّلها هذا الخياط هذا الشهر.</p>`;
   const tableRows = rows.map(({inv,count})=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${inv.date}</td><td>${count}</td></tr>`).join("");
   return `<div class="table-wrap"><table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>التاريخ</th><th>عدد الثياب</th></tr></thead><tbody>${tableRows}</tbody></table></div>
-    <p style="margin-top:8px;font-weight:700;">📊 إجمالي: ${rows.length} فاتورة — ${totalGarments} ثوب هذا الشهر</p>`;
+    <p style="margin-top:8px;font-weight:700;">إجمالي: ${rows.length} فاتورة — ${totalGarments} ثوب هذا الشهر</p>`;
 }
 function buildInvoiceStatusReport(inv){
   const rows = inv.garments.map((g,idx)=>{
@@ -5545,7 +5553,7 @@ function buildInvoiceStatusReport(inv){
   return `<div class="garment-card" style="margin-bottom:10px;">
     <div style="display:flex;justify-content:space-between;"><b>فاتورة ${esc(inv.number)}</b><span class="sub">${esc(inv.customerName||"—")}</span></div>
     <div style="margin-top:6px;">${rows}</div>
-    ${Math.abs(remaining)>0.01 ? `<p style="margin:6px 0 0;color:var(--loss);font-size:12px;">💰 متبقي عليها: ${remaining.toFixed(0)} ريال</p>` : `<p style="margin:6px 0 0;color:var(--profit);font-size:12px;">✅ مسددة بالكامل</p>`}
+    ${Math.abs(remaining)>0.01 ? `<p style="margin:6px 0 0;color:var(--loss);font-size:12px;">متبقي عليها: ${remaining.toFixed(0)} ريال</p>` : `<p style="margin:6px 0 0;color:var(--profit);font-size:12px;">مسددة بالكامل</p>`}
   </div>`;
 }
 function handleQuickScan(){
@@ -5592,7 +5600,7 @@ async function completeGarmentAdvance(inv, idx, next, snapshot){
 }
 function showQuickDeliveryPayment(inv, idx, remaining){
   $("quickScanPicker").innerHTML = `<div class="garment-card">
-    <p style="margin:0 0 10px;color:var(--loss);font-weight:700;">💰 متبقي على الفاتورة ${remaining.toFixed(0)} ريال — حصّل المبلغ عشان تكمل التسليم</p>
+    <p style="margin:0 0 10px;color:var(--loss);font-weight:700;">متبقي على الفاتورة ${remaining.toFixed(0)} ريال — حصّل المبلغ عشان تكمل التسليم</p>
     <div class="row-2">
       <div class="field"><label>كاش (ريال)</label><input type="number" id="quickPayCash" min="0" value="${remaining.toFixed(0)}"></div>
       <div class="field"><label>شبكة (ريال)</label><input type="number" id="quickPayNetwork" min="0" value="0"></div>
@@ -5667,7 +5675,7 @@ function renderDebtsTab(){
   state.invoices.forEach(inv=> inv.garments.forEach((g,i)=>{
     if(g.creditDelivered && (g.creditAmount-g.creditPaid) > 0.01) debts.push({inv, g, idx:i});
   }));
-  if(!debts.length){ el.innerHTML = `<p class="sub">ما فيه ديون مسجّلة حالياً.</p>`; return; }
+  if(!debts.length){ el.innerHTML = emptyStateHtml("credit-card","ما فيه ديون مسجّلة حالياً."); return; }
   el.innerHTML = debts.map(({inv,g,idx})=>{
     const owed = g.creditAmount - g.creditPaid;
     return `<div class="garment-card">
@@ -5697,7 +5705,7 @@ function buildDebtReminderMessage(inv){
 function renderCustomerDebts(){
   const el = $("customerDebtsList");
   const debts = customerDebtInvoices();
-  if(!debts.length){ el.innerHTML = `<p class="sub">ما فيه مديونيات حالياً.</p>`; return; }
+  if(!debts.length){ el.innerHTML = emptyStateHtml("wallet","ما فيه مديونيات حالياً."); return; }
   const totalOwed = debts.reduce((a,inv)=>a+invoiceRemaining(inv),0);
   el.innerHTML = `<p class="sub" style="margin-bottom:10px;">عدد العملاء: <b>${debts.length}</b> — إجمالي المتبقي: <b style="color:var(--loss);">${totalOwed.toFixed(0)} ﷼</b></p>` +
     debts.map(inv=>{
@@ -5712,7 +5720,7 @@ function renderCustomerDebts(){
         </div>
         <div class="actions-row" style="margin-top:8px;">
           <button class="btn btn-gold btn-sm" onclick="settleCustomerDebt('${inv.id}')">سداد</button>
-          ${inv.customerMobile?`<a class="btn btn-ghost btn-sm" target="_blank" href="${waLink(inv.customerMobile, buildDebtReminderMessage(inv))}">📱 تذكير</a>`:""}
+          ${inv.customerMobile?`<a class="btn btn-ghost btn-sm" target="_blank" href="${waLink(inv.customerMobile, buildDebtReminderMessage(inv))}">تذكير</a>`:""}
         </div>
       </div>`;
     }).join("") +
@@ -5743,7 +5751,7 @@ async function settleCustomerDebt(invId){
   applyPaymentToBalances(payment); // this was missing entirely before — the cash/network was never credited to any box
   if(await saveStateWithRollback(snapshot)){
     logAudit("customer_debt_settled", {invoiceNumber:inv.number, amount, method});
-    showToast(`✅ تم تسجيل سداد ${amount.toFixed(0)} ريال لفاتورة ${inv.number}`);
+    showToast(`تم تسجيل سداد ${amount.toFixed(0)} ريال لفاتورة ${inv.number}`);
   }
 }
 async function payCreditDebt(invId, idx){
@@ -5867,7 +5875,7 @@ async function performCloseMonth(){
     if(!saved){
       state = stateSnapshot; // roll back the in-memory close/payroll so a retry starts clean
       renderAll();
-      showToast("⚠ تعذّر حفظ إقفال الشهر بالسحابة — لم يُقفل الشهر، تأكد من الاتصال بالإنترنت وحاول مرة ثانية");
+      showToast("تعذّر حفظ إقفال الشهر بالسحابة — لم يُقفل الشهر، تأكد من الاتصال بالإنترنت وحاول مرة ثانية");
       return;
     }
     renderAll();
@@ -6022,7 +6030,7 @@ function renderAll(){
     tr.innerHTML = `<td><b>${esc(inv.number)}</b></td><td>${esc(inv.customerName||"—")}</td><td>${inv.date}</td>
       <td>${s.toFixed(0)} ﷼</td><td>${paid.toFixed(0)} ﷼</td><td>${rem.toFixed(0)} ﷼</td>
       <td>${profitCell}</td>
-      <td style="white-space:nowrap;">${isAdmin?`<button class="btn btn-ghost btn-sm" style="color:var(--gold-soft);border-color:var(--gold-soft);" onclick="editInvoice('${inv.id}')" title="تعديل الفاتورة">تعديل</button> <button class="btn btn-ghost btn-sm" onclick="createInvoiceReturn('${inv.id}')" title="تسجيل مرتجع">مرتجع</button>`:""}<button class="icon-btn" onclick="printCustomerReceipt('${inv.id}')" title="طباعة فاتورة العميل">🖨</button><button class="icon-btn" onclick="shareReceiptViaWhatsApp('${inv.id}')" title="إرسال الفاتورة واتساب">📤</button>${inv.einvoice?`<button class="icon-btn" onclick="showEinvoiceDetails('${inv.id}')" title="بيانات الفوترة الإلكترونية">🧾</button>`:""}</td>`;
+      <td style="white-space:nowrap;">${isAdmin?`<button class="btn btn-ghost btn-sm" style="color:var(--gold-soft);border-color:var(--gold-soft);" onclick="editInvoice('${inv.id}')" title="تعديل الفاتورة">تعديل</button> <button class="btn btn-ghost btn-sm" onclick="createInvoiceReturn('${inv.id}')" title="تسجيل مرتجع">مرتجع</button>`:""}<button class="icon-btn" onclick="printCustomerReceipt('${inv.id}')" title="طباعة فاتورة العميل"><i data-lucide="printer"></i></button><button class="icon-btn" onclick="shareReceiptViaWhatsApp('${inv.id}')" title="إرسال الفاتورة واتساب"><i data-lucide="send"></i></button>${inv.einvoice?`<button class="icon-btn" onclick="showEinvoiceDetails('${inv.id}')" title="بيانات الفوترة الإلكترونية"><i data-lucide="receipt"></i></button>`:""}</td>`;
     body.appendChild(tr);
     const badges = inv.garments.map(g=>{const st=STATUSES.find(x=>x.v===g.status);return `<span class="badge ${st.cls}">${st.label}${esc(g.tailor?" — "+g.tailor:"")}</span>`;}).join(" ");
     const tr2=document.createElement("tr"); tr2.innerHTML=`<td colspan="8" style="padding-top:0;padding-bottom:14px;">${badges}</td>`; body.appendChild(tr2);
@@ -6030,6 +6038,7 @@ function renderAll(){
 
   renderClosedReports(); renderGrowthReport(); renderSearch(); renderReturnResponsibleSelect(); renderTailorReportSelector(); renderBroadcastList(); renderSensitiveGate(); renderCustomers(); renderPendingList(); updateFixedShareNote(); renderLegacyItems(); renderBalancesTab(); renderDebtsTab(); renderCustomerDebts(); renderInventoryTab(); renderInventoryValuation(); renderSalesInvoicesList(); refreshSaleLineOptions(); renderAddonsList(); refreshAddonForm(); renderScanTab(); renderPayrollTab(); renderEntitlementPreview(); renderAlterationSettings(); renderAlterationsLog(); updateManualCardLabels(); renderCustomShopFields(); renderFabricOrigins(); if($("setPrintOriginOnLabel")) $("setPrintOriginOnLabel").checked = state.settings.printOriginOnLabel; renderOffers(); renderOptionLists(); renderOverdueDashboard(); renderOverdueDashboard("dashboardOverdue", true); renderDashboardKPIs(); renderDashboardWorkDistribution(); renderShiftClosingsLog(); renderQuickMenuBar(); renderQuickMenuEditor(); renderReturnsLog(); renderPromoCodesAdmin(); renderAppliedPromoBanner(); renderVouchersTab(); renderTopExpensesReport(); renderVatLedger(); renderProductionTracking(); renderSeasonsList(); renderCustomerNameDatalist("custNameDatalist"); renderCuttingImageEditor(); applyShopBranding(); renderMailTab(); if(currentUser && currentUser.role==="مدير"){ renderUsers(); renderPermissionsEditor(); }
   applyRolePermissions();
+  refreshLucideIcons();
 }
 
 function renderFixedItems(){
@@ -6185,14 +6194,14 @@ function removeFabricOrigin(i){ state.fabricOrigins.splice(i,1); saveState(); re
 
 // ---------------- measurement option lists (with images) ----------------
 const OPTION_LISTS = [
-  {key:"garmentTypes", label:"🧵 أنواع الثوب (سعودي/قطري/كويتي...)"},
-  {key:"collarTypes", label:"👔 أنواع الياقة"},
-  {key:"cufflinkTypes", label:"🔘 أنواع الكبك"},
-  {key:"pocketSewTypes", label:"👝 أنواع خياطة الجيب الجانبي"},
-  {key:"chestPocketTypes", label:"👔 أنواع جيب الصدر"},
-  {key:"fillingTypes", label:"🧶 أنواع الحشوة"},
-  {key:"jabzourTypes", label:"📐 أنواع الجبزور"},
-  {key:"modelTypes", label:"✂ أنواع الموديل"},
+  {key:"garmentTypes", label:"أنواع الثوب (سعودي/قطري/كويتي...)"},
+  {key:"collarTypes", label:"أنواع الياقة"},
+  {key:"cufflinkTypes", label:"أنواع الكبك"},
+  {key:"pocketSewTypes", label:"أنواع خياطة الجيب الجانبي"},
+  {key:"chestPocketTypes", label:"أنواع جيب الصدر"},
+  {key:"fillingTypes", label:"أنواع الحشوة"},
+  {key:"jabzourTypes", label:"أنواع الجبزور"},
+  {key:"modelTypes", label:"أنواع الموديل"},
 ];
 function renderOptionLists(){
   const el = $("optionListsContainer");
@@ -6248,7 +6257,7 @@ function renderOffers(){
     const detail = o.type==="quantity_discount"
       ? `${o.requiredQty} ثياب (${o.matchBy==="origin"?"صناعة: "+esc(o.matchValue):"صنف: "+esc(findItemCard(o.matchValue)?.name||"—")}) — أقلهم سعراً بخصم ${o.discountPercent}%`
       : `عند ${o.minGarments}+ ثوب بالفاتورة — هدية: ${o.giftQty} × ${esc(findItemCard(o.giftItemCard)?.name||"—")}`;
-    return `<div class="item-row"><span>${o.active?"✅":"⏸"} <b>${esc(o.name)}</b> — ${detail}</span>
+    return `<div class="item-row"><span>${o.active?"مفعّل":"متوقف"} <b>${esc(o.name)}</b> — ${detail}</span>
       <button class="icon-btn" onclick="toggleOfferActive(${i})">${o.active?"⏸":"▶"}</button>
       <button class="icon-btn" onclick="removeOffer(${i})">حذف</button></div>`;
   }).join("") || `<p class="sub">ما فيه باقات مضافة بعد.</p>`;
@@ -6313,7 +6322,7 @@ function searchInvoiceForAlteration(){
       return `<div class="garment-card">
         <span class="tag">ثوب ${i+1} — ${esc(g.fabricType)}</span>
         <p class="sub" style="margin:6px 0;">الخياط: ${esc(g.tailor||"—")} — الحالة: ${STATUSES.find(s=>s.v===g.status)?.label||g.status}</p>
-        ${notDelivered ? `<p class="locked-note">🔒 هذا الثوب لسا ما انسلّم للعميل — التعديل يخص الثياب المُسلَّمة بس.</p>` : pending ? `<p style="color:var(--gold-soft);font-weight:700;">🔄 معاد للتعديل حالياً — بانتظار الخياط (${esc(pending.reason)}) — رقم التعديل: ${pending.alterationNumber}</p><button class="btn btn-ghost btn-sm" onclick="printCuttingCard('${inv.id}', ${i})">عرض كرت المقاسات</button>` : `
+        ${notDelivered ? `<p class="locked-note">هذا الثوب لسا ما انسلّم للعميل — التعديل يخص الثياب المُسلَّمة بس.</p>` : pending ? `<p style="color:var(--gold-soft);font-weight:700;">معاد للتعديل حالياً — بانتظار الخياط (${esc(pending.reason)}) — رقم التعديل: ${pending.alterationNumber}</p><button class="btn btn-ghost btn-sm" onclick="printCuttingCard('${inv.id}', ${i})">عرض كرت المقاسات</button>` : `
         <button class="btn btn-ghost btn-sm" onclick="printCuttingCard('${inv.id}', ${i})" style="margin-bottom:8px;">عرض كرت المقاسات الأصلي</button>
         <div class="row-2">
           <div class="field"><label>سبب التعديل</label><select class="alter-reason" data-idx="${i}">${state.alterationReasons.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join("")||`<option value="">-- أضف أسباب من الإعدادات --</option>`}</select></div>
@@ -6453,14 +6462,14 @@ function renderItemCards(){
     const avail = cardAvailableQty(c);
     const fabricExtraFields = c.type==="fabric" ? `
       <div class="row-2">
-        <div class="field"><label>الصناعة (بلد المنشأ) ${!c.origin?"⚠ إلزامي":""}</label><select class="card-origin" data-card="${c.id}">
+        <div class="field"><label>الصناعة (بلد المنشأ) ${!c.origin?"— إلزامي":""}</label><select class="card-origin" data-card="${c.id}">
           <option value="">-- اختر --</option>
           ${state.fabricOrigins.map(o=>`<option value="${esc(o)}" ${c.origin===o?"selected":""}>${esc(o)}</option>`).join("")}
         </select></div>
-        <div class="field"><label>الموسم ${!c.season?"⚠ إلزامي":""}</label><select class="card-season" data-card="${c.id}">
+        <div class="field"><label>الموسم ${!c.season?"— إلزامي":""}</label><select class="card-season" data-card="${c.id}">
           <option value="">-- اختر --</option>
-          <option value="صيفي" ${c.season==="صيفي"?"selected":""}>☀ صيفي</option>
-          <option value="شتوي" ${c.season==="شتوي"?"selected":""}>❄ شتوي</option>
+          <option value="صيفي" ${c.season==="صيفي"?"selected":""}>صيفي</option>
+          <option value="شتوي" ${c.season==="شتوي"?"selected":""}>شتوي</option>
         </select></div>
       </div>` : "";
     const priceFields = c.type==="fabric" ? `
@@ -6475,7 +6484,7 @@ function renderItemCards(){
     return `<div class="garment-card">
       <span class="tag">#${c.code!==undefined?c.code:"—"} — ${esc(c.name)} — ${typeLabelAr}${originSeasonBadge}${c.active?"":" (متوقف)"}</span>
       <p class="sub" style="margin:6px 0;">التكلفة الحالية: ${c.currentCost.toFixed(2)} ريال / ${c.type==="fabric"?unitLabel():"قطعة"} — المتاح: ${avail.toFixed(1)} ${c.type==="fabric"?unitLabel():"قطعة"}${c.reservedQty?` (محجوز: ${c.reservedQty.toFixed(1)})`:""} — إجمالي القيمة: <b>${(avail*(c.currentCost||0)).toFixed(2)} ريال</b></p>
-      ${avail<=0 ? `<p style="color:var(--loss);font-weight:700;margin:4px 0;">⚠ المخزون منتهٍ أو سالب</p>` : (c.minStock>0 && avail<c.minStock) ? `<p style="color:var(--loss);font-weight:700;margin:4px 0;">⚠ تحت الحد الأدنى (${c.minStock} ${c.type==="fabric"?unitLabel():"قطعة"})</p>` : ""}
+      ${avail<=0 ? `<p style="color:var(--loss);font-weight:700;margin:4px 0;">المخزون منتهٍ أو سالب</p>` : (c.minStock>0 && avail<c.minStock) ? `<p style="color:var(--loss);font-weight:700;margin:4px 0;">تحت الحد الأدنى (${c.minStock} ${c.type==="fabric"?unitLabel():"قطعة"})</p>` : ""}
       ${fabricExtraFields}
       <div class="row-2">
         <div class="field"><label>رصيد أول المدة (${c.type==="fabric"?unitLabel():"قطعة"})</label><input type="number" class="card-opening" data-card="${c.id}" step="0.1" value="${c.openingBalance||""}" placeholder="0"></div>
@@ -6675,10 +6684,10 @@ function updatePurchItemStatus(){
   $("purchFabricExtraWrap").style.display = (type==="fabric" && name && !match) ? "" : "none";
   if(!name){ statusEl.textContent=""; return; }
   if(match){
-    statusEl.innerHTML = `✅ صنف موجود — التكلفة الحالية: ${match.currentCost.toFixed(2)} ريال، المتاح: ${cardAvailableQty(match).toFixed(1)} ${type==="fabric"?unitLabel():"قطعة"}`;
+    statusEl.innerHTML = `صنف موجود — التكلفة الحالية: ${match.currentCost.toFixed(2)} ريال، المتاح: ${cardAvailableQty(match).toFixed(1)} ${type==="fabric"?unitLabel():"قطعة"}`;
     statusEl.style.color = "var(--profit)";
   } else {
-    statusEl.innerHTML = `➕ صنف جديد — بيُنشأ تلقائياً كرت له عند الحفظ`;
+    statusEl.innerHTML = `صنف جديد — بيُنشأ تلقائياً كرت له عند الحفظ`;
     statusEl.style.color = "var(--gold-soft)";
   }
 }
@@ -6786,8 +6795,9 @@ function renderPurchases(){
     const sup = state.suppliers.find(s=>s.id===p.supplierId);
     const card = findItemCard(p.itemCardId);
     return `<tr><td>${p.invoiceNo||"—"}</td><td>${esc(p.supplierInvoiceNo||"—")}</td><td>${p.date}</td><td>${sup?esc(sup.name):"—"}</td><td>${card?esc(card.name):"—"}</td><td>${p.quantity}</td><td>${p.total.toFixed(0)} ﷼</td><td>${p.payStatus==="paid"?"مدفوعة":"آجلة"}</td>
-      <td style="white-space:nowrap;"><button class="icon-btn" onclick="printPurchaseInvoice('${p.id}')" title="طباعة">🖨</button>${p.imageData?`<button class="icon-btn" onclick="previewPurchaseImage('${p.id}')" title="معاينة صورة فاتورة المورد">👁</button>`:""}</td></tr>`;
-  }).join("") : `<tr><td colspan="9" class="sub" style="text-align:center;padding:16px;">ما فيه مشتريات مسجّلة بعد.</td></tr>`;
+      <td style="white-space:nowrap;"><button class="icon-btn" onclick="printPurchaseInvoice('${p.id}')" title="طباعة"><i data-lucide="printer"></i></button>${p.imageData?`<button class="icon-btn" onclick="previewPurchaseImage('${p.id}')" title="معاينة صورة فاتورة المورد"><i data-lucide="eye"></i></button>`:""}</td></tr>`;
+  }).join("") : `<tr><td colspan="9">${emptyStateHtml("shopping-cart","ما فيه مشتريات مسجّلة بعد.")}</td></tr>`;
+  refreshLucideIcons();
 }
 function buildPurchaseInvoiceHtml(p){
   const sup = state.suppliers.find(s=>s.id===p.supplierId);
@@ -7031,7 +7041,7 @@ function renderSalesInvoicesList(){
   tbody.innerHTML = rows.length ? rows.map(inv=>{
     const total = inv.items.reduce((a,it)=>a+it.qty*it.price,0);
     return `<tr><td>${esc(inv.number)}</td><td>${inv.date}</td><td>${esc(inv.customerName)}</td><td>${total.toFixed(0)} ﷼</td></tr>`;
-  }).join("") : `<tr><td colspan="4" class="sub" style="text-align:center;padding:16px;">ما فيه فواتير مبيعات بعد.</td></tr>`;
+  }).join("") : `<tr><td colspan="4">${emptyStateHtml("shopping-bag","ما فيه فواتير مبيعات بعد.")}</td></tr>`;
 }
 
 function computeItemSalesTotals(){
@@ -7231,9 +7241,9 @@ function renderInventoryValuation(){
   el.innerHTML = `<div class="garment-card">
     <h3 style="margin:0 0 10px;font-size:15px;">قيمة المخزون الكلي: <span style="color:var(--gold-soft);">${totalValue.toFixed(0)} ريال</span></h3>
     <div class="row-3">
-      <div><p class="sub" style="margin:0;">🧵 أقمشة</p><p style="margin:2px 0;font-weight:700;">${fabricValue.toFixed(0)} ريال</p><p class="sub" style="margin:0;font-size:11px;">يعادل ${equivGarments} ثوب (محسوبة على ثوب رجال)</p></div>
-      <div><p class="sub" style="margin:0;">🛍 منتج جاهز</p><p style="margin:2px 0;font-weight:700;">${productValue.toFixed(0)} ريال</p><p class="sub" style="margin:0;font-size:11px;">${productCount} قطعة</p></div>
-      <div><p class="sub" style="margin:0;">🧷 ملحقات</p><p style="margin:2px 0;font-weight:700;">${addonValue.toFixed(0)} ريال</p><p class="sub" style="margin:0;font-size:11px;">${addonCount} قطعة</p></div>
+      <div><p class="sub" style="margin:0;">أقمشة</p><p style="margin:2px 0;font-weight:700;">${fabricValue.toFixed(0)} ريال</p><p class="sub" style="margin:0;font-size:11px;">يعادل ${equivGarments} ثوب (محسوبة على ثوب رجال)</p></div>
+      <div><p class="sub" style="margin:0;">منتج جاهز</p><p style="margin:2px 0;font-weight:700;">${productValue.toFixed(0)} ريال</p><p class="sub" style="margin:0;font-size:11px;">${productCount} قطعة</p></div>
+      <div><p class="sub" style="margin:0;">ملحقات</p><p style="margin:2px 0;font-weight:700;">${addonValue.toFixed(0)} ريال</p><p class="sub" style="margin:0;font-size:11px;">${addonCount} قطعة</p></div>
     </div>
   </div>`;
 }
@@ -7247,7 +7257,7 @@ function checkLowStockAlerts(){
     if(avail >= c.minStock){ if(c.lowStockAlertedDate) c.lowStockAlertedDate = null; return; } // recovered above threshold — allow a fresh alert if it dips again later
     if(c.lowStockAlertedDate === today) return; // already alerted today, don't spam
     const seq = nextDecisionNo();
-    const message = `⚠ تنبيه مخزون: صنف "${c.name}" نزل تحت الحد الأدنى — المتاح حالياً ${avail.toFixed(1)} ${c.type==="fabric"?unitLabel():"قطعة"}، والحد الأدنى المحدد ${c.minStock} ${c.type==="fabric"?unitLabel():"قطعة"}.`;
+    const message = `تنبيه مخزون: صنف "${c.name}" نزل تحت الحد الأدنى — المتاح حالياً ${avail.toFixed(1)} ${c.type==="fabric"?unitLabel():"قطعة"}، والحد الأدنى المحدد ${c.minStock} ${c.type==="fabric"?unitLabel():"قطعة"}.`;
     recipients.forEach(u=>{
       state.decisions.push({id:Date.now()+"-"+u.username, seq, type:"low_stock", recipientUsername:u.username, amount:0, reason:c.name, message, decidedBy:"النظام", date:today});
     });
@@ -7353,7 +7363,7 @@ function renderBalancesTab(){
     const cat = state.expenseCategories.find(c=>c.id===e.categoryId);
     const box = findCashBox(e.sourceBoxId);
     return `<tr><td>${e.date}</td><td>${cat?esc(cat.label):"—"}</td><td>${e.amount.toFixed(0)} ﷼</td><td>${esc(e.paidTo||"—")}</td><td>${esc(e.storeName||"—")}</td><td>${box?esc(box.name):"—"}</td></tr>`;
-  }).join("") : `<tr><td colspan="6" class="sub" style="text-align:center;padding:16px;">ما فيه مصروفات مسجّلة بعد.</td></tr>`;
+  }).join("") : `<tr><td colspan="6">${emptyStateHtml("receipt","ما فيه مصروفات مسجّلة بعد.")}</td></tr>`;
 }
 function renderClosedReports(){
   const el=$("archiveList");
@@ -7400,8 +7410,8 @@ function renderGrowthReport(){
     const gGarY = yoy?pctGrowth(r.garmentCount, yoy.garmentCount):null;
     return `<div class="archive-item">
       <b>${monthDisplay(r.monthLabel)}</b> — مبيعات: ${r.invoicedTotal.toFixed(0)} ﷼ · ثياب: ${r.garmentCount}<br>
-      <span class="sub">📅 نمو عن الشهر السابق — مبيعات: ${fmtGrowth(gSalesM)} · ثياب: ${fmtGrowth(gGarM)}</span><br>
-      <span class="sub">📆 نمو عن نفس الشهر بالسنة الماضية — مبيعات: ${fmtGrowth(gSalesY)} · ثياب: ${fmtGrowth(gGarY)}</span>
+      <span class="sub">نمو عن الشهر السابق — مبيعات: ${fmtGrowth(gSalesM)} · ثياب: ${fmtGrowth(gGarM)}</span><br>
+      <span class="sub">نمو عن نفس الشهر بالسنة الماضية — مبيعات: ${fmtGrowth(gSalesY)} · ثياب: ${fmtGrowth(gGarY)}</span>
     </div>`;
   }).join("");
 
@@ -7413,15 +7423,15 @@ function renderGrowthReport(){
     const gProfitY = yoy?pctGrowth(r.profitInvoiced, yoy.profitInvoiced):null;
     return `<div class="archive-item">
       <b>${monthDisplay(r.monthLabel)}</b> — صافي المحل: ${r.profitInvoiced.toFixed(0)} ﷼<br>
-      <span class="sub">📅 نمو عن الشهر السابق: ${fmtGrowth(gProfitM)}</span><br>
-      <span class="sub">📆 نمو عن نفس الشهر بالسنة الماضية: ${fmtGrowth(gProfitY)}</span>
+      <span class="sub">نمو عن الشهر السابق: ${fmtGrowth(gProfitM)}</span><br>
+      <span class="sub">نمو عن نفس الشهر بالسنة الماضية: ${fmtGrowth(gProfitY)}</span>
     </div>`;
   }).join("");
 
   // ===== Card 3: stagnant inventory (independent, latest closed month vs previous, frozen snapshots only) =====
   const latest = reports[reports.length-1];
   if(latest.readyCount===undefined){
-    invEl.innerHTML = `<div class="garment-card"><span class="tag">📦 المخزون الراكد</span><p class="sub" style="margin-top:8px;">هذي البطاقة تبدأ تُحسب من أول إقفال شهر بعد تفعيل هذي الميزة — الأشهر المقفلة سابقاً ما فيها لقطة محفوظة.</p></div>`;
+    invEl.innerHTML = `<div class="garment-card"><span class="tag">المخزون الراكد</span><p class="sub" style="margin-top:8px;">هذي البطاقة تبدأ تُحسب من أول إقفال شهر بعد تفعيل هذي الميزة — الأشهر المقفلة سابقاً ما فيها لقطة محفوظة.</p></div>`;
   } else {
     const prevInv = byMonth[prevMonthLabel(latest.monthLabel)];
     const total = latest.readyCount + latest.overdueCount;
@@ -7431,12 +7441,12 @@ function renderGrowthReport(){
       const increased = total > prevTotal;
       const decreased = total < prevTotal;
       const diff = total - prevTotal;
-      if(increased) arrowHtml = `<span style="color:var(--loss);font-weight:700;">⬆ زاد بمقدار ${diff} (إنذار)</span>`;
-      else if(decreased) arrowHtml = `<span style="color:var(--profit);font-weight:700;">⬇ نقص بمقدار ${Math.abs(diff)} (تحسّن)</span>`;
+      if(increased) arrowHtml = `<span style="color:var(--loss);font-weight:700;">زاد بمقدار ${diff} (إنذار)</span>`;
+      else if(decreased) arrowHtml = `<span style="color:var(--profit);font-weight:700;">نقص بمقدار ${Math.abs(diff)} (تحسّن)</span>`;
       else arrowHtml = `<span class="sub">بدون تغيير عن الشهر السابق</span>`;
     }
     invEl.innerHTML = `<div class="garment-card">
-      <span class="tag">📦 المخزون الراكد — ${monthDisplay(latest.monthLabel)}</span>
+      <span class="tag">المخزون الراكد — ${monthDisplay(latest.monthLabel)}</span>
       <p style="font-weight:700;font-size:20px;margin:8px 0;">${total} ثوب ${arrowHtml}</p>
       <p class="sub">جاهز (أقل من 7 أيام): ${latest.readyCount} — متعثر (7 أيام فأكثر): ${latest.overdueCount}</p>
     </div>`;
@@ -7465,8 +7475,8 @@ function renderGrowthReport(){
     const gGarY = (yoy&&yoy.monthsCount===3)?pctGrowth(q.garmentCount, yoy.garmentCount):null;
     return `<div class="archive-item">
       <b>${quarterDisplay(q.quarter)}</b> — مبيعات: ${q.invoicedTotal.toFixed(0)} ﷼ · ثياب: ${q.garmentCount}<br>
-      <span class="sub">📊 نمو عن الربع السابق — مبيعات: ${fmtGrowth(gSalesM)} · ثياب: ${fmtGrowth(gGarM)}</span><br>
-      <span class="sub">📆 نمو عن نفس الربع بالسنة الماضية — مبيعات: ${fmtGrowth(gSalesY)} · ثياب: ${fmtGrowth(gGarY)}</span>
+      <span class="sub">نمو عن الربع السابق — مبيعات: ${fmtGrowth(gSalesM)} · ثياب: ${fmtGrowth(gGarM)}</span><br>
+      <span class="sub">نمو عن نفس الربع بالسنة الماضية — مبيعات: ${fmtGrowth(gSalesY)} · ثياب: ${fmtGrowth(gGarY)}</span>
     </div>`;
   }).join("");
   profitQEl.innerHTML = completeQuarters.slice().reverse().map(q=>{
@@ -7476,8 +7486,8 @@ function renderGrowthReport(){
     const gProfitY = (yoy&&yoy.monthsCount===3)?pctGrowth(q.profitInvoiced, yoy.profitInvoiced):null;
     return `<div class="archive-item">
       <b>${quarterDisplay(q.quarter)}</b> — صافي المحل: ${q.profitInvoiced.toFixed(0)} ﷼<br>
-      <span class="sub">📊 نمو عن الربع السابق: ${fmtGrowth(gProfitM)}</span><br>
-      <span class="sub">📆 نمو عن نفس الربع بالسنة الماضية: ${fmtGrowth(gProfitY)}</span>
+      <span class="sub">نمو عن الربع السابق: ${fmtGrowth(gProfitM)}</span><br>
+      <span class="sub">نمو عن نفس الربع بالسنة الماضية: ${fmtGrowth(gProfitY)}</span>
     </div>`;
   }).join("");
 }
@@ -7504,10 +7514,10 @@ function renderSearch(){
   }));
   $("statusReport").innerHTML = STATUSES.map(st=>`<div class="report-card"><div class="st">${st.label}</div>
     <div class="amt">${statusTotals[st.v].amount.toFixed(0)} ﷼</div><div class="cnt">${statusTotals[st.v].count} ثوب</div></div>`).join("");
-  $("embroReport").innerHTML = `<div class="report-card"><div class="st">🧵 نشاط التطريز</div>
+  $("embroReport").innerHTML = `<div class="report-card"><div class="st">نشاط التطريز</div>
     <div class="amt">${embroRevenue.toFixed(0)} ﷼</div><div class="cnt">${embroCount} ثوب مطرّز</div></div>`;
   const tbody=$("searchResults"); tbody.innerHTML="";
-  if(rows.length===0){ tbody.innerHTML=`<tr><td colspan="5" class="sub" style="text-align:center;padding:20px;">لا نتائج</td></tr>`; return; }
+  if(rows.length===0){ tbody.innerHTML=`<tr><td colspan="5">${emptyStateHtml("search-x","لا نتائج")}</td></tr>`; refreshLucideIcons(); return; }
   rows.forEach(({inv,g})=>{ const st=STATUSES.find(x=>x.v===g.status);
     tbody.innerHTML += `<tr><td>${esc(inv.number)}</td><td>${esc(g.tailor||"—")}</td><td><span class="badge ${st.cls}">${st.label}</span></td><td>${garmentSalePrice(g).toFixed(0)} ﷼</td><td>${g.deliveryReceipt||"—"}</td></tr>`; });
 }
@@ -7568,7 +7578,7 @@ function renderBroadcastList(){
   const wrap = $("broadcastListView");
   if(!wrap) return;
   const list = buildBroadcastList();
-  $("broadcastCountLabel").textContent = `📋 عدد النتائج: ${list.length}`;
+  $("broadcastCountLabel").textContent = `عدد النتائج: ${list.length}`;
   const totalPages = Math.max(1, Math.ceil(list.length/BROADCAST_PAGE_SIZE));
   if(broadcastPage >= totalPages) broadcastPage = totalPages-1;
   if(broadcastPage < 0) broadcastPage = 0;
@@ -7581,8 +7591,8 @@ function renderBroadcastList(){
     return `<div class="item-row" style="justify-content:space-between;">
       <span>${c.code} — ${esc(customerDisplayName(c))} — ${esc(c.mobile)}</span>
       <span style="display:flex;align-items:center;gap:8px;">
-        ${sent ? `<span style="color:var(--profit);font-weight:700;">✅ أُرسلت</span>` : ""}
-        <a href="${waLink(c.mobile, personalizedMsg)}" target="_blank" class="icon-btn" style="${sent?'opacity:0.5;':''}" onclick="markBroadcastSent('${c.mobile}')" title="إرسال واتساب">📱</a>
+        ${sent ? `<span style="color:var(--profit);font-weight:700;">أُرسلت</span>` : ""}
+        <a href="${waLink(c.mobile, personalizedMsg)}" target="_blank" class="icon-btn" style="${sent?'opacity:0.5;':''}" onclick="markBroadcastSent('${c.mobile}')" title="إرسال واتساب"><i data-lucide="message-circle"></i></a>
       </span>
     </div>`;
   }).join("") : `<p class="sub">ما فيه عملاء مطابقين لهذا الفلتر.</p>`;
@@ -7618,27 +7628,27 @@ async function resetBroadcastCampaign(){
   showToast("بدأت حملة جديدة");
 }
 function renderCustomers(){
-  $("totalCustomersCount").textContent = `📇 إجمالي عدد العملاء المسجّلين: ${state.customers.length}`;
+  $("totalCustomersCount").textContent = `إجمالي عدد العملاء المسجّلين: ${state.customers.length}`;
   const q=($("customerSearch").value||"").trim(); const filter=$("customerFilter").value;
   let customers = getCustomers().filter(c=>isDormant(c.lastDate)===(filter==="dormant"));
   if(q) customers = customers.filter(c=>c.mobile.includes(q));
   const tbody=$("customersBody"); tbody.innerHTML="";
-  if(customers.length===0){ tbody.innerHTML=`<tr><td colspan="7" class="sub" style="text-align:center;padding:20px;">لا نتائج</td></tr>`; return; }
+  if(customers.length===0){ tbody.innerHTML=`<tr><td colspan="7">${emptyStateHtml("users","لا نتائج")}</td></tr>`; refreshLucideIcons(); return; }
   const isAdmin = currentUser && currentUser.role==="مدير";
   customers.forEach(c=>{
-    const waBtn = filter==="dormant" ? `<a href="${waLink(c.mobile, state.settings.waPromoMessage)}" target="_blank" class="icon-btn" title="إرسال عرض واتساب">📱</a>` : "";
+    const waBtn = filter==="dormant" ? `<a href="${waLink(c.mobile, state.settings.waPromoMessage)}" target="_blank" class="icon-btn" title="إرسال عرض واتساب"><i data-lucide="message-circle"></i></a>` : "";
     const cust = findCustomerByMobile(c.mobile);
     const individual = cust ? cust.individuals.find(i=>i.name===c.name) : null;
     const displayCode = individual ? individual.subCode : (cust ? cust.code : "—");
     let loyaltyCell;
     if(cust && cust.vip){
-      loyaltyCell = isAdmin ? `<label style="display:flex;align-items:center;gap:4px;font-size:12px;">👑 VIP <input type="checkbox" class="cust-vip-toggle" data-mobile="${c.mobile}" checked></label>` : `👑 VIP`;
+      loyaltyCell = isAdmin ? `<label style="display:flex;align-items:center;gap:4px;font-size:12px;">VIP <input type="checkbox" class="cust-vip-toggle" data-mobile="${c.mobile}" checked></label>` : `VIP`;
     } else {
       const tier = customerTier(c.mobile);
       const pts = cust ? (cust.loyaltyPoints||0) : 0;
       loyaltyCell = `${tierLabel(tier)}<br><span class="sub">${pts} نقطة</span>${isAdmin?`<br><label style="display:flex;align-items:center;gap:4px;font-size:11px;"><input type="checkbox" class="cust-vip-toggle" data-mobile="${c.mobile}"> اجعله VIP</label>`:""}`;
     }
-    tbody.innerHTML += `<tr><td>${esc(displayCode)}</td><td>${esc(c.name)} ${c.mobile?`<a href="${waLink(c.mobile)}" target="_blank" class="icon-btn" title="فتح واتساب">📱</a>`:""}</td><td>${esc(c.mobile)}</td><td>${c.lastDate||"—"}</td><td>${c.count}</td><td>${loyaltyCell}</td><td><button class="btn btn-ghost btn-sm" onclick="showCustomerReport('${c.mobile}','${esc(c.name).replace(/'/g,"\\'")}')">تقرير العميل</button> ${waBtn}</td></tr>`;
+    tbody.innerHTML += `<tr><td>${esc(displayCode)}</td><td>${esc(c.name)} ${c.mobile?`<a href="${waLink(c.mobile)}" target="_blank" class="icon-btn" title="فتح واتساب"><i data-lucide="message-circle"></i></a>`:""}</td><td>${esc(c.mobile)}</td><td>${c.lastDate||"—"}</td><td>${c.count}</td><td>${loyaltyCell}</td><td><button class="btn btn-ghost btn-sm" onclick="showCustomerReport('${c.mobile}','${esc(c.name).replace(/'/g,"\\'")}')">تقرير العميل</button> ${waBtn}</td></tr>`;
   });
   document.querySelectorAll(".cust-vip-toggle").forEach(cb=> cb.addEventListener("change", ()=>{
     const mobile = cb.dataset.mobile;
@@ -7649,6 +7659,7 @@ function renderCustomers(){
     saveState(); renderAll();
     showToast(cust.vip ? "تم تفعيل VIP لهذا العميل" : "تم إلغاء VIP لهذا العميل");
   }));
+  refreshLucideIcons();
 }
 function saveCustomerNotes(mobile){
   let cust = findCustomerByMobile(mobile);
@@ -7678,12 +7689,12 @@ function showCustomerReport(mobile, filterName){
       <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="saveCustomerNotes('${mobile}')">حفظ الملاحظات</button>
     </div>`;
   const profileHtml = `<div class="order-summary-card">
-      <div class="order-summary-head"><span class="order-summary-number">${esc(name)}</span>${mobile?`<a href="${waLink(mobile)}" target="_blank" class="icon-btn" title="فتح واتساب" style="margin-right:8px;">📱</a>`:""}</div>
+      <div class="order-summary-head"><span class="order-summary-number">${esc(name)}</span>${mobile?`<a href="${waLink(mobile)}" target="_blank" class="icon-btn" title="فتح واتساب" style="margin-right:8px;"><i data-lucide="message-circle"></i></a>`:""}</div>
       <div class="order-summary-grid">
         <div><div class="order-summary-lbl">رقم الجوال</div><div class="order-summary-val">${esc(mobile)}</div></div>
         <div><div class="order-summary-lbl">عدد الطلبات</div><div class="order-summary-val">${invs.length}</div></div>
         <div><div class="order-summary-lbl">آخر طلب</div><div class="order-summary-val">${lastInvDate||"—"}</div></div>
-        <div><div class="order-summary-lbl">المستوى</div><div class="order-summary-val">${cust&&cust.vip?"👑 VIP":tierLabel(customerTier(mobile))}</div></div>
+        <div><div class="order-summary-lbl">المستوى</div><div class="order-summary-val">${cust&&cust.vip?"VIP":tierLabel(customerTier(mobile))}</div></div>
       </div>
     </div>`;
   let html = profileHtml + measurementsHtml;
@@ -7695,7 +7706,7 @@ function showCustomerReport(mobile, filterName){
       <table style="margin-top:8px;"><thead><tr><th>نوع القماش</th><th>السعر</th><th>الحالة</th></tr></thead><tbody>
       ${inv.garments.map(g=>`<tr><td>${esc(g.fabricType)}</td><td>${garmentSalePrice(g).toFixed(0)} ﷼</td><td>${STATUSES.find(x=>x.v===g.status)?.label||g.status}</td></tr>`).join("")}
       </tbody></table>
-      <p class="sub" style="margin:8px 0 4px;">💵 الدفعات:</p>
+      <p class="sub" style="margin:8px 0 4px;">الدفعات:</p>
       ${(inv.payments&&inv.payments.length) ? `<table><thead><tr><th>التاريخ</th><th>كاش</th><th>سند الكاش</th><th>شبكة</th><th>سند الشبكة</th><th>خصم</th></tr></thead><tbody>
         ${inv.payments.map(p=>`<tr><td>${p.date||"—"}</td><td>${(p.cash||0).toFixed(0)} ﷼</td><td>${p.cashReceiptNo||"—"}</td><td>${(p.network||0).toFixed(0)} ﷼</td><td>${p.networkReceiptNo||p.receipt||"—"}</td><td>${p.discount?p.discount.toFixed(0)+" ﷼":"—"}</td></tr>`).join("")}
         </tbody></table>` : `<p class="sub">ما فيه دفعات مسجّلة.</p>`}
@@ -7705,6 +7716,7 @@ function showCustomerReport(mobile, filterName){
   html += `<div class="remaining-box"><span>إجمالي كل الفواتير: ${totalSale.toFixed(0)} ﷼ — إجمالي المدفوع: ${totalPaid.toFixed(0)} ﷼${totalDiscount?` — إجمالي الخصم: ${totalDiscount.toFixed(0)} ﷼`:""}</span><span class="amt">إجمالي المتبقي: ${(totalSale-totalPaid-totalDiscount).toFixed(0)} ﷼</span></div>`;
   html += notesHtml;
   $("customerReportView").innerHTML = html;
+  refreshLucideIcons();
 }
 
 // ---------------- daily report ----------------
@@ -7773,7 +7785,7 @@ function buildDailyReportHtml(day, r){
   r.expensesToday.forEach(e=>{ const cat = state.expenseCategories.find(c=>c.id===e.categoryId); html+=`<tr><td>${cat?esc(cat.label):"—"}</td><td>${e.amount.toFixed(0)} ﷼</td><td>${esc(e.paidTo||"—")}</td><td>${esc(e.note||"—")}</td></tr>`; });
   if(!r.expensesToday.length) html+=`<tr><td colspan="4">لا يوجد</td></tr>`;
   html += `</tbody></table>`;
-  html += `<div id="dailyReceiptSearchWrap" class="no-print"><div class="field"><label>🔎 بحث برقم الإيصال (كاش أو شبكة)</label><input type="text" id="dailyReceiptSearchInput" placeholder="اكتب رقم الإيصال..."></div></div>`;
+  html += `<div id="dailyReceiptSearchWrap" class="no-print"><div class="field"><label>بحث برقم الإيصال (كاش أو شبكة)</label><input type="text" id="dailyReceiptSearchInput" placeholder="اكتب رقم الإيصال..."></div></div>`;
   html += `<h3>الدفعات اليوم — كاش: ${r.cash.toFixed(0)} ﷼ / شبكة: ${r.network.toFixed(0)} ﷼ / خصم: ${r.discount.toFixed(0)} ﷼</h3><table id="dailyPaymentsTable"><thead><tr><th>رقم الفاتورة</th><th>كاش</th><th>سند الكاش</th><th>شبكة</th><th>سند الشبكة</th><th>خصم</th></tr></thead><tbody>`;
   r.paymentRows.forEach(({inv,p})=> html+=`<tr data-receipt="${esc((p.cashReceiptNo||"")+" "+(p.networkReceiptNo||p.receipt||""))}"><td>${esc(inv.number)}</td><td>${p.cash.toFixed(0)} ﷼</td><td>${p.cashReceiptNo||"—"}</td><td>${p.network.toFixed(0)} ﷼</td><td>${p.networkReceiptNo||p.receipt||"—"}</td><td>${p.discount?p.discount.toFixed(0)+" ﷼":"—"}</td></tr>`);
   if(!r.paymentRows.length) html+=`<tr><td colspan="6">لا يوجد</td></tr>`;
@@ -7802,7 +7814,7 @@ function findMissingReceiptInvoices(){
   }));
   let html;
   if(!rows.length){
-    html = `<p class="sub" style="margin-top:10px;">✅ ما فيه دفعات ناقصة رقم سند.</p>`;
+    html = `<p class="sub" style="margin-top:10px;">ما فيه دفعات ناقصة رقم سند.</p>`;
   } else {
     html = `<div class="table-wrap" style="margin-top:10px;"><table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>تاريخ الدفعة</th><th>كاش</th><th>شبكة</th></tr></thead><tbody>`;
     rows.forEach(({inv,p})=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${p.date||"—"}</td><td>${(p.cash||0).toFixed(0)} ﷼</td><td>${(p.network||0).toFixed(0)} ﷼</td></tr>`);
@@ -8170,11 +8182,12 @@ function renderPermissionsEditor(){
         ${group.items.map(it=>{
           const checked = perm.tabs.includes(it.tab);
           const isSettingsForAdmin = role==="مدير" && SETTINGS_TABS.includes(it.tab);
-          return `<div class="embro-toggle" style="margin:6px 0;"><input type="checkbox" class="perm-tab" data-role="${role}" data-tab="${it.tab}" ${checked?"checked":""} ${isSettingsForAdmin?"disabled":""}><label style="margin:0;font-size:14px;">${it.icon} ${it.label}${isSettingsForAdmin?` <span style="color:var(--muted);font-size:11px;">(ثابت للمدير دائماً)</span>`:""}</label></div>`;
+          return `<div class="embro-toggle" style="margin:6px 0;"><input type="checkbox" class="perm-tab" data-role="${role}" data-tab="${it.tab}" ${checked?"checked":""} ${isSettingsForAdmin?"disabled":""}><label style="margin:0;font-size:14px;"><i data-lucide="${navIcon(it.tab)}" style="width:14px;height:14px;vertical-align:middle;"></i> ${it.label}${isSettingsForAdmin?` <span style="color:var(--muted);font-size:11px;">(ثابت للمدير دائماً)</span>`:""}</label></div>`;
         }).join("")}
       </div>`).join("");
     return `<div class="garment-card"><span class="tag">${role}</span>${groupsHtml}</div>`;
   }).join("");
+  refreshLucideIcons();
   document.querySelectorAll(".perm-tab").forEach(cb=> cb.addEventListener("change", ()=>{
     const role=cb.dataset.role, tab=cb.dataset.tab;
     const perm = state.permissions[role];
@@ -8277,7 +8290,7 @@ function renderCustomerAlert(mobile){
   if(alert.convertedGarments && alert.convertedGarments.length) parts.push(...alert.convertedGarments.map(({inv,g})=>`عليه ثوب سابق (فاتورة #${esc(inv.number)}) تحوّل "متعثر" وانباع لعميل ثاني بتاريخ ${g.saleConversionDate}`));
   wrap.style.display = "";
   const jumpBtn = alert.totalDebt>0.01 ? `<button type="button" class="btn btn-ghost btn-sm" onclick="switchTab('customerDebts')" style="margin-right:8px;">الذهاب لتسوية المديونية</button>` : "";
-  wrap.innerHTML = `<div class="item-row" style="background:rgba(224,90,90,0.12);border:1px solid var(--loss);border-radius:8px;padding:8px 12px;"><span style="color:var(--loss);font-weight:700;">⚠ تنبيه: ${parts.join(" و")}</span>${jumpBtn}</div>`;
+  wrap.innerHTML = `<div class="item-row" style="background:rgba(224,90,90,0.12);border:1px solid var(--loss);border-radius:8px;padding:8px 12px;"><span style="color:var(--loss);font-weight:700;">تنبيه: ${parts.join(" و")}</span>${jumpBtn}</div>`;
 }
 $("custMobile").addEventListener("input", ()=>{
   renderCustomerPicker("custMobile","custName","custPickerWrap"); renderLoyaltyInfo();
@@ -8423,7 +8436,7 @@ setInterval(()=>{
   const thresholdMs = (state.settings.invoiceSaveReminderMinutes||3)*60*1000;
   if(Date.now()-invoiceDirtySince >= thresholdMs && Date.now()-(idleReminderShownAt||0) >= thresholdMs){
     idleReminderShownAt = Date.now();
-    showToast("⏰ عندك فاتورة لسا ما انحفظت — لا تنسى تضغط 💾 حفظ الفاتورة");
+    showToast("عندك فاتورة لسا ما انحفظت — لا تنسى تضغط حفظ الفاتورة");
   }
 }, 15000);
 document.querySelectorAll(".tab-btn").forEach(btn=>{
