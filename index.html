@@ -39,9 +39,10 @@ html[data-theme="light"]{
   --profit:#227a4c; --loss:#c23b3b; --info:#2c5f85; --warn:#c97418;
 }
 *{box-sizing:border-box;}
+html{overflow-x:hidden;}
 body{margin:0;background:var(--bg);
   color:var(--ivory);font-family:var(--font-main);min-height:100vh;line-height:1.55;
-  -webkit-font-smoothing:antialiased;}
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;}
 h1,h2,h3{font-family:var(--font-main);letter-spacing:0;}
 .hidden{display:none !important;}
 #loginScreen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:200;}
@@ -146,6 +147,24 @@ h1,h2,h3{font-family:var(--font-main);letter-spacing:0;}
 .kpi-card.c-sales{--accent:#2f6fb0;--accent-bg:#e6eefa;} .kpi-card.c-count{--accent:#b8863a;--accent-bg:#f4ecda;}
 .kpi-card.c-progress{--accent:#e0872e;--accent-bg:#fbe9d6;} .kpi-card.c-ready{--accent:#1f9d5c;--accent-bg:#e1f5ea;}
 .kpi-card.c-overdue{--accent:#dc3545;--accent-bg:#fbe1e3;} .kpi-card.c-due{--accent:#7d5fb0;--accent-bg:#ece5f7;}
+/* ===================== order summary card + progress stepper ===================== */
+.order-summary-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 18px;margin-bottom:14px;}
+.order-summary-head{display:flex;align-items:baseline;margin-bottom:12px;}
+.order-summary-number{font-family:var(--font-main);font-size:18px;font-weight:800;color:var(--gold-soft);}
+.order-summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px 18px;}
+@media(max-width:820px){.order-summary-grid{grid-template-columns:repeat(2,1fr);}}
+.order-summary-lbl{font-size:11px;color:var(--muted);margin-bottom:2px;}
+.order-summary-val{font-size:14px;font-weight:700;color:var(--ivory);}
+.stepper{display:flex;align-items:flex-start;margin:10px 0 6px;overflow-x:auto;padding-top:2px;}
+.stepper-step{display:flex;flex-direction:column;align-items:center;gap:5px;flex:1;min-width:62px;position:relative;}
+.stepper-step .dot{width:22px;height:22px;border-radius:50%;background:var(--surface3);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:800;color:var(--muted);z-index:1;flex-shrink:0;}
+.stepper-step .lbl{font-size:10px;color:var(--muted);text-align:center;white-space:nowrap;}
+.stepper-step::before{content:"";position:absolute;top:11px;right:50%;width:100%;height:2px;background:var(--border);z-index:0;}
+.stepper-step:first-child::before{display:none;}
+.stepper-step.done .dot{background:var(--profit);border-color:var(--profit);color:#fff;}
+.stepper-step.done::before{background:var(--profit);}
+.stepper-step.current .dot{background:var(--gold);border-color:var(--gold);color:#241c07;box-shadow:0 0 0 4px rgba(184,134,58,.18);}
+.stepper-step.current .lbl{color:var(--ivory);font-weight:700;}
 .stitch{border:none;border-top:2px dashed var(--border);margin:24px 0;position:relative;}
 .stitch::after{content:"✂";position:absolute;top:-11px;right:0;background:var(--bg);padding:0 8px;color:var(--muted);font-size:14px;}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
@@ -5015,16 +5034,49 @@ function openDistributionInvoice(inv){
   $("distResultsList").innerHTML="";
   renderDistributionArea(inv);
 }
+function buildStepperHtml(status){
+  if(status==="ملغي") return `<div class="badge b-cancel" style="margin:6px 0 10px;">ملغي</div>`;
+  const stages = [
+    {v:"جديد", lbl:"استلام الطلب"},
+    {v:"قص", lbl:"القص"},
+    {v:"تفصيل", lbl:"الخياطة"},
+    {v:"جاهز", lbl:"جاهز"},
+    {v:"تسليم", lbl:"تم التسليم"},
+  ];
+  const effectiveStatus = status==="معلقة" ? "جاهز" : status; // "معلقة" = كان جاهز بس ما انسلّم قبل إقفال الشهر
+  const idx = stages.findIndex(s=>s.v===effectiveStatus);
+  const stepsHtml = stages.map((s,i)=>{
+    const cls = i<idx ? "done" : i===idx ? "current" : "";
+    const mark = i<idx ? "✓" : (i+1);
+    return `<div class="stepper-step ${cls}"><div class="dot">${mark}</div><div class="lbl">${esc(s.lbl)}</div></div>`;
+  }).join("");
+  return `<div class="stepper">${stepsHtml}</div>` + (status==="معلقة" ? `<p class="locked-note" style="color:var(--warn);">معلّقة — جاهزة بس تجاوزت إقفال الشهر بدون تسليم</p>` : "");
+}
 function renderDistributionArea(inv){
   const area = $("distArea");
   const isAdmin = currentUser.role==="مدير";
   const availableStatusesBase = STATUSES.filter(s=> s.v!=="معلقة" && (s.v!=="ملغي" || isAdmin) && s.v!=="تفصيل");
   const paid = invoicePaid(inv), discountTotal = invoiceDiscountTotal(inv), total = invoiceSaleTotal(inv), remaining = invoiceRemaining(inv);
+  const activeGarmentCount = inv.garments.filter(g=>g.status!=="ملغي").length;
   const paymentsHtml = (inv.payments&&inv.payments.length) ? inv.payments.map(p=>`<div class="payment-row">
       <span>💵 ${(p.cash||0).toFixed(0)} ﷼${p.cashReceiptNo?` (سند ${p.cashReceiptNo})`:""}</span><span>💳 ${(p.network||0).toFixed(0)} ﷼${(p.networkReceiptNo||p.receipt)?` (سند ${p.networkReceiptNo||p.receipt})`:""}</span>${p.discount?`<span>🏷 خصم: ${p.discount.toFixed(0)} ﷼</span>`:""}
       <span style="color:var(--muted)">${p.date}</span></div>`).join("")
     : `<p class="sub">ما فيه دفعات مسجّلة بعد.</p>`;
-  area.innerHTML = `<div class="stitch"></div><h3 style="font-size:14px;margin:0 0 10px;">فاتورة ${esc(inv.number)} — ${esc(inv.customerName||"")} (${monthDisplay(inv.originMonth)})</h3>${inv.notes?`<p class="sub" style="margin-bottom:10px;">📝 ملاحظات الفاتورة: ${esc(inv.notes)}</p>`:""}${(inv.appliedOffers&&inv.appliedOffers.length)?`<p class="sub" style="margin-bottom:10px;color:var(--gold-soft);">🎁 عروض مطبّقة: ${inv.appliedOffers.join("، ")}</p>`:""}` +
+  const summaryField = (lbl, val)=> `<div><div class="order-summary-lbl">${lbl}</div><div class="order-summary-val">${val}</div></div>`;
+  const summaryHtml = `<div class="order-summary-card">
+    <div class="order-summary-head"><span class="order-summary-number">${esc(inv.number)}</span><span class="sub" style="margin-right:8px;">${monthDisplay(inv.originMonth)}</span></div>
+    <div class="order-summary-grid">
+      ${summaryField("العميل", esc(inv.customerName||"—"))}
+      ${summaryField("رقم الجوال", esc(inv.customerMobile||"—"))}
+      ${summaryField("تاريخ الطلب", inv.date)}
+      ${summaryField("تاريخ التسليم المتوقع", inv.expectedDeliveryDate||"—")}
+      ${summaryField("عدد الثياب", activeGarmentCount)}
+      ${summaryField("الإجمالي", total.toFixed(0)+" ﷼")}
+      ${summaryField("المدفوع", paid.toFixed(0)+" ﷼")}
+      ${summaryField("المتبقي", remaining.toFixed(0)+" ﷼")}
+    </div>
+  </div>`;
+  area.innerHTML = summaryHtml + `${inv.notes?`<p class="sub" style="margin:10px 0;">📝 ملاحظات الفاتورة: ${esc(inv.notes)}</p>`:""}${(inv.appliedOffers&&inv.appliedOffers.length)?`<p class="sub" style="margin-bottom:10px;color:var(--gold-soft);">🎁 عروض مطبّقة: ${inv.appliedOffers.join("، ")}</p>`:""}` +
     inv.garments.map((g,i)=>{
       const locked = (g.status==="تسليم"||g.status==="ملغي") && !isAdmin;
       const tailorLocked = g.status==="تفصيل"; // "تم التفصيل" is exclusively set via the tailor's own scan screen — no one edits it here, admin included
@@ -5033,6 +5085,7 @@ function renderDistributionArea(inv){
       const canCreditDeliver = isAdmin && g.status!=="تسليم" && g.status!=="ملغي";
       const creditBadge = g.creditDelivered ? `<p class="locked-note" style="color:var(--loss);">🔴 مسلَّم بدين — متبقٍ عليه ${(g.creditAmount-g.creditPaid).toFixed(0)} ﷼ (تابعه من "مديونية الثياب")</p>` : "";
       return `<div class="garment-card"><span class="tag">ثوب ${i+1} — ${esc(g.fabricType)}</span>
+        ${buildStepperHtml(g.status)}
         <div class="row-2">
           <div class="field"><label>اسم الخياط</label><input type="text" class="dist-tailor" data-idx="${i}" value="${esc(g.tailor||"")}" ${dis}></div>
           <div class="field"><label>الحالة</label><select class="dist-status" data-idx="${i}" ${dis}>${availableStatuses.map(s=>`<option value="${s.v}" ${s.v===g.status?"selected":""}>${s.label}</option>`).join("")}</select></div>
@@ -7572,12 +7625,44 @@ function renderCustomers(){
     showToast(cust.vip ? "تم تفعيل VIP لهذا العميل" : "تم إلغاء VIP لهذا العميل");
   }));
 }
+function saveCustomerNotes(mobile){
+  let cust = findCustomerByMobile(mobile);
+  if(!cust){ cust = {id:Date.now()+"", code:nextCustomerCode(), mobile, individuals:[], loyaltyPoints:0, vip:false}; state.customers.push(cust); }
+  cust.notes = $("customerNotesInput").value;
+  saveState();
+  showToast("تم حفظ الملاحظات");
+}
 function showCustomerReport(mobile, filterName){
   const invs = state.invoices.filter(i=>(i.customerMobile||"").trim()===mobile && (!filterName || i.customerName===filterName));
   if(!invs.length){ $("customerReportView").innerHTML=`<p class="sub">ما فيه فواتير لهذا العميل.</p>`; return; }
   const name = filterName || invs.find(i=>i.customerName)?.customerName || "—";
   let totalSale=0, totalPaid=0, totalDiscount=0;
-  let html = `<div class="stitch"></div><h3 style="font-size:14px;margin:0 0 10px;">📋 تقرير العميل — ${esc(name)} (${esc(mobile)}) ${mobile?`<a href="${waLink(mobile)}" target="_blank" class="icon-btn" title="فتح واتساب">📱</a>`:""}</h3>`;
+  const cust = findCustomerByMobile(mobile);
+  const lastInvDate = invs.reduce((max,i)=> (i.date||"")>max ? i.date : max, "");
+  const lastGarment = findLastGarmentDataForCustomer(mobile, filterName);
+  const measurementsHtml = lastGarment ? `<div class="order-summary-card" style="margin-top:12px;">
+      <div class="order-summary-head"><span class="order-summary-number" style="font-size:14px;">آخر قياسات مسجّلة</span></div>
+      <div class="order-summary-grid" style="grid-template-columns:repeat(4,1fr);">
+        ${MEASUREMENT_FIELDS.filter(f=> lastGarment.measurements[f.key]!==undefined && lastGarment.measurements[f.key]!==null && lastGarment.measurements[f.key]!=="")
+          .map(f=> `<div><div class="order-summary-lbl">${esc(f.label)}</div><div class="order-summary-val">${esc(lastGarment.measurements[f.key])}</div></div>`).join("")}
+      </div>
+    </div>` : "";
+  const notesHtml = `<div class="order-summary-card" style="margin-top:12px;">
+      <div class="order-summary-head"><span class="order-summary-number" style="font-size:14px;">ملاحظات عن العميل</span></div>
+      <textarea id="customerNotesInput" rows="3" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--ivory);font-family:inherit;font-size:13px;">${esc(cust?.notes||"")}</textarea>
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="saveCustomerNotes('${mobile}')">حفظ الملاحظات</button>
+    </div>`;
+  const profileHtml = `<div class="order-summary-card">
+      <div class="order-summary-head"><span class="order-summary-number">${esc(name)}</span>${mobile?`<a href="${waLink(mobile)}" target="_blank" class="icon-btn" title="فتح واتساب" style="margin-right:8px;">📱</a>`:""}</div>
+      <div class="order-summary-grid">
+        <div><div class="order-summary-lbl">رقم الجوال</div><div class="order-summary-val">${esc(mobile)}</div></div>
+        <div><div class="order-summary-lbl">عدد الطلبات</div><div class="order-summary-val">${invs.length}</div></div>
+        <div><div class="order-summary-lbl">آخر طلب</div><div class="order-summary-val">${lastInvDate||"—"}</div></div>
+        <div><div class="order-summary-lbl">المستوى</div><div class="order-summary-val">${cust&&cust.vip?"👑 VIP":tierLabel(customerTier(mobile))}</div></div>
+      </div>
+    </div>`;
+  let html = profileHtml + measurementsHtml;
+  html += `<div class="stitch"></div><h3 style="font-size:14px;margin:0 0 10px;">📋 الطلبات السابقة</h3>`;
   invs.slice().sort((a,b)=> (a.date||"").localeCompare(b.date||"")).forEach(inv=>{
     const s=invoiceSaleTotal(inv), paid=invoicePaid(inv), disc=invoiceDiscountTotal(inv);
     totalSale+=s; totalPaid+=paid; totalDiscount+=disc;
@@ -7593,6 +7678,7 @@ function showCustomerReport(mobile, filterName){
     </div>`;
   });
   html += `<div class="remaining-box"><span>إجمالي كل الفواتير: ${totalSale.toFixed(0)} ﷼ — إجمالي المدفوع: ${totalPaid.toFixed(0)} ﷼${totalDiscount?` — إجمالي الخصم: ${totalDiscount.toFixed(0)} ﷼`:""}</span><span class="amt">إجمالي المتبقي: ${(totalSale-totalPaid-totalDiscount).toFixed(0)} ﷼</span></div>`;
+  html += notesHtml;
   $("customerReportView").innerHTML = html;
 }
 
