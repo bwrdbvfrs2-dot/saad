@@ -213,4 +213,13 @@ function monthDisplay(label){const names=["يناير","فبراير","مارس"
 function nextMonthLabel(label){let [y,m]=label.split("-").map(Number); m++; if(m>12){m=1;y++;} return y+"-"+String(m).padStart(2,"0");}
 function todayStr(){const d=serverDate();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 function esc(s){ if(s===undefined||s===null) return ""; return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+// shared anatomical overlay positions for collar/chest-pocket/jabzour/cufflink images on the front
+// mannequin -- used by both the on-screen measurement-card preview and the printed cutting card,
+// so the two always stay visually in sync.
+function mannequinBadgeHtml(item, top, right, w){
+  return (item && item.image) ? `<img src="${item.image}" title="${esc(item.label)}" class="mannequin-badge" style="top:${top}%;right:${right}%;width:${w}%;">` : "";
+}
+function mannequinFrontOverlayHtml(collarItem, chestPocketItem, jabzourItem, cufflinkItem){
+  return mannequinBadgeHtml(collarItem,1,40,18) + mannequinBadgeHtml(chestPocketItem,19,16,15) + mannequinBadgeHtml(jabzourItem,30,40,13) + mannequinBadgeHtml(cufflinkItem,52,6,13);
+}
 

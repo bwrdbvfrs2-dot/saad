@@ -268,14 +268,13 @@ function buildMannequinPreviewHtml(m){
   const chestPocketItem = (state.chestPocketTypes||[]).find(o=>o.code===m.chestPocketType);
   const jabzourItem = (state.jabzourTypes||[]).find(o=>o.code===m.jabzourType);
   const cufflinkItem = (state.cufflinkTypes||[]).find(o=>o.code===m.cufflinkType);
-  const badge = (item, top, right, w)=> (item && item.image) ? `<img src="${item.image}" title="${esc(item.label)}" class="mannequin-badge" style="top:${top}%;right:${right}%;width:${w}%;">` : "";
   const view = (src, isFront, label)=> `<div style="position:relative;background:#fff;border-radius:8px;overflow:hidden;margin-bottom:8px;">
       <img src="${src}" style="width:100%;display:block;">
-      ${isFront ? badge(collarItem,1,40,18) + badge(chestPocketItem,19,16,15) + badge(jabzourItem,30,40,13) + badge(cufflinkItem,52,6,13) : ""}
+      ${isFront ? mannequinFrontOverlayHtml(collarItem, chestPocketItem, jabzourItem, cufflinkItem) : ""}
       <div style="position:absolute;bottom:2px;left:2px;background:rgba(0,0,0,.55);color:#fff;font-size:9px;padding:1px 5px;border-radius:4px;">${label}</div>
     </div>`;
   return `<div>${view(garmentTypeItem.image,true,"أمام")}${view(garmentTypeItem.imageBack,false,"خلف")}
-    <p class="sub" style="font-size:10px;margin:0;">الصور فوق المنكل تقريبية للمعاينة بس — الطباعة الفعلية بكرت القصاص.</p>
+    <p class="sub" style="font-size:10px;margin:0;">نفس هذي المواضع تظهر بكرت القصاص المطبوع.</p>
   </div>`;
 }
 function renderMeasurementPanelHtml(g, idx){
@@ -296,7 +295,7 @@ function renderMeasurementPanelHtml(g, idx){
   };
   const garmentTypeFieldHtml = buildChoiceFieldHtml(garmentTypeField);
   const choiceFieldsHtml = MEASUREMENT_CHOICE_FIELDS.filter(f=>f.key!=="garmentType").map(buildChoiceFieldHtml).join("");
-  return `<div class="meas-panel" data-idx="${idx}" style="display:none;margin-top:10px;background:var(--surface2);border-radius:10px;border:1px solid var(--border);overflow:hidden;">
+  return `<div class="meas-panel" data-idx="${idx}" style="display:none;margin-top:10px;background:var(--surface2);border-radius:10px;border:1px solid var(--border);">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface3);border-bottom:1px solid var(--border);">
       <b style="font-size:14px;">كرت المقاس — ثوب ${idx+1}</b>
       <button type="button" class="icon-btn meas-close-btn" data-idx="${idx}" title="إغلاق"><i data-lucide="x"></i></button>
