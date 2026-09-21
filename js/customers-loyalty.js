@@ -570,6 +570,19 @@ function buildWelcomeMessage(inv){
 function buildReminderMessage(inv, g){
   return `مرحباً ${esc(inv.customerName||"")}،\nنذكّركم بأن ثوبكم (فاتورة رقم ${esc(inv.number)} — ${esc(g.fabricType)}) جاهز ولم يتم استلامه بعد. يرجى التكرم بمراجعتنا لاستلامه في أقرب وقت.\n\nشكراً لتفهمكم — ${state.settings.shopName||"محلنا"}`;
 }
+function buildReadyMessage(inv){
+  return `مرحباً ${esc(inv.customerName||"")} 👋\nنبشّرك إن ثوبك بفاتورة رقم ${esc(inv.number)} صار جاهز للاستلام من ${state.settings.shopName||"محلنا"} 🎉\nبانتظارك!`;
+}
+// shows a clickable "send WhatsApp" button in the given banner element instead of auto window.open()-ing —
+// by the time a garment's status-change save resolves (async), the original click is no longer a "fresh"
+// user gesture, so browsers silently block an auto-opened popup. A direct click on this button isn't.
+function showReadyWaBanner(bannerId, inv){
+  const banner = $(bannerId);
+  if(!banner) return;
+  if(!inv.customerMobile){ banner.style.display="none"; return; }
+  banner.innerHTML = `<div class="note-box" style="text-align:center;"><a href="${waLink(inv.customerMobile, buildReadyMessage(inv))}" target="_blank" class="btn btn-gold btn-sm" style="display:inline-block;text-decoration:none;">إرسال رسالة واتساب للعميل: ثوبك جاهز 🎉</a></div>`;
+  banner.style.display = "";
+}
 // ---------------- promo codes engine ----------------
 let appliedPromoCode = null; // {id, code, type, value, giftDescription}
 function findActivePromoCode(codeText){

@@ -296,6 +296,7 @@ function handleQuickScan(){
   if(!number){ showToast("أدخل رقم الفاتورة"); return; }
   const inv = state.invoices.find(i=>i.number===number);
   if(!inv){ showToast("ما فيه فاتورة بهذا الرقم"); return; }
+  if($("quickScanWaReadyBanner")) $("quickScanWaReadyBanner").style.display = "none";
   const report = buildInvoiceStatusReport(inv);
   const eligible = inv.garments.map((g,idx)=>({g,idx})).filter(({g})=> g.status!=="تسليم" && g.status!=="ملغي");
   if(!eligible.length){ $("quickScanPicker").innerHTML = report; return; }
@@ -331,6 +332,8 @@ async function completeGarmentAdvance(inv, idx, next, snapshot){
   if(!await saveStateWithRollback(snapshot)) return false;
   $("quickScanInput").value=""; $("quickScanPicker").innerHTML="";
   showToast(`تم التحويل من "${STATUSES.find(s=>s.v===old)?.label}" إلى "${STATUSES.find(s=>s.v===next)?.label}"`);
+  if(next==="جاهز") showReadyWaBanner("quickScanWaReadyBanner", inv);
+  else if($("quickScanWaReadyBanner")) $("quickScanWaReadyBanner").style.display = "none";
   return true;
 }
 function showQuickDeliveryPayment(inv, idx, remaining){
@@ -558,10 +561,8 @@ async function saveDistribution(inv){
   if(!await saveStateWithRollback(snapshot)) return;
   showToast("تم حفظ التوزيع");
   const becameReady = changes.some(c=>c.newStatus==="جاهز");
-  if(becameReady && inv.customerMobile){
-    const msg = `مرحباً ${inv.customerName||""} 👋\nنبشّرك إن ثوبك بفاتورة رقم ${inv.number} صار جاهز للاستلام من ${state.settings.shopName||"محلنا"} 🎉\nبانتظارك!`;
-    window.open(waLink(inv.customerMobile, msg), "_blank");
-  }
+  if(becameReady) showReadyWaBanner("distWaReadyBanner", inv);
+  else $("distWaReadyBanner").style.display = "none";
   $("distInvNumber").value=""; $("distArea").innerHTML=""; $("distInvNumber").focus();
 }
 
