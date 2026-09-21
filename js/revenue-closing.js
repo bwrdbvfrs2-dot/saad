@@ -323,16 +323,18 @@ function advanceGarmentStatus(inv, idx){
 async function completeGarmentAdvance(inv, idx, next, snapshot){
   const g = inv.garments[idx];
   const old = g.status;
+  // open now, still inside the synchronous click/keydown chain that led here, before any await below
+  const waPopup = (next==="جاهز") ? openReadyWaPopup(inv) : null;
   if(!snapshot) snapshot = JSON.parse(JSON.stringify(state)); // no snapshot passed in => nothing prior to protect, snapshot fresh here
   if(next==="قص" && g.itemCardId && g.stockApplied==="reserved") consumeFabricForGarment(g, g.qtyUsed||0);
   g.status = next;
   if(g.status==="قص" && !g.cutDate) g.cutDate = todayStr();
   if(g.status==="جاهز" && !g.readyDate) g.readyDate = todayStr();
   if(g.status==="تسليم" && !g.deliveredDate) g.deliveredDate = todayStr();
-  if(!await saveStateWithRollback(snapshot)) return false;
+  if(!await saveStateWithRollback(snapshot)){ if(waPopup) waPopup.close(); return false; }
   $("quickScanInput").value=""; $("quickScanPicker").innerHTML="";
   showToast(`تم التحويل من "${STATUSES.find(s=>s.v===old)?.label}" إلى "${STATUSES.find(s=>s.v===next)?.label}"`);
-  if(next==="جاهز") showReadyWaBanner("quickScanWaReadyBanner", inv);
+  if(next==="جاهز") finishReadyWaPopup(waPopup, "quickScanWaReadyBanner", inv);
   else if($("quickScanWaReadyBanner")) $("quickScanWaReadyBanner").style.display = "none";
   return true;
 }
@@ -545,6 +547,10 @@ async function saveDistribution(inv){
     return `ثوب ${c.i+1}: ${oldLabel} ← ${newLabel}${tailorNote}`;
   }).join("\n");
   if(!await showConfirm(`تأكيد تحويل حالة فاتورة رقم ${esc(inv.number)}:\n\n${changeLines}\n\nمتابعة؟`)) return;
+  const becameReady = changes.some(c=>c.newStatus==="جاهز");
+  // open the tab NOW — right off the confirm-dialog click, our last fresh user gesture — before the
+  // async save below, so it isn't popup-blocked; we navigate it to the real link once save succeeds
+  const waPopup = becameReady ? openReadyWaPopup(inv) : null;
   const snapshot = JSON.parse(JSON.stringify(state));
   inv.garments.forEach((g,i)=>{
     const newStatus = intents[i].newStatus;
@@ -558,10 +564,9 @@ async function saveDistribution(inv){
     if(g.status==="جاهز" && !g.readyDate) g.readyDate = todayStr();
     if(g.status==="تسليم" && !g.deliveredDate) g.deliveredDate = todayStr();
   });
-  if(!await saveStateWithRollback(snapshot)) return;
+  if(!await saveStateWithRollback(snapshot)){ if(waPopup) waPopup.close(); return; }
   showToast("تم حفظ التوزيع");
-  const becameReady = changes.some(c=>c.newStatus==="جاهز");
-  if(becameReady) showReadyWaBanner("distWaReadyBanner", inv);
+  if(becameReady) finishReadyWaPopup(waPopup, "distWaReadyBanner", inv);
   else $("distWaReadyBanner").style.display = "none";
   $("distInvNumber").value=""; $("distArea").innerHTML=""; $("distInvNumber").focus();
 }

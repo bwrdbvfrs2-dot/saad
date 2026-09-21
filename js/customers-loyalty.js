@@ -573,15 +573,33 @@ function buildReminderMessage(inv, g){
 function buildReadyMessage(inv){
   return `مرحباً ${esc(inv.customerName||"")} 👋\nنبشّرك إن ثوبك بفاتورة رقم ${esc(inv.number)} صار جاهز للاستلام من ${state.settings.shopName||"محلنا"} 🎉\nبانتظارك!`;
 }
-// shows a clickable "send WhatsApp" button in the given banner element instead of auto window.open()-ing —
-// by the time a garment's status-change save resolves (async), the original click is no longer a "fresh"
-// user gesture, so browsers silently block an auto-opened popup. A direct click on this button isn't.
+// shows a clickable "send WhatsApp" button in the given banner element as a fallback when the direct-open
+// trick below didn't get us a live tab — a manual click always gets past the popup blocker.
 function showReadyWaBanner(bannerId, inv){
   const banner = $(bannerId);
   if(!banner) return;
   if(!inv.customerMobile){ banner.style.display="none"; return; }
   banner.innerHTML = `<div class="note-box" style="text-align:center;"><a href="${waLink(inv.customerMobile, buildReadyMessage(inv))}" target="_blank" class="btn btn-gold btn-sm" style="display:inline-block;text-decoration:none;">إرسال رسالة واتساب للعميل: ثوبك جاهز 🎉</a></div>`;
   banner.style.display = "";
+}
+// call this SYNCHRONOUSLY, still inside the click (or click-derived confirm-dialog) handler, before any
+// await — opens a blank tab now (allowed, since it's tied to a fresh user gesture) so we can navigate it
+// to the real WhatsApp link later once the async save resolves and we know it succeeded. Navigating an
+// already-open window afterward isn't subject to popup blocking, only opening a NEW one is.
+function openReadyWaPopup(inv){
+  if(!inv.customerMobile) return null;
+  try{ return window.open('', '_blank'); }catch(e){ return null; }
+}
+// finishes the trick above: navigates the pre-opened tab to the real link, or falls back to the manual
+// banner button if the tab never opened (e.g. blocked for some other reason, or customerMobile was missing).
+function finishReadyWaPopup(popup, bannerId, inv){
+  if(popup && !popup.closed && inv.customerMobile){
+    popup.location.href = waLink(inv.customerMobile, buildReadyMessage(inv));
+    if($(bannerId)) $(bannerId).style.display = "none";
+  } else {
+    if(popup && !popup.closed) popup.close();
+    showReadyWaBanner(bannerId, inv);
+  }
 }
 // ---------------- promo codes engine ----------------
 let appliedPromoCode = null; // {id, code, type, value, giftDescription}
