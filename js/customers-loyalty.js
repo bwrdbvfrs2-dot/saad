@@ -239,17 +239,34 @@ function saveMeasurementSnapshotToHistory(idx){
   saveState();
   showToast(seasonKey ? `تم حفظ المقاس (${seasonLabelAr(seasonKey)}) بسجل العميل` : "تم الحفظ — بدون تصنيف موسمي لأن القماش المختار ما له موسم محدد بكرت الصنف");
 }
+// picks whichever of the two seasons' latest snapshot has the more recent date — lets a customer get
+// their absolute last measurement regardless of season, independent of the currently selected fabric
+function latestMeasurementSnapshotAnySeason(individual){
+  const hist = individual && individual.measurementHistory;
+  if(!hist) return null;
+  const summer = hist.summer && hist.summer[0], winter = hist.winter && hist.winter[0];
+  if(summer && winter) return summer.date >= winter.date ? {snapshot:summer, seasonKey:"summer"} : {snapshot:winter, seasonKey:"winter"};
+  if(summer) return {snapshot:summer, seasonKey:"summer"};
+  if(winter) return {snapshot:winter, seasonKey:"winter"};
+  return null;
+}
 function loadMeasurementSnapshotIntoGarment(idx, seasonKey){
   const mobile = $("custMobile").value.trim();
   const name = $("custName").value.trim();
   const individual = findIndividualRecord(mobile, name);
-  const snapshot = individual && individual.measurementHistory && individual.measurementHistory[seasonKey] && individual.measurementHistory[seasonKey][0];
-  if(!snapshot){ showToast(`ما فيه مقاس ${seasonLabelAr(seasonKey)} محفوظ سابقاً لهذا العميل`); return; }
+  let snapshot, resolvedSeasonKey = seasonKey;
+  if(seasonKey==="any"){
+    const latest = latestMeasurementSnapshotAnySeason(individual);
+    snapshot = latest && latest.snapshot; resolvedSeasonKey = latest && latest.seasonKey;
+  } else {
+    snapshot = individual && individual.measurementHistory && individual.measurementHistory[seasonKey] && individual.measurementHistory[seasonKey][0];
+  }
+  if(!snapshot){ showToast(seasonKey==="any" ? "ما فيه أي مقاس محفوظ سابقاً لهذا العميل" : `ما فيه مقاس ${seasonLabelAr(seasonKey)} محفوظ سابقاً لهذا العميل`); return; }
   const current = readGarmentFields();
   current[idx] = {...current[idx], measurements: {...snapshot.measurements}, category: snapshot.category||current[idx].category};
   renderGarmentFields(current);
   openMeasPanel(idx);
-  showToast(`تم تحميل آخر مقاس ${seasonLabelAr(seasonKey)} (${snapshot.date})`);
+  showToast(`تم تحميل آخر مقاس ${seasonLabelAr(resolvedSeasonKey)} (${snapshot.date})`);
 }
 function buildMeasurementHistoryBoxHtml(idx, itemCardId){
   const mobile = $("custMobile") ? $("custMobile").value.trim() : "";
@@ -266,9 +283,11 @@ function buildMeasurementHistoryBoxHtml(idx, itemCardId){
     const highlighted = seasonKey===currentSeason;
     return `<button type="button" class="btn ${highlighted?"btn-gold":"btn-ghost"} btn-sm meas-fetch-season-btn" data-idx="${idx}" data-season="${seasonKey}" style="width:100%;margin-bottom:4px;">تحميل آخر مقاس ${seasonLabelAr(seasonKey)} — ${date}</button>`;
   };
+  // only useful when both seasons have history — with just one season saved, its own button above is already "the last measurement, any season"
+  const anyBtn = (summerCount && winterCount) ? `<button type="button" class="btn btn-ghost btn-sm meas-fetch-season-btn" data-idx="${idx}" data-season="any" style="width:100%;margin-bottom:4px;">تحميل آخر مقاس (بغض النظر عن الموسم)</button>` : "";
   return `<div style="margin-bottom:8px;">
     <p class="sub" style="font-size:10px;margin:0 0 4px;">مقاسات محفوظة سابقاً لهذا العميل:</p>
-    ${seasonBtn("summer", summerCount)}${seasonBtn("winter", winterCount)}
+    ${seasonBtn("summer", summerCount)}${seasonBtn("winter", winterCount)}${anyBtn}
   </div>`;
 }
 function buildMannequinPreviewHtml(m){
