@@ -242,11 +242,15 @@ function buildCuttingCardHtml(inv, gIdx){
   const diagramImages = (garmentTypeItem && garmentTypeItem.image && garmentTypeItem.imageBack) ? {front:garmentTypeItem.image, back:garmentTypeItem.imageBack}
     : (s.cuttingCardImages && s.cuttingCardImages.front && s.cuttingCardImages.back) ? s.cuttingCardImages : null;
   const diagramParts = diagramImages ? buildPhotoDiagramHtml(diagramImages) : null;
-  // any measurement that has a value but no hand-placed position on the mannequin photo (configured via
-  // الإعدادات ← صورة كرت القصاص) falls back to a plain table instead of silently not printing anywhere
-  const mappedKeys = new Set(Object.keys(s.cuttingCardLabelPositions||{}));
-  const unmappedFields = MEASUREMENT_FIELDS.filter(f=> has(f.key) && !mappedKeys.has(f.key));
-  const unmappedTableHtml = (diagramParts && unmappedFields.length) ? `<div style="margin-top:6px;border:1px solid #999;border-radius:6px;padding:5px 6px;">
+  // any measurement that has a value but isn't already shown elsewhere on the card (a hand-placed
+  // position on the mannequin photo, configured via الإعدادات ← صورة كرت القصاص — or, with no photo
+  // uploaded yet, one of the handful of fields embedded directly in the generic schematic drawing)
+  // falls back to a plain table instead of silently not printing anywhere, or duplicating what's
+  // already on the diagram
+  const alreadyShownKeys = diagramParts ? new Set(Object.keys(s.cuttingCardLabelPositions||{}))
+    : new Set(["frontChestWidth","frontLength","bottomWidth","chestPocketLength","chestPocketWidth","shoulderWidth","backLength","sleeveLength"]);
+  const unmappedFields = MEASUREMENT_FIELDS.filter(f=> has(f.key) && !alreadyShownKeys.has(f.key));
+  const unmappedTableHtml = unmappedFields.length ? `<div style="margin-top:6px;border:1px solid #999;border-radius:6px;padding:5px 6px;">
       <div style="font-size:9px;font-weight:700;margin-bottom:3px;">قياسات إضافية (بدون موضع على المنكل)</div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px 10px;">
         ${unmappedFields.map(f=>`<div style="display:flex;justify-content:space-between;gap:4px;font-size:8.5px;border-bottom:1px dotted #ccc;padding:1px 0;"><span>${esc(f.label)}</span><b>${val(f.key)}</b></div>`).join("")}
@@ -259,10 +263,13 @@ function buildCuttingCardHtml(inv, gIdx){
       <div style="width:108px;flex-shrink:0;">${leftBoxesHtml}</div>
     </div>
     ${unmappedTableHtml}
-  </div>` : `<div style="display:flex;gap:6px;align-items:flex-start;">
+  </div>` : `<div>
+    <div style="display:flex;gap:6px;align-items:flex-start;">
       <div style="flex:1;">${buildFallbackDiagramSvg(val)}</div>
       <div style="width:108px;flex-shrink:0;">${leftBoxesHtml}</div>
-    </div>`;
+    </div>
+    ${unmappedTableHtml}
+  </div>`;
   const customerCode = customer ? customer.code : "—";
   const extraTypesLine = [
     cufflinkImg ? `نوع الكبك: ${esc(cufflinkImg.label)}` : "",
@@ -301,20 +308,6 @@ function buildCuttingCardHtml(inv, gIdx){
     ${extraTypesLine ? `<p style="margin:3px 0;font-size:9.5px;">${extraTypesLine}</p>` : ""}
     <hr style="margin:4px 0;">
     ${bodyHtml}
-    <hr style="margin:4px 0;">
-    <div style="columns:3;font-size:10px;column-gap:10px;">
-      <p style="margin:2px 0;">ميل الكتف: ${val('shoulderSlope')}</p><p style="margin:2px 0;">وسع الكم أعلى: ${val('upperSleeveWidth')}</p>
-      <p style="margin:2px 0;">وسع الكم وسط: ${val('midSleeveWidth')}</p><p style="margin:2px 0;">وسع المعصم: ${val('wristWidth')}</p>
-      <p style="margin:2px 0;">كفة الكم سادة: ${val('cuffWidth')}</p><p style="margin:2px 0;">طول الكبك: ${val('cuffLength')}</p>
-      <p style="margin:2px 0;">عرض الكبك: ${val('cuffPocketWidth')}</p><p style="margin:2px 0;">وسع الصدر خلف: ${val('backChestWidth')}</p>
-      <p style="margin:2px 0;">وسع الوسط: ${val('waistWidth')}</p><p style="margin:2px 0;">كفة أسفل: ${val('bottomCuff')}</p>
-      <p style="margin:2px 0;">وسع الصدر أمام: ${val('frontChestWidth')}</p><p style="margin:2px 0;">عرض الكتف: ${val('shoulderWidth')}</p>
-      <p style="margin:2px 0;">طول أمام: ${val('frontLength')}</p><p style="margin:2px 0;">طول خلف: ${val('backLength')}</p>
-      <p style="margin:2px 0;">طول الكم سادة: ${val('sleeveLength')}</p><p style="margin:2px 0;">وسع أسفل: ${val('bottomWidth')}</p>
-      <p style="margin:2px 0;">وسع الورك: ${val('hipWidth')}</p><p style="margin:2px 0;">بين جيب الصدر والكتف: ${val('betweenChestPocketShoulder')}</p>
-      <p style="margin:2px 0;">جيب الجنب: ${val('sidePocket')}</p><p style="margin:2px 0;">تخاليص: ${val('takhalees')}</p>
-      <p style="margin:2px 0;">القماش المتوقع بالمتر: ${val('expectedFabricMeters')}</p>
-    </div>
     <hr style="margin:4px 0;">
     <div style="border-top:2px dashed #000;padding-top:4px;">
       <p style="margin:2px 0;font-size:10px;">${g.urgent?"مستعجل &nbsp;&nbsp;":""}${g.sample?"عينة &nbsp;&nbsp;":""}<b>ملاحظات / شغل خاص:</b> ${esc(g.measurementNotes||"—")}</p>
