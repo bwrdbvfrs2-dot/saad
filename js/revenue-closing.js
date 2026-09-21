@@ -309,7 +309,7 @@ function handleQuickScan(){
   $("quickScanPicker").innerHTML = report + `<p class="sub" style="margin-bottom:8px;">هذي الفاتورة فيها أكثر من ثوب — اختر أي وحد ترحّله:</p>` +
     eligible.map(({g,idx})=>`<button class="btn btn-ghost btn-sm" style="margin:4px;" onclick="advanceGarmentStatus(state.invoices.find(i=>i.number==='${number}'), ${idx});">ثوب ${idx+1} — ${esc(g.fabricType)} (${STATUSES.find(s=>s.v===g.status)?.label})</button>`).join("");
 }
-function advanceGarmentStatus(inv, idx){
+async function advanceGarmentStatus(inv, idx){
   const g = inv.garments[idx];
   const next = nextStatusOf(g.status);
   if(!next){ showToast("هذا الثوب وصل آخر مرحلة أصلاً"); return; }
@@ -317,6 +317,10 @@ function advanceGarmentStatus(inv, idx){
   if(next==="تسليم"){
     const remaining = invoiceRemaining(inv);
     if(Math.abs(remaining)>0.01){ showQuickDeliveryPayment(inv, idx, remaining); return; }
+    // invoice is already fully paid, so nothing stops this from completing instantly — still require
+    // an explicit confirm before finalizing the delivery, so a duplicate scan (scanner double-fires,
+    // or the same barcode gets scanned twice by mistake) can never silently deliver a garment unattended
+    if(!await showConfirm(`تأكيد تسليم الثوب "${esc(g.fabricType)}" — فاتورة رقم ${esc(inv.number)} (الفاتورة مسددة بالكامل، ما فيه مبلغ متبقي). متابعة؟`)) return;
   }
   completeGarmentAdvance(inv, idx, next);
 }
