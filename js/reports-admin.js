@@ -1058,6 +1058,10 @@ $("setCommissionBasis").addEventListener("change", ()=>{
   state.settings.commissionBasis = $("setCommissionBasis").value;
   saveState(); renderAll();
 });
+$("setCuttingCardTemplate").addEventListener("change", ()=>{
+  state.settings.cuttingCardTemplate = $("setCuttingCardTemplate").value;
+  saveState(); renderAll();
+});
 $("setMinDepositValue").addEventListener("input", ()=>{
   state.settings.minDepositValue = parseFloat($("setMinDepositValue").value)||0;
   saveState();
