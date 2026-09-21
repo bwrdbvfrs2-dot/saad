@@ -216,6 +216,7 @@ function buildCuttingCardHtml(inv, gIdx){
   // photo-based diagram: prefers the selected garment type's own front/back photos, falls back to the admin-uploaded generic photos, with hand-placed measurement label positions overlaid when configured
   function buildPhotoDiagramHtml(images){
     const positions = s.cuttingCardLabelPositions||{};
+    const isCustomTemplate = s.cuttingCardTemplate==="custom";
     const viewHtml = (view)=>{
       const entries = Object.entries(positions).filter(([k,p])=>p.view===view);
       const linesSvg = entries.map(([k,p])=> dimensionLineMarkup(p.x1,p.y1,p.x2,p.y2,"#c00")).join("");
@@ -223,13 +224,14 @@ function buildCuttingCardHtml(inv, gIdx){
         const field = MEASUREMENT_FIELDS.find(f=>f.key===k);
         const label = field ? field.label : k;
         const midX = (p.x1+p.x2)/2, midY = (p.y1+p.y2)/2;
+        const text = isCustomTemplate ? val(k) : `${label}: ${val(k)}`;
         return `<div style="position:absolute;right:${100-midX}%;top:${midY}%;transform:translate(50%,-50%);">
-          <span style="background:rgba(255,255,255,0.92);color:#000;font-size:9px;padding:1px 4px;border-radius:3px;white-space:nowrap;border:0.5px solid #999;">${label}: ${val(k)}</span>
+          <span style="background:rgba(255,255,255,0.92);color:#000;font-size:${isCustomTemplate?"11px;font-weight:700;":"9px;"}padding:1px 4px;border-radius:3px;white-space:nowrap;border:0.5px solid #999;">${text}</span>
         </div>`;
       }).join("");
       return `<div style="position:relative;width:100%;">
         <img src="${images[view]}" style="width:100%;max-height:320px;object-fit:contain;display:block;margin:0 auto;">
-        ${view==="front" ? mannequinFrontOverlayHtml(collarImg, chestPocketImg, jabzourImg, cufflinkImg) : ""}
+        ${(view==="front" && !isCustomTemplate) ? mannequinFrontOverlayHtml(collarImg, chestPocketImg, jabzourImg, cufflinkImg) : ""}
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;">${linesSvg}</svg>
         ${labelsHtml}
       </div>`;

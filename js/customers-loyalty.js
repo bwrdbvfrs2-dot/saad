@@ -36,6 +36,17 @@ const MEASUREMENT_CHOICE_FIELDS = [
   {key:"jabzourType", label:"نوع الجبزور", listKey:"jabzourTypes"},
   {key:"modelType", label:"نوع المديل", listKey:"modelTypes"},
 ];
+// paired length/width measurement fields shown inline right under their matching type selector, instead of buried in the flat fields grid
+const PAIRED_SIZE_FIELDS = {
+  collarType: ["neckHeight","neckWidth"],
+  chestPocketType: ["chestPocketLength","chestPocketWidth"],
+  jabzourType: ["placketHeight","placketWidth"],
+};
+// pocket groups with no image type library of their own — just a labeled box with their paired length/width fields
+const UNLINKED_SIZE_GROUPS = [
+  {label:"جيب الجوال", keys:["mobilePocketLength","mobilePocketWidth"]},
+  {label:"جيب المحفظة", keys:["walletPocketLength","walletPocketWidth"]},
+];
 let cuttingImgArmedField = null;
 let cuttingImgCurrentView = "front";
 let cuttingImgPendingPoint1 = null;
@@ -279,22 +290,33 @@ function buildMannequinPreviewHtml(m){
 }
 function renderMeasurementPanelHtml(g, idx){
   const m = g.measurements || {};
-  const numFieldsHtml = MEASUREMENT_FIELDS.map(f=>
+  const pairedKeys = new Set(Object.values(PAIRED_SIZE_FIELDS).flat().concat(UNLINKED_SIZE_GROUPS.flatMap(gr=>gr.keys)));
+  const numFieldsHtml = MEASUREMENT_FIELDS.filter(f=>!pairedKeys.has(f.key)).map(f=>
     `<div class="field" style="margin-bottom:6px;"><label style="font-size:11px;">${f.label}</label><input type="number" step="0.01" class="meas-field" data-idx="${idx}" data-key="${f.key}" value="${m[f.key]!==undefined && m[f.key]!==null ? m[f.key] : ""}" placeholder="0"></div>`
   ).join("");
+  const sizeInputHtml = key=>{
+    const f = MEASUREMENT_FIELDS.find(x=>x.key===key);
+    return `<div class="field" style="margin-bottom:0;"><label style="font-size:10.5px;">${f.label}</label><input type="number" step="0.01" class="meas-field" data-idx="${idx}" data-key="${key}" value="${m[key]!==undefined && m[key]!==null ? m[key] : ""}" placeholder="0"></div>`;
+  };
   const garmentTypeField = MEASUREMENT_CHOICE_FIELDS.find(f=>f.key==="garmentType");
   const buildChoiceFieldHtml = f=>{
     const list = state[f.listKey]||[];
     const cur = m[f.key]||"";
     const curItem = list.find(o=>o.code===cur);
     const opts = `<option value="">-- اختر --</option>` + list.map(o=>`<option value="${esc(o.code)}" ${o.code===cur?"selected":""}>${esc(o.code)} - ${esc(o.label)}</option>`).join("");
+    const pairedFieldKeys = PAIRED_SIZE_FIELDS[f.key];
+    const pairedHtml = pairedFieldKeys ? `<div class="row-2" style="gap:6px;margin-top:6px;">${pairedFieldKeys.map(sizeInputHtml).join("")}</div>` : "";
     return `<div class="field" style="margin-bottom:6px;"><label style="font-size:11px;">${f.label}</label>
       <select class="meas-choice" data-idx="${idx}" data-key="${f.key}">${opts}</select>
       ${curItem && curItem.image ? `<img src="${curItem.image}" style="max-width:70px;max-height:70px;border-radius:6px;margin-top:4px;border:1px solid var(--border);">` : ""}
+      ${pairedHtml}
     </div>`;
   };
   const garmentTypeFieldHtml = buildChoiceFieldHtml(garmentTypeField);
-  const choiceFieldsHtml = MEASUREMENT_CHOICE_FIELDS.filter(f=>f.key!=="garmentType").map(buildChoiceFieldHtml).join("");
+  const choiceFieldsHtml = MEASUREMENT_CHOICE_FIELDS.filter(f=>f.key!=="garmentType").map(buildChoiceFieldHtml).join("")
+    + UNLINKED_SIZE_GROUPS.map(gr=> `<div class="field" style="margin-bottom:6px;"><label style="font-size:11px;">${gr.label}</label>
+        <div class="row-2" style="gap:6px;">${gr.keys.map(sizeInputHtml).join("")}</div>
+      </div>`).join("");
   return `<div class="meas-panel" data-idx="${idx}" style="display:none;margin-top:10px;background:var(--surface2);border-radius:10px;border:1px solid var(--border);">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface3);border-bottom:1px solid var(--border);">
       <b style="font-size:14px;">كرت المقاس — ثوب ${idx+1}</b>

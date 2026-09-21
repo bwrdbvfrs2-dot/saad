@@ -16,6 +16,7 @@ function renderAll(){
   renderExpenseCategories();
   $("setMeasureUnit").value = state.settings.measureUnit;
   $("setCommissionBasis").value = state.settings.commissionBasis||"تسليم";
+  if($("setCuttingCardTemplate")) $("setCuttingCardTemplate").value = state.settings.cuttingCardTemplate||"default";
   $("setLoyEarnRate").value = state.settings.loyaltyEarnRate;
   $("setLoyRedeemRate").value = state.settings.loyaltyRedeemRate;
   $("setLoyMinRedeem").value = state.settings.loyaltyMinRedeem;

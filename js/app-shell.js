@@ -72,6 +72,7 @@ function normalizeState(){
   if(state.settings.fabricQtyBuffer===undefined) state.settings.fabricQtyBuffer = 0.25;
   if(state.settings.minDepositValue===undefined) state.settings.minDepositValue=0;
   if(!state.settings.cuttingCardLabelPositions) state.settings.cuttingCardLabelPositions={};
+  if(state.settings.cuttingCardTemplate===undefined) state.settings.cuttingCardTemplate="default";
   if(state.settings.loyaltyEarnRate===undefined) state.settings.loyaltyEarnRate=10;
   if(state.settings.loyaltyRedeemRate===undefined) state.settings.loyaltyRedeemRate=1;
   if(state.settings.loyaltyMinRedeem===undefined) state.settings.loyaltyMinRedeem=0;
