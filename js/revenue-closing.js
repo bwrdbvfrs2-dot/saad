@@ -50,7 +50,7 @@ async function loadAndRenderAuditLog(){
   const el = $("auditLogView");
   if(!el) return;
   el.innerHTML = `<p class="sub">جاري التحميل...</p>`;
-  const userFilter = $("auditFilterUser").value.trim();
+  const userFilter = $("auditFilterUser").value;
   const actionFilter = $("auditFilterAction").value;
   const fromFilter = $("auditFilterFrom").value;
   try{
@@ -58,7 +58,7 @@ async function loadAndRenderAuditLog(){
     if(actionFilter) query = AUDIT_LOG_COL.where("action","==",actionFilter).orderBy("timestamp","desc").limit(200);
     const snap = await query.get();
     let rows = snap.docs.map(d=>({id:d.id, ...d.data()}));
-    if(userFilter) rows = rows.filter(r=>(r.username||"").toLowerCase().includes(userFilter.toLowerCase()));
+    if(userFilter) rows = rows.filter(r=>r.username===userFilter);
     if(fromFilter) rows = rows.filter(r=>(r.clientDate||"")>=fromFilter);
     if(!rows.length){ el.innerHTML = `<p class="sub">ما فيه سجلات مطابقة.</p>`; return; }
     const actionLabels = {expense_recorded:"مصروف", month_closed:"إقفال شهر", price_changed:"تعديل سعر", funds_transferred:"تحويل أموال", invoice_returned:"مرتجع فاتورة", user_added:"إضافة مستخدم", user_removed:"حذف مستخدم", permission_changed:"تغيير صلاحية"};

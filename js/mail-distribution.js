@@ -648,7 +648,7 @@ function renderDistributionArea(inv){
       const tailorLocked = g.status==="تفصيل"; // "تم التفصيل" is exclusively set via the tailor's own scan screen — no one edits it here, admin included
       const dis = (locked||tailorLocked)?"disabled":"";
       const availableStatuses = g.status==="تفصيل" ? STATUSES.filter(s=>s.v==="تفصيل") : availableStatusesBase.filter(s=> s.v!=="تسليم" || g.status==="جاهز" || g.status==="تسليم");
-      const canCreditDeliver = isAdmin && g.status!=="تسليم" && g.status!=="ملغي";
+      const canCreditDeliver = isAdmin && g.status!=="تسليم" && g.status!=="ملغي" && g.status!=="جديد" && g.status!=="قص";
       const creditBadge = g.creditDelivered ? `<p class="locked-note" style="color:var(--loss);">مسلَّم بدين — متبقٍ عليه ${(g.creditAmount-g.creditPaid).toFixed(0)} ﷼ (تابعه من "مديونية الثياب")</p>` : "";
       return `<div class="garment-card"><span class="tag">ثوب ${i+1} — ${esc(g.fabricType)}</span>
         ${buildStepperHtml(g.status)}
@@ -713,6 +713,7 @@ async function addDistPayment(inv){
   if(invoiceRemaining(inv) <= 0.01){
     inv.garments.forEach(g=>{
       if(g.status==="ملغي" || g.status==="تسليم" || g.status==="معلقة") return;
+      if(g.status==="جديد" || g.status==="قص") return; // ما تفصّل بعد — ما يصير يتسلم تلقائياً حتى لو الفاتورة اتسددت بالكامل
       g.status="تسليم"; if(!g.readyDate) g.readyDate=todayStr(); if(!g.deliveredDate) g.deliveredDate=todayStr(); autoDelivered++;
     });
   }
@@ -727,6 +728,7 @@ async function creditDeliverGarment(invId, idx){
   const inv = state.invoices.find(i=>i.id===invId); if(!inv) return;
   const g = inv.garments[idx]; if(!g) return;
   if(g.status==="تسليم" || g.status==="ملغي"){ showToast("لا يمكن تطبيق هذا على ثوب مُسلَّم أو ملغي"); return; }
+  if(g.status==="جديد" || g.status==="قص"){ showToast("ما يصير تسليم الثوب بدين قبل ما يخلص التفصيل — عشان ما يضيع حق القصاص وما تفقد بيانات التكاليف مصداقيتها"); return; }
   const amount = garmentSalePrice(g);
   if(!await showConfirm(`تأكيد: بيتم تسليم هذا الثوب الآن رغم وجود دين عليه بقيمة ${amount.toFixed(0)} ريال. الثوب بينتقل لقائمة "مديونية الثياب" حتى يُسدد المبلغ. متابعة؟`)) return;
   const snapshot = JSON.parse(JSON.stringify(state));

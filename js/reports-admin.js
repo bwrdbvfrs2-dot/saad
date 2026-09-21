@@ -773,6 +773,8 @@ $("saleCustName").addEventListener("input", ()=>{
 });
 $("addSaleLineBtn").addEventListener("click", ()=>{ renderSaleLine(); updateSaleTotal(); });
 $("saveSaleBtn").addEventListener("click", saveSaleInvoice);
+$("saleCash").addEventListener("input", ()=>{ saleCashTouched = true; });
+$("saleNetwork").addEventListener("input", updateSaleTotal);
 $("saveInvoiceBtn").addEventListener("click", saveInvoice);
 $("saveAndPrintBtn").addEventListener("click", saveInvoiceAndPrint);
 $("saveAndSendBtn").addEventListener("click", saveInvoiceAndSend);
@@ -1042,9 +1044,8 @@ $("quickCameraBtn").addEventListener("click", ()=> openCameraScan("quickCameraVi
 $("quickCameraCloseBtn").addEventListener("click", ()=> closeCameraScan("quickCameraVideo","quickCameraWrap"));
 $("distSearchBtn").addEventListener("click", searchInvoiceForDistribution);
 $("distInvNumber").addEventListener("keydown", e=>{ if(e.key==="Enter") searchInvoiceForDistribution(); });
-["setWage","setPadding","setEmbroWage"].forEach(id=>{
+["setPadding","setEmbroWage"].forEach(id=>{
   $(id).addEventListener("input", ()=>{
-    state.settings.wage=parseFloat($("setWage").value)||0;
     state.settings.padding=parseFloat($("setPadding").value)||0;
     state.settings.embroideryWage=parseFloat($("setEmbroWage").value)||0;
     saveState(); renderAll();

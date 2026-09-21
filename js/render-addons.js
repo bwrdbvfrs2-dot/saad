@@ -1,7 +1,11 @@
 // ---------------- render ----------------
 function renderAll(){
   $("curMonthLbl").textContent = monthDisplay(state.settings.currentMonth);
-  $("setWage").value=state.settings.wage; $("setPadding").value=state.settings.padding;
+  if($("auditFilterUser")){
+    const curAuditUserFilter = $("auditFilterUser").value;
+    $("auditFilterUser").innerHTML = `<option value="">الكل</option>` + state.users.map(u=>`<option value="${esc(u.username)}" ${u.username===curAuditUserFilter?"selected":""}>${esc(u.username)}</option>`).join("");
+  }
+  $("setPadding").value=state.settings.padding;
   $("setEmbroWage").value=state.settings.embroideryWage; $("setNextInv").value=state.settings.nextInvoiceNumber;
   $("setNextSaleInv").value=state.settings.nextSalesInvoiceNumber;
   $("setThermalWidth").value=state.settings.thermalPaperWidth;

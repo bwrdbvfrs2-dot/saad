@@ -1,4 +1,23 @@
 // ---------------- inventory: item cards, suppliers, purchases, returns ----------------
+// manual expand/collapse overrides, keyed by card id — falls back to isItemCardIncomplete() when a card has no override yet
+let itemCardExpandOverrides = {};
+function isItemCardIncomplete(c){
+  if(c.type==="fabric"){
+    if(!c.origin || !c.season) return true;
+    if(BODY_CATEGORIES.some(cat=> !(c.prices[cat]>0))) return true;
+    if(BODY_CATEGORIES.some(cat=> !(c.qty[cat]>0))) return true;
+    return false;
+  }
+  if(c.type==="product") return !(c.salePrice>0);
+  return false;
+}
+function isItemCardExpanded(c){
+  return itemCardExpandOverrides.hasOwnProperty(c.id) ? itemCardExpandOverrides[c.id] : isItemCardIncomplete(c);
+}
+function toggleItemCardExpand(cardId){
+  itemCardExpandOverrides[cardId] = !isItemCardExpanded(findItemCard(cardId));
+  renderItemCards();
+}
 function renderItemCards(){
   const el = $("itemCardsList");
   if(!state.itemCards.length){ el.innerHTML = `<p class="sub">ما فيه أصناف بعد — تُنشأ تلقائياً أول ما تسجّل فاتورة شراء.</p>`; return; }
@@ -7,6 +26,8 @@ function renderItemCards(){
   if(!filtered.length){ el.innerHTML = `<p class="sub">ما فيه أصناف مطابقة لبحثك.</p>`; return; }
   el.innerHTML = filtered.map(c=>{
     const avail = cardAvailableQty(c);
+    const incomplete = isItemCardIncomplete(c);
+    const expanded = isItemCardExpanded(c);
     const fabricExtraFields = c.type==="fabric" ? `
       <div class="row-2">
         <div class="field"><label>الصناعة (بلد المنشأ) ${!c.origin?"— إلزامي":""}</label><select class="card-origin" data-card="${c.id}">
@@ -28,10 +49,7 @@ function renderItemCards(){
       </div>` : c.type==="product" ? `<div class="field"><label>سعر البيع (ريال)</label><input type="number" class="card-saleprice" data-card="${c.id}" value="${c.salePrice||""}" placeholder="0"></div>` : "";
     const typeLabelAr = c.type==="fabric"?"قماش":c.type==="product"?"منتج جاهز":"ملحق فعلي";
     const originSeasonBadge = c.type==="fabric" && (c.origin||c.season) ? ` — ${c.origin||""}${c.origin&&c.season?" / ":""}${c.season||""}` : "";
-    return `<div class="garment-card">
-      <span class="tag">#${c.code!==undefined?c.code:"—"} — ${esc(c.name)} — ${typeLabelAr}${originSeasonBadge}${c.active?"":" (متوقف)"}</span>
-      <p class="sub" style="margin:6px 0;">التكلفة الحالية: ${c.currentCost.toFixed(2)} ريال / ${c.type==="fabric"?unitLabel():"قطعة"} — المتاح: ${avail.toFixed(1)} ${c.type==="fabric"?unitLabel():"قطعة"}${c.reservedQty?` (محجوز: ${c.reservedQty.toFixed(1)})`:""} — إجمالي القيمة: <b>${(avail*(c.currentCost||0)).toFixed(2)} ريال</b></p>
-      ${avail<=0 ? `<p style="color:var(--loss);font-weight:700;margin:4px 0;">المخزون منتهٍ أو سالب</p>` : (c.minStock>0 && avail<c.minStock) ? `<p style="color:var(--loss);font-weight:700;margin:4px 0;">تحت الحد الأدنى (${c.minStock} ${c.type==="fabric"?unitLabel():"قطعة"})</p>` : ""}
+    const bodyHtml = expanded ? `
       ${fabricExtraFields}
       <div class="row-2">
         <div class="field"><label>رصيد أول المدة (${c.type==="fabric"?unitLabel():"قطعة"})</label><input type="number" class="card-opening" data-card="${c.id}" step="0.1" value="${c.openingBalance||""}" placeholder="0"></div>
@@ -48,7 +66,15 @@ function renderItemCards(){
         <button class="btn btn-ghost btn-sm" onclick="showItemStatement('${c.id}')">كشف حساب الصنف</button>
         ${c.type==="fabric" ? `<button class="btn btn-ghost btn-sm" onclick="openPrintLabelModal('${c.id}')">طباعة ملصق الصنف</button>` : ""}
         <button class="btn btn-danger btn-sm" onclick="writeOffItemCard('${c.id}')">إتلاف الصنف</button>
+      </div>` : "";
+    return `<div class="garment-card">
+      <div class="ic-header" data-card="${c.id}" style="display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;">
+        <span class="tag">#${c.code!==undefined?c.code:"—"} — ${esc(c.name)} — ${typeLabelAr}${originSeasonBadge}${c.active?"":" (متوقف)"}${incomplete?` — <b style="color:var(--loss);">بيانات ناقصة</b>`:""}</span>
+        <i data-lucide="${expanded?"chevron-up":"chevron-down"}" style="flex-shrink:0;"></i>
       </div>
+      <p class="sub" style="margin:6px 0;">التكلفة الحالية: ${c.currentCost.toFixed(2)} ريال / ${c.type==="fabric"?unitLabel():"قطعة"} — المتاح: ${avail.toFixed(1)} ${c.type==="fabric"?unitLabel():"قطعة"}${c.reservedQty?` (محجوز: ${c.reservedQty.toFixed(1)})`:""} — إجمالي القيمة: <b>${(avail*(c.currentCost||0)).toFixed(2)} ريال</b></p>
+      ${avail<=0 ? `<p style="color:var(--loss);font-weight:700;margin:4px 0;">المخزون منتهٍ أو سالب</p>` : (c.minStock>0 && avail<c.minStock) ? `<p style="color:var(--loss);font-weight:700;margin:4px 0;">تحت الحد الأدنى (${c.minStock} ${c.type==="fabric"?unitLabel():"قطعة"})</p>` : ""}
+      ${bodyHtml}
     </div>`;
   }).join("") + `<div id="itemStatementView" style="margin-top:14px;"></div>`;
   document.querySelectorAll(".card-opening").forEach(inp=> inp.addEventListener("change", async ()=>{
@@ -72,15 +98,23 @@ function renderItemCards(){
     const c = findItemCard(inp.dataset.card);
     const oldPrice = c.prices[inp.dataset.cat];
     c.prices[inp.dataset.cat] = parseFloat(inp.value)||0;
-    if(inp.dataset.cat==="رجال") autoCalcCategoryPricing(c, "prices");
-    saveState(); renderAll();
+    if(inp.dataset.cat==="رجال"){
+      autoCalcCategoryPricing(c, "prices");
+      // patch sibling price fields in place instead of a full renderAll() — a re-render mid-entry steals focus
+      // and misdirects the next keystrokes into the wrong field while tabbing through رجال/ولادي/طفل
+      document.querySelectorAll(`.card-price[data-card="${c.id}"]`).forEach(sib=>{ if(sib!==inp) sib.value = c.prices[sib.dataset.cat]||""; });
+    }
+    saveState();
     logAudit("price_changed", {cardId:c.id, cardName:c.name, category:inp.dataset.cat, oldPrice, newPrice:c.prices[inp.dataset.cat]});
   }));
   document.querySelectorAll(".card-qty").forEach(inp=> inp.addEventListener("change", ()=>{
     const c = findItemCard(inp.dataset.card);
     c.qty[inp.dataset.cat] = parseFloat(inp.value)||0;
-    if(inp.dataset.cat==="رجال") autoCalcCategoryPricing(c, "qty", false);
-    saveState(); renderAll();
+    if(inp.dataset.cat==="رجال"){
+      autoCalcCategoryPricing(c, "qty", false);
+      document.querySelectorAll(`.card-qty[data-card="${c.id}"]`).forEach(sib=>{ if(sib!==inp) sib.value = c.qty[sib.dataset.cat]||""; });
+    }
+    saveState();
   }));
   document.querySelectorAll(".card-saleprice").forEach(inp=> inp.addEventListener("change", ()=>{
     findItemCard(inp.dataset.card).salePrice = parseFloat(inp.value)||0; saveState();
@@ -101,6 +135,8 @@ function renderItemCards(){
   document.querySelectorAll(".card-fabric-saleprice").forEach(inp=> inp.addEventListener("change", ()=>{
     findItemCard(inp.dataset.card).salePrice = parseFloat(inp.value)||0; saveState();
   }));
+  document.querySelectorAll(".ic-header").forEach(h=> h.addEventListener("click", ()=> toggleItemCardExpand(h.dataset.card)));
+  refreshLucideIcons();
 }
 const CATEGORY_PRICE_RATIOS = {"ولادي":0.80, "طفل":0.65};
 function autoCalcCategoryPricing(c, field, roundToNearest5=true){
@@ -521,6 +557,10 @@ function renderSaleLine(prefill=null){
   priceInp.addEventListener("input", updateSaleTotal);
   qtyInp.addEventListener("input", updateSaleTotal);
 }
+// tracks whether the cashier has manually typed into "cash" this sale — while false, "cash" auto-fills
+// as (total - network) (full cash-at-sale is the common case), so saving doesn't get silently blocked
+// by the cash+network===total check just because nobody filled the payment fields
+let saleCashTouched = false;
 function updateSaleTotal(){
   let total = 0;
   document.querySelectorAll("#saleItemsHolder .garment-card").forEach(div=>{
@@ -529,6 +569,10 @@ function updateSaleTotal(){
     total += qty*price;
   });
   $("saleLiveTotal").textContent = total.toFixed(0)+" ﷼";
+  if(!saleCashTouched){
+    const network = parseFloat($("saleNetwork").value)||0;
+    $("saleCash").value = Math.max(total-network, 0) || "";
+  }
   return total;
 }
 function resetSaleForm(){
@@ -538,6 +582,7 @@ function resetSaleForm(){
   $("salePickerWrap").style.display="none"; $("salePickerWrap").innerHTML="";
   $("saleItemsHolder").innerHTML="";
   renderSaleLine();
+  saleCashTouched = false;
   $("saleCash").value=""; $("saleNetwork").value=""; $("saleReceipt").value="";
   updateSaleTotal();
 }
