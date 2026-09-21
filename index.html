@@ -598,13 +598,6 @@
   <div id="custPickerWrap" style="display:none;margin-bottom:12px;"></div>
   <div id="loyaltyInfoWrap" style="display:none;margin-bottom:12px;"></div>
   <div id="customerAlertWrap" style="display:none;margin-bottom:12px;"></div>
-  <div class="row-2" style="align-items:flex-end;">
-    <div class="field" style="margin-bottom:0;"><label>كود خصم / هدية (اختياري)</label><input type="text" id="promoCodeInput" placeholder="اكتب الكود..." style="text-transform:uppercase;"></div>
-    <button type="button" class="btn btn-ghost btn-sm" id="applyPromoCodeBtn" style="margin-bottom:2px;">تطبيق</button>
-  </div>
-  <div id="appliedPromoBanner" style="display:none;margin:8px 0;"></div>
-  <div class="field"><label>خصم مباشر (ريال) — اختياري، منفصل عن الكود والعرض</label><input type="number" id="directDiscountInput" min="0" step="1" placeholder="0"></div>
-  <div class="stitch"></div>
   <h3 style="margin:0 0 10px;font-size:14px;">تفاصيل الثياب</h3>
   <div id="priceLockNote" style="display:none;color:var(--gold-soft);font-weight:700;font-size:12px;margin-bottom:8px;">الأسعار مقفلة حالياً — يوجد كود خصم أو باقة عرض مفعّلة، وما يمكن تعديل السعر يدوياً حتى تُزال</div>
   <div id="garmentsHolder"></div>
@@ -612,6 +605,13 @@
   <div id="invoiceOffersWrap" style="margin-top:10px;"></div>
   <div class="stitch"></div>
   <div class="field"><label>ملاحظات على الفاتورة (اختياري)</label><textarea id="invNotes" rows="2" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 11px;color:var(--ivory);font-family:inherit;font-size:14px;" placeholder="أي ملاحظة عامة على الفاتورة كاملة..."></textarea></div>
+  <div class="stitch"></div>
+  <div class="row-2" style="align-items:flex-end;">
+    <div class="field" style="margin-bottom:0;"><label>كود خصم / هدية (اختياري)</label><input type="text" id="promoCodeInput" placeholder="اكتب الكود..." style="text-transform:uppercase;"></div>
+    <button type="button" class="btn btn-ghost btn-sm" id="applyPromoCodeBtn" style="margin-bottom:2px;">تطبيق</button>
+  </div>
+  <div id="appliedPromoBanner" style="display:none;margin:8px 0;"></div>
+  <div class="field"><label>خصم مباشر (ريال) — اختياري، منفصل عن الكود والعرض</label><input type="number" id="directDiscountInput" min="0" step="1" placeholder="0"></div>
   <div class="stitch"></div>
   <h3 style="margin:0 0 10px;font-size:14px;">الدفعات</h3>
   <div id="paymentsList"></div>
@@ -715,7 +715,7 @@
 <div class="tab-panel" id="tab-scan">
 <div class="panel" id="scanPanelTailor" style="display:none;">
   <h2>مسح باركود — تسجيل التفصيل</h2>
-  <p class="sub">امسح باركود الفاتورة (بالكاميرا أو قارئ باركود خارجي) أو اكتب رقمها يدوياً. كل ثوب لسا ما وصل "تم التفصيل" ينسب لك تلقائياً.</p>
+  <p class="sub">امسح باركود الفاتورة (بالكاميرا أو قارئ باركود خارجي) أو اكتب رقمها يدوياً. لو فيها ثوب وحيد لسا ما وصل "تم التفصيل" ينسب لك تلقائياً، ولو فيها أكثر من ثوب غير مسجّل تختار أي وحد منها تبي تسجّله لك.</p>
   <div class="row-2">
     <div class="field"><label>رقم الفاتورة</label><input type="text" id="tailorScanInput" placeholder="امسح الباركود أو اكتب الرقم..."></div>
     <div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-gold" id="tailorScanBtn" style="width:100%;">تسجيل</button></div>
@@ -725,6 +725,7 @@
     <video id="tailorCameraVideo" style="width:100%;border-radius:12px;" playsinline></video>
     <button class="btn btn-ghost btn-sm" id="tailorCameraCloseBtn" style="margin-top:8px;">إغلاق الكاميرا</button>
   </div>
+  <div id="tailorScanPicker" style="margin-top:10px;"></div>
   <div class="stitch"></div>
   <h3 style="margin:0 0 10px;font-size:14px;">آخر الفواتير اللي مسحتها</h3>
   <div id="tailorScanHistory"><p class="sub">ما مسحت أي فاتورة بعد.</p></div>
