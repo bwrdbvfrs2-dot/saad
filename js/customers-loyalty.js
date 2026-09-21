@@ -18,6 +18,7 @@ const MEASUREMENT_FIELDS = [
   {key:"backChestWidth", label:"وسع الصدر خلف"}, {key:"waistWidth", label:"وسع الوسط"},
   {key:"bottomWidth", label:"وسع أسفل"}, {key:"bottomCuff", label:"كفة أسفل"},
   {key:"neckHeight", label:"ارتفاع الرقبة سادة"}, {key:"neckWidth", label:"وسع الرقبة سادة"},
+  {key:"turnedCollarHeight", label:"ارتفاع رقبة قلاب"}, {key:"turnedCollarWidth", label:"وسع رقبة قلاب"},
   {key:"placketHeight", label:"ارتفاع الجبزور"}, {key:"placketWidth", label:"عرض الجبزور"},
   {key:"hipWidth", label:"وسع الورك"}, {key:"chestPocketLength", label:"ط-جيب الصدر"},
   {key:"chestPocketWidth", label:"ع-جيب الصدر"}, {key:"mobilePocketLength", label:"ط-جيب الجوال"},
@@ -38,7 +39,7 @@ const MEASUREMENT_CHOICE_FIELDS = [
 ];
 // paired length/width measurement fields shown inline right under their matching type selector, instead of buried in the flat fields grid
 const PAIRED_SIZE_FIELDS = {
-  collarType: ["neckHeight","neckWidth"],
+  collarType: ["neckHeight","neckWidth","turnedCollarHeight","turnedCollarWidth"],
   chestPocketType: ["chestPocketLength","chestPocketWidth"],
   jabzourType: ["placketHeight","placketWidth"],
 };

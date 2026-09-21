@@ -213,6 +213,10 @@ function monthDisplay(label){const names=["يناير","فبراير","مارس"
 function nextMonthLabel(label){let [y,m]=label.split("-").map(Number); m++; if(m>12){m=1;y++;} return y+"-"+String(m).padStart(2,"0");}
 function todayStr(){const d=serverDate();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 function esc(s){ if(s===undefined||s===null) return ""; return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+// whole riyals show with no decimals; fractional amounts (e.g. from a fractional qty × unit price) show
+// 2 decimals instead of silently rounding away halalas — a flat toFixed(0) elsewhere made a real 71.5
+// total display as "72", which looked like a calculation bug even though the underlying total was correct
+function fmtSar(n){ n = n||0; return Number.isInteger(Math.round(n*100)/100) ? n.toFixed(0) : n.toFixed(2); }
 // shared anatomical overlay positions for collar/chest-pocket/jabzour/cufflink images on the front
 // mannequin -- used by both the on-screen measurement-card preview and the printed cutting card,
 // so the two always stay visually in sync.

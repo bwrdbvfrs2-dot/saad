@@ -461,9 +461,22 @@ function renderGarmentFields(prefill=null){
     div.querySelectorAll(".meas-choice").forEach(sel=> sel.addEventListener("change", ()=>{
       const idx = parseInt(sel.dataset.idx);
       const wasOpen = openMeasPanelIdx === idx;
+      // renderGarmentFields() below rebuilds the whole panel as a fresh DOM node (scrollTop resets to 0),
+      // so picking a type near the bottom of a long panel used to jump you back to its top every time —
+      // save the current scroll position and restore it on the rebuilt panel
+      const oldPanel = wasOpen ? sel.closest(".meas-panel") : null;
+      const savedScrollTop = oldPanel ? oldPanel.scrollTop : 0;
+      const savedPageScrollY = window.scrollY;
       renderGarmentFields(readGarmentFields());
       // re-open the same panel after re-render (rebuilds the DOM) so picking an option doesn't close it, and refreshes the mannequin preview
-      if(wasOpen) openMeasPanel(idx);
+      if(wasOpen){
+        openMeasPanel(idx);
+        const newPanel = $("garmentsHolder").children[idx].querySelector(".meas-panel");
+        if(newPanel) newPanel.scrollTop = savedScrollTop;
+      }
+      // replacing the changed <select> with a fresh DOM node makes some mobile browsers auto-scroll the
+      // whole page back to the top (treating it like a newly-focused field) — put it back where it was
+      if(window.scrollY !== savedPageScrollY) window.scrollTo(0, savedPageScrollY);
     }));
     const cb = div.querySelector(".g-hasEmbro"), wrap = div.querySelector(".g-embro-wrap");
     cb.addEventListener("change", ()=>{ wrap.style.display = cb.checked?"":"none"; updateLiveTotals(); });
