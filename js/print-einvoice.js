@@ -231,7 +231,6 @@ function buildCuttingCardHtml(inv, gIdx){
       }).join("");
       return `<div style="position:relative;width:100%;">
         <img src="${images[view]}" style="width:100%;max-height:320px;object-fit:contain;display:block;margin:0 auto;">
-        ${(view==="front" && !isCustomTemplate) ? mannequinFrontOverlayHtml(collarImg, chestPocketImg, jabzourImg, cufflinkImg) : ""}
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;">${linesSvg}</svg>
         ${labelsHtml}
       </div>`;
@@ -241,11 +240,24 @@ function buildCuttingCardHtml(inv, gIdx){
   const diagramImages = (garmentTypeItem && garmentTypeItem.image && garmentTypeItem.imageBack) ? {front:garmentTypeItem.image, back:garmentTypeItem.imageBack}
     : (s.cuttingCardImages && s.cuttingCardImages.front && s.cuttingCardImages.back) ? s.cuttingCardImages : null;
   const diagramParts = diagramImages ? buildPhotoDiagramHtml(diagramImages) : null;
-  const bodyHtml = diagramParts ? `<div style="display:flex;gap:6px;align-items:flex-start;">
+  // any measurement that has a value but no hand-placed position on the mannequin photo (configured via
+  // الإعدادات ← صورة كرت القصاص) falls back to a plain table instead of silently not printing anywhere
+  const mappedKeys = new Set(Object.keys(s.cuttingCardLabelPositions||{}));
+  const unmappedFields = MEASUREMENT_FIELDS.filter(f=> has(f.key) && !mappedKeys.has(f.key));
+  const unmappedTableHtml = (diagramParts && unmappedFields.length) ? `<div style="margin-top:6px;border:1px solid #999;border-radius:6px;padding:5px 6px;">
+      <div style="font-size:9px;font-weight:700;margin-bottom:3px;">قياسات إضافية (بدون موضع على المنكل)</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px 10px;">
+        ${unmappedFields.map(f=>`<div style="display:flex;justify-content:space-between;gap:4px;font-size:8.5px;border-bottom:1px dotted #ccc;padding:1px 0;"><span>${esc(f.label)}</span><b>${val(f.key)}</b></div>`).join("")}
+      </div>
+    </div>` : "";
+  const bodyHtml = diagramParts ? `<div>
+    <div style="display:flex;gap:6px;align-items:flex-start;">
       <div style="flex:1.1;">${diagramParts.front}<div style="text-align:center;font-size:9px;color:#666;">أمام</div></div>
       <div style="flex:1.1;">${diagramParts.back}<div style="text-align:center;font-size:9px;color:#666;">خلف</div></div>
       <div style="width:108px;flex-shrink:0;">${leftBoxesHtml}</div>
-    </div>` : `<div style="display:flex;gap:6px;align-items:flex-start;">
+    </div>
+    ${unmappedTableHtml}
+  </div>` : `<div style="display:flex;gap:6px;align-items:flex-start;">
       <div style="flex:1;">${buildFallbackDiagramSvg(val)}</div>
       <div style="width:108px;flex-shrink:0;">${leftBoxesHtml}</div>
     </div>`;

@@ -285,7 +285,7 @@ function buildMannequinPreviewHtml(m){
       <div style="position:absolute;bottom:2px;left:2px;background:rgba(0,0,0,.55);color:#fff;font-size:9px;padding:1px 5px;border-radius:4px;">${label}</div>
     </div>`;
   return `<div>${view(garmentTypeItem.image,true,"أمام")}${view(garmentTypeItem.imageBack,false,"خلف")}
-    <p class="sub" style="font-size:10px;margin:0;">نفس هذي المواضع تظهر بكرت القصاص المطبوع.</p>
+    <p class="sub" style="font-size:10px;margin:0;">هذي معاينة للتأكد من الأنواع المختارة — كرت القصاص المطبوع يعرض أرقام القياسات على المنكل بدل الصور.</p>
   </div>`;
 }
 function renderMeasurementPanelHtml(g, idx){
