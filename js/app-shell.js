@@ -177,35 +177,6 @@ function normalizeState(){
   if(!state.writtenOffLosses) state.writtenOffLosses=[];
   if(!state.operationalLosses) state.operationalLosses=[];
   if(!state.promoCodes) state.promoCodes=[];
-  // migrate old body-category names: طفل صغير→طفل (child), طفل→ولادي (boy) — safe two-step via placeholder to avoid collision
-  const CATEGORY_RENAME_PLACEHOLDER = "__CHILD_CATEGORY_TEMP__";
-  const renameCategoryValue = (v)=>{
-    if(v==="طفل صغير") return CATEGORY_RENAME_PLACEHOLDER;
-    if(v==="طفل") return "ولادي";
-    if(v===CATEGORY_RENAME_PLACEHOLDER) return "طفل";
-    return v;
-  };
-  state.invoices.forEach(inv=> inv.garments.forEach(g=>{
-    if(g.category==="طفل صغير") g.category = CATEGORY_RENAME_PLACEHOLDER;
-  }));
-  state.invoices.forEach(inv=> inv.garments.forEach(g=>{
-    if(g.category==="طفل") g.category = "ولادي";
-  }));
-  state.invoices.forEach(inv=> inv.garments.forEach(g=>{
-    if(g.category===CATEGORY_RENAME_PLACEHOLDER) g.category = "طفل";
-  }));
-  state.itemCards.forEach(c=>{
-    if(c.prices && c.prices["طفل صغير"]!==undefined){ c.prices[CATEGORY_RENAME_PLACEHOLDER]=c.prices["طفل صغير"]; delete c.prices["طفل صغير"]; }
-    if(c.qty && c.qty["طفل صغير"]!==undefined){ c.qty[CATEGORY_RENAME_PLACEHOLDER]=c.qty["طفل صغير"]; delete c.qty["طفل صغير"]; }
-  });
-  state.itemCards.forEach(c=>{
-    if(c.prices && c.prices["طفل"]!==undefined){ c.prices["ولادي"]=c.prices["طفل"]; delete c.prices["طفل"]; }
-    if(c.qty && c.qty["طفل"]!==undefined){ c.qty["ولادي"]=c.qty["طفل"]; delete c.qty["طفل"]; }
-  });
-  state.itemCards.forEach(c=>{
-    if(c.prices && c.prices[CATEGORY_RENAME_PLACEHOLDER]!==undefined){ c.prices["طفل"]=c.prices[CATEGORY_RENAME_PLACEHOLDER]; delete c.prices[CATEGORY_RENAME_PLACEHOLDER]; }
-    if(c.qty && c.qty[CATEGORY_RENAME_PLACEHOLDER]!==undefined){ c.qty["طفل"]=c.qty[CATEGORY_RENAME_PLACEHOLDER]; delete c.qty[CATEGORY_RENAME_PLACEHOLDER]; }
-  });
   if(state.settings.nextDecisionNumber===undefined) state.settings.nextDecisionNumber=1;
   if(state.settings.nextMailRequestNumber===undefined) state.settings.nextMailRequestNumber=1;
   if(!state.alterations) state.alterations=[];
