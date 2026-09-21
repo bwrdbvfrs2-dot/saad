@@ -570,6 +570,7 @@ function searchInvoiceForDistribution(){
   const statusFilter = $("distStatusFilter").value;
   const area = $("distArea"), resultsList = $("distResultsList");
   area.innerHTML=""; resultsList.innerHTML="";
+  $("distWaReadyBanner").style.display = "none";
   if(!q && !statusFilter) return;
   const legacyMatches = q ? state.legacyItems.filter(x=> x.status!=="تم التسليم" && (x.name.toLowerCase().includes(q.toLowerCase()) || x.mobile.includes(q))) : [];
   const legacyHtml = legacyMatches.length ? `<div class="stitch"></div><h4 style="font-size:13px;margin:10px 0;color:var(--gold-soft);">أمانات قديمة من الجرد الافتتاحي (لسا ما تسلّمت)</h4>
@@ -598,6 +599,7 @@ function openDistributionInvoiceByNumber(num){
 }
 function openDistributionInvoice(inv){
   $("distResultsList").innerHTML="";
+  $("distWaReadyBanner").style.display = "none";
   renderDistributionArea(inv);
 }
 function buildStepperHtml(status){
