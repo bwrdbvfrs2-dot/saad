@@ -759,38 +759,63 @@ function renderTailorScanHistory(){
   $("tailorScanHistory").innerHTML = mine.length ? mine.map(s=>`<div class="item-row"><span>فاتورة ${s.invoiceNumber} — ${s.claimedCount} ثوب — ${s.date}</span></div>`).join("")
     : `<p class="sub">ما مسحت أي فاتورة بعد.</p>`;
 }
-async function handleTailorScan(){
+function handleTailorScan(){
   const number = $("tailorScanInput").value.trim();
   if(!number){ showToast("أدخل رقم الفاتورة"); return; }
   const inv = state.invoices.find(i=>i.number===number);
   if(!inv){ showToast("ما فيه فاتورة بهذا الرقم"); return; }
-  let claimed = 0; const conflicts = [];
-  inv.garments.forEach(g=>{
+  $("tailorScanPicker").innerHTML = "";
+  const conflicts = [];
+  const eligible = [];
+  inv.garments.forEach((g,idx)=>{
     if(g.status==="تسليم" || g.status==="ملغي") return;
     if(g.status==="تفصيل" || g.status==="جاهز"){
       if(g.tailor && g.tailor!==currentUser.username) conflicts.push(g.tailor);
       return; // already claimed (by this tailor or another) or progressed further
     }
-    g.tailor = currentUser.username; g.status = "تفصيل"; g.tailorCompletedDate = todayStr(); claimed++;
+    eligible.push(idx);
   });
-  // resolve any pending alteration for garments originally tailored by this user
+  // the barcode only carries the invoice number, identical on every garment's cutting card within it —
+  // it can't tell us which specific garment was physically scanned. With exactly one unclaimed garment
+  // that's not ambiguous, so claim it directly; with more than one (e.g. different tailors sewing
+  // different garments on the same invoice), auto-claiming them ALL for whoever scans first would
+  // wrongly credit one tailor for another's work — so show a picker and let the tailor pick which one.
+  if(eligible.length===1){
+    claimSingleTailorGarment(inv, eligible[0], number, conflicts);
+  } else if(eligible.length>1){
+    $("tailorScanPicker").innerHTML = `<div class="garment-card">
+      <p class="sub" style="margin-bottom:8px;">هذي الفاتورة فيها أكثر من ثوب غير مسجّل — اختر أي ثوب تبي تسجّله لك:</p>
+      ${eligible.map(idx=>`<button class="btn btn-ghost btn-sm" style="margin:4px;" onclick="claimSingleTailorGarment(state.invoices.find(i=>i.number==='${number}'), ${idx}, '${number}', []);">ثوب ${idx+1} — ${esc(inv.garments[idx].fabricType)}</button>`).join("")}
+    </div>`;
+  } else {
+    resolvePendingAlterationsForTailor(inv);
+    $("tailorScanInput").value="";
+    const parts = [];
+    if(conflicts.length) parts.push(`تنبيه: باقي الثياب مسجّلة مسبقاً لصالح ${[...new Set(conflicts)].join("، ")}`);
+    showToast(parts.length ? parts.join(" — ") : "ما فيه ثياب تحتاج تسجيل بهذي الفاتورة");
+  }
+}
+function resolvePendingAlterationsForTailor(inv){
   let alterationsCompleted = 0;
   state.alterations.forEach(a=>{
     if(a.invoiceId!==inv.id || a.status!=="pending") return;
     const g = inv.garments[a.garmentIndex];
     if(g && g.tailor===currentUser.username){ a.status="completed"; a.dateCompleted=todayStr(); alterationsCompleted++; }
   });
-  if(claimed>0 || alterationsCompleted>0){
-    if(claimed>0) state.tailorScans.push({id:Date.now()+"", tailorUsername:currentUser.username, invoiceNumber:number, date:todayStr(), claimedCount:claimed});
-    saveState(); renderAll();
-  }
-  $("tailorScanInput").value="";
-  const parts = [];
-  if(claimed>0) parts.push(`تم تسجيل ${claimed} ثوب لصالحك`);
+  return alterationsCompleted;
+}
+function claimSingleTailorGarment(inv, idx, number, conflicts){
+  const g = inv.garments[idx];
+  if(!g || g.status==="تسليم" || g.status==="ملغي" || g.status==="تفصيل" || g.status==="جاهز"){ showToast("هذا الثوب ما عاد متاح للتسجيل — يمكن سجّله خياط ثاني قبلك"); $("tailorScanPicker").innerHTML=""; return; }
+  g.tailor = currentUser.username; g.status = "تفصيل"; g.tailorCompletedDate = todayStr();
+  const alterationsCompleted = resolvePendingAlterationsForTailor(inv);
+  state.tailorScans.push({id:Date.now()+"", tailorUsername:currentUser.username, invoiceNumber:number, date:todayStr(), claimedCount:1});
+  saveState(); renderAll();
+  $("tailorScanInput").value=""; $("tailorScanPicker").innerHTML="";
+  const parts = [`تم تسجيل ثوب لصالحك`];
   if(alterationsCompleted>0) parts.push(`تم تأكيد إكمال تعديل ${alterationsCompleted} ثوب`);
-  if(conflicts.length) parts.push(`تنبيه: باقي الثياب مسجّلة مسبقاً لصالح ${[...new Set(conflicts)].join("، ")}`);
-  if(parts.length) showToast(parts.join(" — "));
-  else showToast("ما فيه ثياب تحتاج تسجيل بهذي الفاتورة");
+  if(conflicts && conflicts.length) parts.push(`تنبيه: باقي الثياب مسجّلة مسبقاً لصالح ${[...new Set(conflicts)].join("، ")}`);
+  showToast(parts.join(" — "));
 }
 const STATUS_ORDER = ["جديد","قص","تفصيل","جاهز","تسليم"];
 function nextStatusOf(status){ const i=STATUS_ORDER.indexOf(status); return i>=0 && i<STATUS_ORDER.length-1 ? STATUS_ORDER[i+1] : null; }

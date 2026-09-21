@@ -225,6 +225,13 @@ function saveMeasurementSnapshotToHistory(idx){
     showToast("أدخل اسم العميل ورقم جواله كامل أول عشان يُحفظ المقاس بسجله");
     return;
   }
+  const snapshot = measurementSnapshotFromPanel(idx);
+  // an empty snapshot (nothing filled in yet) would silently push out a real saved measurement from
+  // the 3-slot history ring buffer if allowed through — guard against saving blank/garbage entries
+  if(!snapshot || !Object.keys(snapshot.measurements).length){
+    showToast("ما فيه أي قياس معبّى بعد بهذا الكرت — عبّي شي أول عشان يُحفظ");
+    return;
+  }
   const card = $("garmentsHolder").children[idx];
   const itemCardId = card ? card.querySelector(".g-itemCard").value : "";
   const seasonKey = garmentMeasurementSeasonFromItemCardId(itemCardId);
@@ -233,7 +240,7 @@ function saveMeasurementSnapshotToHistory(idx){
   if(!individual.measurementHistory) individual.measurementHistory = {summer:[], winter:[]};
   if(seasonKey){
     const list = individual.measurementHistory[seasonKey] || [];
-    list.unshift(measurementSnapshotFromPanel(idx));
+    list.unshift(snapshot);
     individual.measurementHistory[seasonKey] = list.slice(0,3);
   }
   saveState();
