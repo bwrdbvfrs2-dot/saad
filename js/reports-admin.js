@@ -761,6 +761,27 @@ $("custName").addEventListener("input", ()=>{
   const match = findCustomerByIndividualName($("custName").value.trim());
   if(match){ $("custMobile").value = match.mobile; $("custMobile").dispatchEvent(new Event("input")); }
 });
+// confirm adding a new individual to an already-registered mobile right when the name is typed,
+// instead of silently registering it later as a side effect of saving the whole invoice — that used
+// to mean a typo could add a bogus "individual" with nobody noticing until it was too late to undo easily
+$("custName").addEventListener("blur", ()=>{
+  const mobile = $("custMobile").value.trim();
+  const name = $("custName").value.trim();
+  if(!/^[0-9]{10}$/.test(mobile) || !name || editingId) return;
+  const cust = findCustomerByMobile(mobile);
+  if(!cust || cust.individuals.some(i=>i.name===name)) return;
+  showConfirm(`الرقم ${mobile} مسجل عليه اسم آخر (${cust.individuals.map(i=>i.name).join("، ")}).\nهل ترغب بإضافة "${name}" كفرد جديد على نفس الرقم؟`).then(ok=>{
+    if($("custName").value.trim()!==name) return; // the field changed again while the dialog was open — stale, ignore
+    if(ok){
+      ensureCustomerIndividual(mobile, name);
+      showToast(`تمت إضافة "${name}" كفرد جديد على هذا الرقم`);
+      renderCustomerPicker("custMobile","custName","custPickerWrap");
+    } else {
+      $("custName").value = "";
+      showToast("تم إلغاء الإضافة — اختر اسم من القائمة أو أعد كتابته للتأكيد");
+    }
+  });
+});
 $("saleCustMobile").addEventListener("input", ()=>{
   renderCustomerPicker("saleCustMobile","saleCustName","salePickerWrap");
   const mobile = $("saleCustMobile").value.trim();
