@@ -568,7 +568,7 @@ function updateSaleTotal(){
     const price = parseFloat(div.querySelector(".sl-price").value)||0;
     total += qty*price;
   });
-  $("saleLiveTotal").textContent = total.toFixed(0)+" ﷼";
+  $("saleLiveTotal").textContent = fmtSar(total)+" ﷼";
   if(!saleCashTouched){
     const network = parseFloat($("saleNetwork").value)||0;
     $("saleCash").value = Math.max(total-network, 0) || "";
@@ -632,7 +632,7 @@ function renderSalesInvoicesList(){
   const rows = state.salesInvoices.slice().reverse();
   tbody.innerHTML = rows.length ? rows.map(inv=>{
     const total = inv.items.reduce((a,it)=>a+it.qty*it.price,0);
-    return `<tr><td>${esc(inv.number)}</td><td>${inv.date}</td><td>${esc(inv.customerName)}</td><td>${total.toFixed(0)} ﷼</td></tr>`;
+    return `<tr><td>${esc(inv.number)}</td><td>${inv.date}</td><td>${esc(inv.customerName)}</td><td>${fmtSar(total)} ﷼</td></tr>`;
   }).join("") : `<tr><td colspan="4">${emptyStateHtml("shopping-bag","ما فيه فواتير مبيعات بعد.")}</td></tr>`;
 }
 

@@ -252,7 +252,8 @@ function renderOptionLists(){
     const items = state[ol.key]||[];
     const itemsHtml = items.map((it,i)=>`<div class="item-row">
         ${it.image?`<img src="${it.image}" style="width:32px;height:32px;object-fit:cover;border-radius:6px;margin-left:8px;">`:""}
-        <span>${esc(it.code)} - ${esc(it.label)}</span>
+        <span style="flex-shrink:0;">${esc(it.code)} -</span>
+        <input type="text" class="opt-rename-input" data-list="${ol.key}" data-idx="${i}" value="${esc(it.label)}" style="flex:1;min-width:0;">
         <button class="icon-btn" onclick="removeOptionListItem('${ol.key}', ${i})">حذف</button>
       </div>`).join("") || `<p class="sub">ما فيه خيارات مضافة بعد.</p>`;
     return `<div class="garment-card">
@@ -266,6 +267,16 @@ function renderOptionLists(){
       <button class="btn btn-ghost btn-sm" onclick="addOptionListItem('${ol.key}')">إضافة خيار</button>
     </div>`;
   }).join("");
+  document.querySelectorAll(".opt-rename-input").forEach(inp=> inp.addEventListener("change", ()=>{
+    const list = state[inp.dataset.list];
+    const item = list && list[parseInt(inp.dataset.idx)];
+    if(!item) return;
+    const newLabel = inp.value.trim();
+    if(!newLabel){ inp.value = item.label; showToast("الاسم ما يصير فاضي"); return; }
+    item.label = newLabel;
+    saveState();
+    showToast("تم تحديث الاسم");
+  }));
 }
 function addOptionListItem(listKey){
   const codeInp = document.querySelector(`.opt-code[data-list="${listKey}"]`);

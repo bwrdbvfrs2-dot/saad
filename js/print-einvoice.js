@@ -140,7 +140,7 @@ function buildReceiptHtml(inv){
     </tr>`;
   }).join("");
   return `
-  <div id="receiptShareRoot" style="width:100%;max-width:${(s.thermalPaperWidth||58)===80?280:200}px;font-family:var(--font-main);direction:rtl;text-align:right;font-size:11px;margin:0 auto;background:#fff;color:#000;padding:2px 8px 8px;">
+  <div id="receiptShareRoot" style="width:100%;max-width:${(s.thermalPaperWidth||58)===80?300:220}px;font-family:var(--font-main);direction:rtl;text-align:right;font-size:13px;line-height:1.4;margin:0 auto;background:#fff;color:#000;padding:2px 8px 8px;">
     <div style="text-align:center;">
       ${s.shopLogo?`<img src="${s.shopLogo}" style="max-width:80px;max-height:80px;">`:""}
       <h3 style="margin:6px 0;">${esc(s.shopName||"—")}</h3>
@@ -157,7 +157,7 @@ function buildReceiptHtml(inv){
     <p style="margin:2px 0;">العميل: ${esc(inv.customerName||"—")}</p>
     <p style="margin:2px 0;">الجوال: ${esc(inv.customerMobile||"—")}</p>
     <hr>
-    <table style="width:100%;border-collapse:collapse;font-size:10.5px;table-layout:fixed;">
+    <table style="width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed;">
       <colgroup><col style="width:46%;"><col style="width:14%;"><col style="width:20%;"><col style="width:20%;"></colgroup>
       <thead><tr>
         <th style="text-align:right;padding:3px 2px;border-bottom:1px solid #000;font-weight:700;">الصنف</th>
@@ -175,7 +175,7 @@ function buildReceiptHtml(inv){
     <p style="margin:2px 0;">المبلغ المدفوع: ${paid.toFixed(2)}</p>
     <p style="margin:2px 0;font-weight:700;">المبلغ المتبقي: ${remaining.toFixed(2)}</p>
     <hr>
-    <p style="font-size:10px;white-space:pre-line;">${esc(s.receiptTerms||"")}</p>
+    <p style="font-size:12px;white-space:pre-line;">${esc(s.receiptTerms||"")}</p>
     <div id="receiptQrHolder" style="text-align:center;margin-top:8px;"></div>
   </div>`;
 }
@@ -206,8 +206,10 @@ function buildCuttingCardHtml(inv, gIdx){
       <div style="font-size:8.5px;margin-top:3px;min-height:11px;">${item?esc(item.label):""}</div>
       ${sizeLine ? `<div style="font-size:9px;font-weight:700;margin-top:2px;color:#333;">${sizeLine}</div>` : ""}
     </div>`;
+  const collarSizeLine = `سادة: ارتفاع ${val('neckHeight')} / وسع ${val('neckWidth')}`
+    + ((has('turnedCollarHeight')||has('turnedCollarWidth')) ? ` — قلاب: ارتفاع ${val('turnedCollarHeight')} / وسع ${val('turnedCollarWidth')}` : "");
   const leftBoxesHtml = `
-    ${infoBox("نوع الياقة", collarImg, `ارتفاع ${val('neckHeight')} / وسع ${val('neckWidth')}`)}
+    ${infoBox("نوع الياقة", collarImg, collarSizeLine)}
     ${infoBox("نوع جيب الصدر", chestPocketImg, `طول ${val('chestPocketLength')} / عرض ${val('chestPocketWidth')}`)}
     ${infoBox("نوع الجبزور", jabzourImg, `طول ${val('placketHeight')} / عرض ${val('placketWidth')}`)}
     ${(has('mobilePocketLength')||has('mobilePocketWidth')) ? infoBox("جيب الجوال", null, `طول ${val('mobilePocketLength')} / عرض ${val('mobilePocketWidth')}`, PHONE_ICON) : ""}
