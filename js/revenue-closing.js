@@ -537,6 +537,7 @@ async function saveDistribution(inv){
     if(g.status==="تفصيل"){ showToast("لا يمكن تغيير حالة ثوب \"تم التفصيل\" من هنا — يخص حساب الخياط فقط"); return; }
     if(intent.newStatus==="ملغي" && !isAdmin){ showToast("إلغاء الثوب متاح للمدير فقط"); return; }
     if(intent.newStatus==="تفصيل"){ showToast("الانتقال لـ\"تم التفصيل\" يخص حساب الخياط بس — يمسحها من شاشته الخاصة"); return; }
+    if(intent.newStatus==="جاهز" && g.status!=="جاهز"){ showToast(`لا يمكن تحويل ثوب ${i+1} إلى "جاهز" مباشرة — لازم يخلص "تم التفصيل" من شاشة الخياط أولاً`); return; }
     if(intent.newStatus==="تسليم"){
       if(g.status!=="جاهز"){ showToast(`لا يمكن تسليم ثوب ${i+1} قبل اكتمال التفصيل فعلياً ووصوله لمرحلة "جاهز"`); return; }
       if(Math.abs(remaining)>0.01){ showToast(`لا يمكن التسليم قبل سداد كامل الفاتورة (المتبقي ${remaining.toFixed(0)} ريال)`); return; }
