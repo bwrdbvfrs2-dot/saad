@@ -113,30 +113,12 @@ function normalizeState(){
   if(!state.jabzourTypes || !state.jabzourTypes.length){ state.jabzourTypes = defLibs.jabzourTypes; typeLibrariesReseeded = true; }
   if(!state.chestPocketTypes || !state.chestPocketTypes.length){ state.chestPocketTypes = defLibs.chestPocketTypes; typeLibrariesReseeded = true; }
   if(!state.modelTypes || !state.modelTypes.length){ state.modelTypes = defLibs.modelTypes; typeLibrariesReseeded = true; }
-  // additive: seed the thobe_library-derived type entries (collar/placket/pocket/cuff) by code,
-  // without touching any admin-customized entries already in these lists — a shop that already
-  // has these codes (e.g. re-run after an update) is left untouched
-  const THOBE_LIB_TYPES = {
-    collarTypes:      [{code:"ifranji",label:"إفرنجي مدبب"}, {code:"mandarin",label:"صيني"}, {code:"spread",label:"إفرنجي مفتوح"}, {code:"bound",label:"سادة / ربط رقبة"}],
-    jabzourTypes:     [{code:"buttons",label:"أزرار"}, {code:"hidden",label:"مخفي"}, {code:"short-buttons",label:"أزرار قصير"}],
-    chestPocketTypes: [{code:"flap",label:"قلاب"}, {code:"patch",label:"باتش"}, {code:"welt",label:"شق"}],
-    cufflinkTypes:    [{code:"button",label:"أزرار"}, {code:"cufflink",label:"كبك"}, {code:"hem",label:"كفة بسيطة"}],
-  };
-  const THOBE_LIB_FOLDER = {collarTypes:"collars", jabzourTypes:"plackets", chestPocketTypes:"pockets", cufflinkTypes:"cuffs"};
-  Object.keys(THOBE_LIB_TYPES).forEach(listKey=>{
-    if(!state[listKey]) state[listKey]=[];
-    const folder = THOBE_LIB_FOLDER[listKey];
-    THOBE_LIB_TYPES[listKey].forEach(t=>{
-      if(!state[listKey].some(o=>o.code===t.code)) state[listKey].push({code:t.code, label:t.label, image:`assets/thobe_library/library/${folder}/${t.code}.png`});
-    });
-  });
   state.invoices.forEach(inv=>{
     if(inv.expectedDeliveryDate===undefined) inv.expectedDeliveryDate=null;
     inv.garments.forEach(g=>{
       if(g.measurements===undefined) g.measurements={};
       if(g.urgent===undefined) g.urgent=false;
       if(g.sample===undefined) g.sample=false;
-      if(g.thobeStyle===undefined) g.thobeStyle="";
     });
   });
   state.invoices.forEach(inv=>{ if(inv.notes===undefined) inv.notes=""; if(!inv.appliedOffers) inv.appliedOffers=[]; if(!inv.freeGifts) inv.freeGifts=[]; });

@@ -340,15 +340,6 @@ function renderMeasurementPanelHtml(g, idx){
     </div>`;
   };
   const garmentTypeFieldHtml = buildChoiceFieldHtml(garmentTypeField);
-  const THOBE_STYLE_OPTIONS = [
-    {v:"", label:"-- بدون (الرسمة العامة القديمة) --"},
-    {v:"sa", label:"سعودي"}, {v:"qa", label:"قطري"}, {v:"kw", label:"كويتي"}, {v:"sleep", label:"ثوب نوم"},
-    {v:"ae", label:"إماراتي"}, {v:"bh", label:"بحريني"}, {v:"om", label:"عماني"},
-  ];
-  const thobeStyleFieldHtml = `<div class="field" style="margin-bottom:0;margin-top:6px;"><label style="font-size:11px;">نموذج كرت القصاص</label>
-    <select class="meas-thobe-style" data-idx="${idx}">${THOBE_STYLE_OPTIONS.map(o=>`<option value="${o.v}" ${o.v===(g.thobeStyle||"")?"selected":""}>${o.label}</option>`).join("")}</select>
-    <p class="sub" style="margin:4px 0 0;font-size:10px;">سعودي/قطري/كويتي/ثوب نوم يطبعون بمنكل مصوّر وأنواع مركّبة عليه. الباقي (أو بدون اختيار) يطبعون بالرسمة العامة القديمة.</p>
-  </div>`;
   const choiceFieldsHtml = MEASUREMENT_CHOICE_FIELDS.filter(f=>f.key!=="garmentType").map(buildChoiceFieldHtml).join("")
     + UNLINKED_SIZE_GROUPS.map(gr=> `<div class="field" style="margin-bottom:6px;"><label style="font-size:11px;">${gr.label}</label>
         <div class="row-2" style="gap:6px;">${gr.keys.map(sizeInputHtml).join("")}</div>
@@ -360,7 +351,7 @@ function renderMeasurementPanelHtml(g, idx){
     </div>
     <div style="display:flex;gap:14px;padding:14px;flex-wrap:wrap;">
       <div style="flex:1 1 320px;min-width:280px;">
-        <div style="background:var(--surface3);border:1px solid var(--gold);border-radius:8px;padding:8px;margin-bottom:8px;">${garmentTypeFieldHtml}${thobeStyleFieldHtml}</div>
+        <div style="background:var(--surface3);border:1px solid var(--gold);border-radius:8px;padding:8px;margin-bottom:8px;">${garmentTypeFieldHtml}</div>
         ${buildMeasurementHistoryBoxHtml(idx, g.itemCardId)}
         ${buildMannequinPreviewHtml(m)}
       </div>
