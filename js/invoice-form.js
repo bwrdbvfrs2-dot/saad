@@ -549,14 +549,13 @@ function readGarmentFields(existing){
     const urgent = card.querySelector(".meas-urgent") ? card.querySelector(".meas-urgent").checked : false;
     const sample = card.querySelector(".meas-sample") ? card.querySelector(".meas-sample").checked : false;
     const cutter = card.querySelector(".meas-cutter") ? card.querySelector(".meas-cutter").value.trim() : "";
-    const thobeStyle = card.querySelector(".meas-thobe-style") ? card.querySelector(".meas-thobe-style").value : "";
     const measurements = {};
     card.querySelectorAll(".meas-field").forEach(inp=>{ if(inp.value) measurements[inp.dataset.key] = parseFloat(inp.value)||0; });
     card.querySelectorAll(".meas-choice").forEach(sel=>{ if(sel.value) measurements[sel.dataset.key] = sel.value; });
     const old = existing && existing[i] ? existing[i] : {};
     return {
       fabricType, itemCardId, category, price, qtyUsed, hasEmbroidery, embroideryPrice, addons, measurementNotes,
-      measurements, urgent, sample, cutter, thobeStyle,
+      measurements, urgent, sample, cutter,
       tailor: old.tailor||"", status: old.status||"جديد", deliveryReceipt: old.deliveryReceipt||"",
       deliveredDate: old.deliveredDate||null, costSnapshot: old.costSnapshot,
       advisoryApplied: false, advisoryCredit: null, stockApplied: old.stockApplied||null, addonsStockApplied: old.addonsStockApplied||false,
