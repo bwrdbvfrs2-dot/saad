@@ -38,7 +38,8 @@ function synthEmailForNewAccount(){ return genUUID()+"@msar-ac08c.users.local"; 
 function authErrorMessage(e){
   if(e && e.code==="auth/unauthorized-domain") return "هذا الموقع مو مضاف بقائمة النطاقات المصرّح لها بـFirebase — أضفه من Authentication ← Settings ← Authorized domains";
   if(e && e.code==="auth/network-request-failed") return "تعذّر الاتصال بالخادم — تحقق من الإنترنت";
-  return "حدث خطأ غير متوقع — حاول مرة ثانية";
+  if(e && e.code==="auth/operation-not-allowed") return "طريقة الدخول بالبريد وكلمة المرور غير مفعّلة بمشروع Firebase — فعّلها من Authentication ← Sign-in method ← Email/Password";
+  return "حدث خطأ غير متوقع (" + (e && e.code || "بدون رمز") + ") — حاول مرة ثانية";
 }
 // a second, independent Firebase app instance used only to create/update OTHER users' auth
 // accounts without disturbing the currently signed-in admin's own session (createUser normally
