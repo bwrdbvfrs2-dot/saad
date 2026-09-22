@@ -649,7 +649,13 @@ function renderDistributionArea(inv){
       const locked = (g.status==="تسليم"||g.status==="ملغي") && !isAdmin;
       const tailorLocked = g.status==="تفصيل"; // "تم التفصيل" is exclusively set via the tailor's own scan screen — no one edits it here, admin included
       const dis = (locked||tailorLocked)?"disabled":"";
-      const availableStatuses = g.status==="تفصيل" ? STATUSES.filter(s=>s.v==="تفصيل") : availableStatusesBase.filter(s=> s.v!=="تسليم" || g.status==="جاهز" || g.status==="تسليم");
+      // "جاهز" is reached exclusively by finishing "تم التفصيل" first (tailor scan screen) — never offered
+      // here as a pickable jump from "جديد"/"قص", so this screen can't skip the cutting/sewing stages
+      const availableStatuses = g.status==="تفصيل" ? STATUSES.filter(s=>s.v==="تفصيل") : availableStatusesBase.filter(s=> {
+        if(s.v==="جاهز") return g.status==="جاهز";
+        if(s.v==="تسليم") return g.status==="جاهز" || g.status==="تسليم";
+        return true;
+      });
       const canCreditDeliver = isAdmin && g.status!=="تسليم" && g.status!=="ملغي" && g.status!=="جديد" && g.status!=="قص";
       const creditBadge = g.creditDelivered ? `<p class="locked-note" style="color:var(--loss);">مسلَّم بدين — متبقٍ عليه ${(g.creditAmount-g.creditPaid).toFixed(0)} ﷼ (تابعه من "مديونية الثياب")</p>` : "";
       return `<div class="garment-card"><span class="tag">ثوب ${i+1} — ${esc(g.fabricType)}</span>
