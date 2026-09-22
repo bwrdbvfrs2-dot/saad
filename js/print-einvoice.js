@@ -215,6 +215,28 @@ function buildCuttingCardHtml(inv, gIdx){
     ${(has('mobilePocketLength')||has('mobilePocketWidth')) ? infoBox("جيب الجوال", null, `طول ${val('mobilePocketLength')} / عرض ${val('mobilePocketWidth')}`, PHONE_ICON) : ""}
     ${(has('walletPocketLength')||has('walletPocketWidth')) ? infoBox("جيب المحفظة", null, `طول ${val('walletPocketLength')} / عرض ${val('walletPocketWidth')}`, WALLET_ICON) : ""}
   `;
+  // "جداول" template: no mannequin at all — every filled-in field (type or plain number) gets its own box in one grid
+  function buildTablesBodyHtml(){
+    const TAKHALEES_ICON = s.takhaleesIcon ? `<img src="${s.takhaleesIcon}" style="max-width:100%;max-height:100%;">` : undefined;
+    const choiceBoxesHtml = [
+      garmentTypeItem ? infoBox("نوع الثوب", garmentTypeItem) : "",
+      collarImg ? infoBox("نوع الياقة", collarImg, collarSizeLine) : "",
+      chestPocketImg ? infoBox("نوع جيب الصدر", chestPocketImg, `طول ${val('chestPocketLength')} / عرض ${val('chestPocketWidth')}`) : "",
+      jabzourImg ? infoBox("نوع الجبزور", jabzourImg, `طول ${val('placketHeight')} / عرض ${val('placketWidth')}`) : "",
+      cufflinkImg ? infoBox("نوع الكبك", cufflinkImg) : "",
+      pocketImg ? infoBox("نوع خياطة الجيب الجانبي", pocketImg) : "",
+      fillingItem ? infoBox("نوع الحشوة", fillingItem) : "",
+      modelItem ? infoBox("نوع الموديل", modelItem) : "",
+      (has('mobilePocketLength')||has('mobilePocketWidth')) ? infoBox("جيب الجوال", null, `طول ${val('mobilePocketLength')} / عرض ${val('mobilePocketWidth')}`, PHONE_ICON) : "",
+      (has('walletPocketLength')||has('walletPocketWidth')) ? infoBox("جيب المحفظة", null, `طول ${val('walletPocketLength')} / عرض ${val('walletPocketWidth')}`, WALLET_ICON) : "",
+    ].join("");
+    // plain numeric fields not already shown above inside a type's own box (avoids duplicating طول/عرض pairs)
+    const pairedKeys = new Set(Object.values(PAIRED_SIZE_FIELDS).flat().concat(UNLINKED_SIZE_GROUPS.flatMap(gr=>gr.keys)));
+    const plainBoxesHtml = MEASUREMENT_FIELDS.filter(f=> has(f.key) && !pairedKeys.has(f.key))
+      .map(f=> infoBox(f.label, null, val(f.key), f.key==="takhalees" ? TAKHALEES_ICON : undefined)).join("");
+    return `<div><div style="display:grid;grid-template-columns:repeat(6,1fr);gap:5px;">${choiceBoxesHtml}${plainBoxesHtml}</div></div>`;
+  }
+  const tablesBodyHtml = s.cuttingCardTemplate==="tables" ? buildTablesBodyHtml() : null;
   // photo-based diagram: prefers the selected garment type's own front/back photos, falls back to the admin-uploaded generic photos, with hand-placed measurement label positions overlaid when configured
   function buildPhotoDiagramHtml(images){
     const positions = s.cuttingCardLabelPositions||{};
@@ -256,7 +278,7 @@ function buildCuttingCardHtml(inv, gIdx){
         ${unmappedFields.map(f=>`<div style="display:flex;justify-content:space-between;gap:4px;font-size:8.5px;border-bottom:1px dotted #ccc;padding:1px 0;"><span>${esc(f.label)}</span><b>${val(f.key)}</b></div>`).join("")}
       </div>
     </div>` : "";
-  const bodyHtml = diagramParts ? `<div>
+  const bodyHtml = tablesBodyHtml ? tablesBodyHtml : diagramParts ? `<div>
     <div style="display:flex;gap:6px;align-items:flex-start;">
       <div style="flex:1.1;">${diagramParts.front}<div style="text-align:center;font-size:9px;color:#666;">أمام</div></div>
       <div style="flex:1.1;">${diagramParts.back}<div style="text-align:center;font-size:9px;color:#666;">خلف</div></div>
@@ -271,7 +293,8 @@ function buildCuttingCardHtml(inv, gIdx){
     ${unmappedTableHtml}
   </div>`;
   const customerCode = customer ? customer.code : "—";
-  const extraTypesLine = [
+  // "جداول" template already shows these inside their own boxes — no need to repeat them in the header line
+  const extraTypesLine = tablesBodyHtml ? "" : [
     cufflinkImg ? `نوع الكبك: ${esc(cufflinkImg.label)}` : "",
     pocketImg ? `نوع خياطة الجيب الجانبي: ${esc(pocketImg.label)}` : "",
     fillingItem ? `نوع الحشوة: ${esc(fillingItem.label)}` : "",
