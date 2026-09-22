@@ -1,0 +1,5 @@
+{
+  "collarType": {"folder": "collars", "pivot": "top-center", "anchorX": 0.50, "anchorY": 0.095, "widthRatio": 0.22, "view": "front"},
+  "jabzourType": {"folder": "plackets", "pivot": "top-center", "anchorX": 0.50, "anchorY": 0.145, "widthRatio": 0.055, "view": "front"},
+  "chestPocketType": {"folder": "pockets", "pivot": "top-center", "anchorX": 0.62, "anchorY": 0.205, "widthRatio": 0.095, "view": "front"}
+}

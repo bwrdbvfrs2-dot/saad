@@ -123,6 +123,18 @@ async function loadHtml2CanvasLib(){
     s.onload=resolve; s.onerror=reject; document.head.appendChild(s);
   });
 }
+const THOBE_LIBRARY_PATH = "assets/thobe_library";
+const THOBE_LIBRARY_STYLES = new Set(["sa","qa","kw","sleep"]);
+let thobeAnchorsCache = null;
+async function loadThobeAnchors(){
+  if(thobeAnchorsCache) return thobeAnchorsCache;
+  const [measurementAnchors, overlayAnchors] = await Promise.all([
+    fetch(`${THOBE_LIBRARY_PATH}/measurement-anchors.json`).then(r=>r.json()),
+    fetch(`${THOBE_LIBRARY_PATH}/overlay-anchors.json`).then(r=>r.json()),
+  ]);
+  thobeAnchorsCache = {measurementAnchors, overlayAnchors};
+  return thobeAnchorsCache;
+}
 function buildReceiptHtml(inv){
   const s = state.settings;
   const total = invoiceSaleTotal(inv);
@@ -179,7 +191,7 @@ function buildReceiptHtml(inv){
     <div id="receiptQrHolder" style="text-align:center;margin-top:8px;"></div>
   </div>`;
 }
-function buildCuttingCardHtml(inv, gIdx){
+async function buildCuttingCardHtml(inv, gIdx){
   const g = inv.garments[gIdx];
   const m = g.measurements||{};
   const s = state.settings;
@@ -206,7 +218,7 @@ function buildCuttingCardHtml(inv, gIdx){
       <div style="font-size:8.5px;margin-top:3px;min-height:11px;">${item?esc(item.label):""}</div>
       ${sizeLine ? `<div style="font-size:9px;font-weight:700;margin-top:2px;color:#333;">${sizeLine}</div>` : ""}
     </div>`;
-  const collarSizeLine = `سادة: ارتفاع ${val('neckHeight')} / وسع ${val('neckWidth')}`
+  const collarSizeLine = `ارتفاع ${val('neckHeight')} / وسع ${val('neckWidth')}`
     + ((has('turnedCollarHeight')||has('turnedCollarWidth')) ? ` — قلاب: ارتفاع ${val('turnedCollarHeight')} / وسع ${val('turnedCollarWidth')}` : "");
   const leftBoxesHtml = `
     ${infoBox("نوع الياقة", collarImg, collarSizeLine)}
@@ -215,6 +227,48 @@ function buildCuttingCardHtml(inv, gIdx){
     ${(has('mobilePocketLength')||has('mobilePocketWidth')) ? infoBox("جيب الجوال", null, `طول ${val('mobilePocketLength')} / عرض ${val('mobilePocketWidth')}`, PHONE_ICON) : ""}
     ${(has('walletPocketLength')||has('walletPocketWidth')) ? infoBox("جيب المحفظة", null, `طول ${val('walletPocketLength')} / عرض ${val('walletPocketWidth')}`, WALLET_ICON) : ""}
   `;
+  // thobe_library diagram: real front/back mannequin photos with the actual collar/jabzour/chestPocket
+  // type PNGs composited onto the neckline/chest at fixed ratio positions, and measurement numbers
+  // placed on fixed dimension lines from measurement-anchors.json — used only when the garment has an
+  // explicit thobeStyle selected (sa/qa/kw/sleep); ae/bh/om and unset fall through to the paths below untouched
+  function buildThobeLibraryDiagramHtml(style, thobeAnchors){
+    const LIB = THOBE_LIBRARY_PATH;
+    const shownKeys = new Set();
+    const overlayFieldListKey = {collarType:"collarTypes", jabzourType:"jabzourTypes", chestPocketType:"chestPocketTypes"};
+    const overlaysHtml = Object.keys(thobeAnchors.overlayAnchors).map(fieldKey=>{
+      const code = m[fieldKey];
+      if(!code) return "";
+      const typeItem = (state[overlayFieldListKey[fieldKey]]||[]).find(o=>o.code===code);
+      if(!typeItem || !typeItem.image || !typeItem.image.startsWith(`${LIB}/library/`)) return ""; // not a thobe_library asset (e.g. an admin-custom type) — no PNG to overlay
+      const cfg = thobeAnchors.overlayAnchors[fieldKey];
+      const transform = cfg.pivot==="top-center" ? "translate(-50%,0)" : cfg.pivot==="bottom-center" ? "translate(-50%,-100%)" : "translate(-50%,-50%)";
+      return `<img src="${LIB}/library/${cfg.folder}/${code}.png" style="position:absolute;left:${cfg.anchorX*100}%;top:${cfg.anchorY*100}%;width:${cfg.widthRatio*100}%;transform:${transform};">`;
+    }).join("");
+    const measLinesHtml = view=>{
+      const entries = Object.entries(thobeAnchors.measurementAnchors[view]||{}).filter(([key])=>has(key));
+      entries.forEach(([key])=>shownKeys.add(key));
+      const linesSvg = entries.map(([key,a])=>dimensionLineMarkup(a.x1,a.y1,a.x2,a.y2,"#c00")).join("");
+      const labelsHtml = entries.map(([key,a])=>`<div style="position:absolute;left:${a.labelX}%;top:${a.labelY}%;transform:translate(-50%,-50%);">
+          <span style="background:rgba(255,255,255,0.92);color:#000;font-size:10px;font-weight:700;padding:1px 4px;border-radius:3px;white-space:nowrap;border:0.5px solid #999;">${val(key)}</span>
+        </div>`).join("");
+      return `<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;">${linesSvg}</svg>${labelsHtml}`;
+    };
+    const frontHtml = `<div style="position:relative;width:100%;">
+      <img src="${LIB}/bases/${style}.jpg" style="width:100%;max-height:320px;object-fit:contain;display:block;margin:0 auto;">
+      ${overlaysHtml}
+      ${measLinesHtml("front")}
+    </div>`;
+    const backHtml = `<div style="position:relative;width:100%;">
+      <img src="${LIB}/bases/${style}-back.jpg" style="width:100%;max-height:320px;object-fit:contain;display:block;margin:0 auto;">
+      ${measLinesHtml("back")}
+    </div>`;
+    // fields already represented in the left sidebar boxes above are also "shown" — keep them out of the unmapped table too
+    ["neckHeight","neckWidth","turnedCollarHeight","turnedCollarWidth","chestPocketLength","chestPocketWidth",
+     "placketHeight","placketWidth","mobilePocketLength","mobilePocketWidth","walletPocketLength","walletPocketWidth"]
+      .forEach(k=>{ if(has(k)) shownKeys.add(k); });
+    return {front: frontHtml, back: backHtml, shownKeys};
+  }
+  const thobeLibraryParts = THOBE_LIBRARY_STYLES.has(g.thobeStyle) ? buildThobeLibraryDiagramHtml(g.thobeStyle, await loadThobeAnchors()) : null;
   // photo-based diagram: prefers the selected garment type's own front/back photos, falls back to the admin-uploaded generic photos, with hand-placed measurement label positions overlaid when configured
   function buildPhotoDiagramHtml(images){
     const positions = s.cuttingCardLabelPositions||{};
@@ -247,7 +301,8 @@ function buildCuttingCardHtml(inv, gIdx){
   // uploaded yet, one of the handful of fields embedded directly in the generic schematic drawing)
   // falls back to a plain table instead of silently not printing anywhere, or duplicating what's
   // already on the diagram
-  const alreadyShownKeys = diagramParts ? new Set(Object.keys(s.cuttingCardLabelPositions||{}))
+  const alreadyShownKeys = thobeLibraryParts ? thobeLibraryParts.shownKeys
+    : diagramParts ? new Set(Object.keys(s.cuttingCardLabelPositions||{}))
     : new Set(["frontChestWidth","frontLength","bottomWidth","chestPocketLength","chestPocketWidth","shoulderWidth","backLength","sleeveLength"]);
   const unmappedFields = MEASUREMENT_FIELDS.filter(f=> has(f.key) && !alreadyShownKeys.has(f.key));
   const unmappedTableHtml = unmappedFields.length ? `<div style="margin-top:6px;border:1px solid #999;border-radius:6px;padding:5px 6px;">
@@ -256,10 +311,10 @@ function buildCuttingCardHtml(inv, gIdx){
         ${unmappedFields.map(f=>`<div style="display:flex;justify-content:space-between;gap:4px;font-size:8.5px;border-bottom:1px dotted #ccc;padding:1px 0;"><span>${esc(f.label)}</span><b>${val(f.key)}</b></div>`).join("")}
       </div>
     </div>` : "";
-  const bodyHtml = diagramParts ? `<div>
+  const bodyHtml = (thobeLibraryParts || diagramParts) ? `<div>
     <div style="display:flex;gap:6px;align-items:flex-start;">
-      <div style="flex:1.1;">${diagramParts.front}<div style="text-align:center;font-size:9px;color:#666;">أمام</div></div>
-      <div style="flex:1.1;">${diagramParts.back}<div style="text-align:center;font-size:9px;color:#666;">خلف</div></div>
+      <div style="flex:1.1;">${(thobeLibraryParts||diagramParts).front}<div style="text-align:center;font-size:9px;color:#666;">أمام</div></div>
+      <div style="flex:1.1;">${(thobeLibraryParts||diagramParts).back}<div style="text-align:center;font-size:9px;color:#666;">خلف</div></div>
       <div style="width:108px;flex-shrink:0;">${leftBoxesHtml}</div>
     </div>
     ${unmappedTableHtml}
@@ -387,7 +442,7 @@ async function printCuttingCard(invId, gIdx){
   // margins it silently overflows onto a second page. An explicit, tight, predictable margin
   // removes that variable entirely and guarantees this always fits on one A4 page.
   $("dynamicPageSize").textContent = "@media print{ @page{ size:A4; margin:8mm; } }";
-  $("printArea").innerHTML = buildCuttingCardHtml(inv, gIdx);
+  $("printArea").innerHTML = await buildCuttingCardHtml(inv, gIdx);
   await loadBarcodeLib().catch(e=>{ /* barcode lib needs internet on first use — card still prints fine without it */ });
   if(window.JsBarcode){
     const drawBarcode = (id, opts)=>{ try{ window.JsBarcode(id, inv.number, opts); }catch(e){ console.error("barcode render failed for "+id, e); } };
