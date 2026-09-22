@@ -312,14 +312,21 @@ async function loadState(){
         // touched by a state write, so any entries there prove this shop has real history —
         // refuse to silently reinitialize in that case rather than risk overwriting
         // recoverable data with a blank state.
-        let hasPriorHistory = false;
+        // Fail-safe: if the check itself can't be completed (network blip, permission hiccup,
+        // anything), that is NOT proof the shop is new — treat it exactly like "history found"
+        // and refuse to auto-init, rather than defaulting to "no history" and silently
+        // overwriting real data with a blank state (this previously caused exactly that).
+        let hasPriorHistory = true;
         try{
           const priorAudit = await AUDIT_LOG_COL.limit(1).get();
           hasPriorHistory = !priorAudit.empty;
-        }catch(e){ console.error("audit history check failed", e); }
+        }catch(e){ console.error("audit history check failed — treating as unverified, refusing to auto-init", e); }
         if(hasPriorHistory){
-          console.error("STATE_DOC missing but auditLog has prior entries — refusing to auto-reinitialize.");
-          showToast("تعذّر العثور على بيانات المحل رغم وجود سجل نشاط سابق — لن يتم إنشاء بيانات جديدة تلقائياً تجنباً لفقدان بياناتك. تواصل مع الدعم الفني فوراً.");
+          console.error("STATE_DOC missing and prior history could not be ruled out — refusing to auto-reinitialize.");
+          showToast("تعذّر العثور على بيانات المحل — لن يتم إنشاء بيانات جديدة تلقائياً تجنباً لفقدان بياناتك. تواصل مع الدعم الفني فوراً.");
+          // shape the in-memory fallback state (users, permissions, cash boxes, ...) so the app
+          // doesn't crash on a null field while blocked here — this never touches Firestore
+          normalizeState();
         } else {
           normalizeState();
           STATE_DOC.set(JSON.parse(JSON.stringify(state))).catch(e=>console.error("Firestore init failed", e));
