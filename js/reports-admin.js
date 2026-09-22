@@ -1130,6 +1130,14 @@ $("setShopLogoInput").addEventListener("change", ()=>{
   reader.onload = ()=>{ state.settings.shopLogo = reader.result; saveState(); renderAll(); showToast("تم رفع الشعار"); };
   reader.readAsDataURL(file);
 });
+$("setTakhaleesIconInput").addEventListener("change", ()=>{
+  const file = $("setTakhaleesIconInput").files[0];
+  if(!file) return;
+  if(file.size > 512*1024){ showToast("حجم الصورة كبير — اختر صورة أقل من 512 كيلوبايت"); return; }
+  const reader = new FileReader();
+  reader.onload = ()=>{ state.settings.takhaleesIcon = reader.result; saveState(); showToast("تم رفع أيقونة التخاليص"); };
+  reader.readAsDataURL(file);
+});
 $("setThemeMode").addEventListener("change", ()=>{
   state.settings.themeMode = $("setThemeMode").value;
   applyThemeMode();
