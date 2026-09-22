@@ -36,6 +36,16 @@
       <button class="btn btn-gold" style="width:100%;" id="loginBtn">دخول</button>
       <div class="login-err" id="loginErr"></div>
     </div>
+    <div id="firstSetupFormState" class="hidden">
+      <div class="mark" id="firstSetupMark"></div>
+      <h2>إعداد الحساب الأول</h2>
+      <p class="sub">ما فيه محل مُعَدّ على هذا النظام بعد — سوّي حساب المدير الأول حتى تبدأ.</p>
+      <div class="field" style="text-align:right;"><label>اسم المستخدم</label><input type="text" id="setupUser"></div>
+      <div class="field" style="text-align:right;"><label>كلمة المرور</label><input type="password" id="setupPass"></div>
+      <div class="field" style="text-align:right;"><label>تأكيد كلمة المرور</label><input type="password" id="setupPassConfirm"></div>
+      <button class="btn btn-gold" style="width:100%;" id="firstSetupBtn">إنشاء الحساب والبدء</button>
+      <div class="login-err" id="firstSetupErr"></div>
+    </div>
   </div>
 </div>
 
@@ -406,6 +416,11 @@
         <div class="field"><label>الدور</label><select id="newUserRole"><option value="محاسب">محاسب</option><option value="كاشير">كاشير</option><option value="خياط">خياط</option><option value="مدير">مدير</option></select></div>
       </div>
       <button class="btn btn-ghost btn-sm" id="addUserBtn">إضافة مستخدم</button>
+      <div class="stitch"></div>
+      <h3 style="margin:0 0 8px;font-size:14px;">النسخ الاحتياطي</h3>
+      <p class="sub" style="margin-bottom:10px;">يحتفظ النظام تلقائياً بنسخة يومية من بيانات المحل (آخر ١٤ يوم). لو صار أي خطأ أو فقدان بيانات، تقدر ترجع لأي نسخة من هنا — يستبدل كل البيانات الحالية ببيانات تلك النسخة (المستخدمين وصلاحياتهم يبقون كما هم الحين).</p>
+      <button class="btn btn-ghost btn-sm" id="refreshBackupsBtn">تحديث قائمة النسخ</button>
+      <div id="backupsList" style="margin-top:10px;"></div>
   </div>
 </div>
 </div>

@@ -26,16 +26,40 @@ async function logAudit(action, details){
   }
 }
 
-async function ensureAuth(){
-  if(!fbAuth.currentUser){
-    try{ await fbAuth.signInAnonymously(); }
-    catch(e){
-      console.error("Firebase auth failed", e);
-      let msg = "تعذّر الاتصال بالخادم — تحقق من الإنترنت";
-      if(e && e.code==="auth/admin-restricted-operation") msg = "تسجيل الدخول المجهول (Anonymous Auth) موقوف بمشروع Firebase — فعّله من Authentication ← Sign-in method";
-      else if(e && e.code==="auth/unauthorized-domain") msg = "هذا الموقع مو مضاف بقائمة النطاقات المصرّح لها بـFirebase — أضفه من Authentication ← Settings ← Authorized domains";
-      showToast(msg);
-    }
+// ---------------- real per-user auth (replaces the old anonymous-auth model) ----------------
+// Every app user is backed by a real Firebase Auth email/password account, using a synthetic,
+// never-shown email tied to a random id — this is purely a mechanism to get a real, per-person
+// Firestore identity behind the scenes; the login screen still only ever asks for the username
+// and password people already know. usernames/{username} (public, read-only) maps a typed
+// username to that synthetic email so the login form can resolve which account to sign into.
+const USERNAMES_COL = db.collection("usernames");
+const ROLES_COL = db.collection("roles");
+function synthEmailForNewAccount(){ return genUUID()+"@msar-ac08c.users.local"; }
+function authErrorMessage(e){
+  if(e && e.code==="auth/unauthorized-domain") return "هذا الموقع مو مضاف بقائمة النطاقات المصرّح لها بـFirebase — أضفه من Authentication ← Settings ← Authorized domains";
+  if(e && e.code==="auth/network-request-failed") return "تعذّر الاتصال بالخادم — تحقق من الإنترنت";
+  return "حدث خطأ غير متوقع — حاول مرة ثانية";
+}
+// a second, independent Firebase app instance used only to create/update OTHER users' auth
+// accounts without disturbing the currently signed-in admin's own session (createUser normally
+// signs in as the new account on whatever auth instance it's called on).
+let secondaryAuthApp = null;
+function secondaryAuth(){
+  if(!secondaryAuthApp) secondaryAuthApp = firebase.initializeApp(firebaseConfig, "secondary");
+  return secondaryAuthApp.auth();
+}
+// resolves true/false for "does the shop already have data" without ever needing to read it —
+// the security rules allow this one specific check (existence only, no contents) unauthenticated.
+async function checkShopExists(){
+  try{
+    const snap = await STATE_DOC.get();
+    return snap.exists;
+  }catch(e){
+    // permission-denied here means the document exists but rules correctly hid its contents from
+    // an unauthenticated read — that is itself proof the shop already has data, not an error.
+    if(e && e.code==="permission-denied") return true;
+    console.error("shop-existence check failed — assuming an existing shop rather than risking the first-time-setup path", e);
+    return true;
   }
 }
 

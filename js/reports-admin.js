@@ -566,8 +566,11 @@ function confirmWithPassword(message){
       resolve(v);
     }
     async function onYes(){
-      if(await checkPassword(currentUser, input.value)){ cleanup(true); }
-      else { $("passwordModalError").style.display = ""; input.value=""; input.focus(); }
+      try{
+        const cred = firebase.auth.EmailAuthProvider.credential(currentUser.authEmail, input.value);
+        await fbAuth.currentUser.reauthenticateWithCredential(cred);
+        cleanup(true);
+      }catch(e){ $("passwordModalError").style.display = ""; input.value=""; input.focus(); }
     }
     function onNo(){ cleanup(false); }
     function onKey(e){ if(e.key==="Enter") onYes(); }
@@ -683,20 +686,54 @@ async function saveUserEdit(i){
   const wageChild = wageChildInp ? (parseFloat(wageChildInp.value)||0) : 0;
   const wageChildSmallInp = document.querySelector(`.edit-wage-childsmall[data-idx="${i}"]`);
   const wageChildSmall = wageChildSmallInp ? (parseFloat(wageChildSmallInp.value)||0) : 0;
+  if(newPassword && newPassword.length<6){ showToast("كلمة المرور لازم تكون ٦ أحرف على الأقل"); return; }
   const prevUser = state.users[i];
-  const updatedUser = {username,role,baseSalary,commissionEnabled,commissionRate,discountEnabled,discountType,discountValue,dailyCapacity,productionCapacity,wageMen,wageChild,wageChildSmall};
-  if(newPassword){ await setUserPassword(updatedUser, newPassword); }
-  else { updatedUser.passwordHash = prevUser.passwordHash; updatedUser.passwordSalt = prevUser.passwordSalt; if(!updatedUser.passwordHash) updatedUser.password = prevUser.password; }
+  const updatedUser = {...prevUser, username,role,baseSalary,commissionEnabled,commissionRate,discountEnabled,discountType,discountValue,dailyCapacity,productionCapacity,wageMen,wageChild,wageChildSmall};
+  if(newPassword){
+    // client-side Firebase Auth can't set another account's password directly — create a fresh
+    // login account carrying the new password and retire the old one
+    const email = synthEmailForNewAccount();
+    let uid;
+    try{
+      const cred = await secondaryAuth().createUserWithEmailAndPassword(email, newPassword);
+      uid = cred.user.uid;
+      await secondaryAuth().signOut();
+    }catch(e){
+      console.error("password reset — new auth account creation failed", e);
+      showToast(e && e.code==="auth/weak-password" ? "كلمة المرور ضعيفة جداً" : "تعذّر تحديث كلمة المرور — حاول مرة ثانية");
+      return;
+    }
+    try{
+      await ROLES_COL.doc(uid).set({role});
+      if(prevUser.authUid) await ROLES_COL.doc(prevUser.authUid).delete().catch(()=>{});
+    }catch(e){ console.error("role registration after password reset failed", e); showToast("تعذّر تحديث كلمة المرور — حاول مرة ثانية"); return; }
+    updatedUser.authUid = uid; updatedUser.authEmail = email;
+  } else if(prevUser.authUid && role!==prevUser.role){
+    try{ await ROLES_COL.doc(prevUser.authUid).set({role}); }
+    catch(e){ console.error("role update failed", e); showToast("تعذّر تحديث الصلاحية — حاول مرة ثانية"); return; }
+  }
+  if(username!==oldUsername){
+    try{
+      await USERNAMES_COL.doc(username).set({authEmail: updatedUser.authEmail});
+      await USERNAMES_COL.doc(oldUsername).delete();
+    }catch(e){ console.error("username rename failed", e); showToast("تعذّر تغيير اسم المستخدم — حاول مرة ثانية"); return; }
+  }
   state.users[i]=updatedUser;
   if(currentUser && currentUser.username===oldUsername){ currentUser=state.users[i]; $("curUserLbl").textContent=currentUser.username+" ("+currentUser.role+")"; applyRolePermissions(); }
+  normalizeState();
   saveState(); showToast("تم حفظ التعديل"); // no renderAll() here on purpose — re-rendering the whole list would wipe unsaved edits typed into OTHER users' rows
 }
 async function removeUser(i){
   const managerCount = state.users.filter(u=>u.role==="مدير").length;
   if(state.users[i].role==="مدير" && managerCount<=1){ showToast("لازم يبقى مدير واحد على الأقل"); return; }
   if(!await showConfirm("متأكد تبي تحذف هذا المستخدم؟")) return;
-  const removedUsername = state.users[i].username, removedRole = state.users[i].role;
-  const wasCapacity = state.users[i].productionCapacity||0;
+  const removedUser = state.users[i];
+  const removedUsername = removedUser.username, removedRole = removedUser.role;
+  const wasCapacity = removedUser.productionCapacity||0;
+  try{
+    await USERNAMES_COL.doc(removedUsername).delete();
+    if(removedUser.authUid) await ROLES_COL.doc(removedUser.authUid).delete();
+  }catch(e){ console.error("failed to revoke removed user's login access", e); showToast("تعذّر إلغاء دخول المستخدم — حاول مرة ثانية"); return; }
   state.users.splice(i,1);
   saveState(); renderAll();
   logAudit("user_removed", {removedUsername, removedRole});
@@ -705,17 +742,61 @@ async function removeUser(i){
 async function addUser(){
   const username=$("newUserName").value.trim(), password=$("newUserPass").value, role=$("newUserRole").value;
   if(!username||!password){ showToast("أدخل اسم المستخدم وكلمة المرور"); return; }
+  if(password.length<6){ showToast("كلمة المرور لازم تكون ٦ أحرف على الأقل"); return; }
   if(state.users.some(u=>u.username===username)){ showToast("اسم المستخدم موجود مسبقاً"); return; }
-  const newUser = {username,role,baseSalary:0,commissionEnabled:false,commissionRate:0,commissionThreshold:0,discountEnabled:false,discountType:"amount",discountValue:0,dailyCapacity:0,productionCapacity:0};
-  await setUserPassword(newUser, password);
-  state.users.push(newUser); ensureUserBoxes(username); saveState(); renderAll();
+  const email = synthEmailForNewAccount();
+  let uid;
+  try{
+    const cred = await secondaryAuth().createUserWithEmailAndPassword(email, password);
+    uid = cred.user.uid;
+    await secondaryAuth().signOut();
+  }catch(e){
+    console.error("new-user auth account creation failed", e);
+    showToast(e && e.code==="auth/weak-password" ? "كلمة المرور ضعيفة جداً" : "تعذّر إنشاء حساب الدخول — حاول مرة ثانية");
+    return;
+  }
+  try{
+    await USERNAMES_COL.doc(username).set({authEmail: email});
+    await ROLES_COL.doc(uid).set({role});
+  }catch(e){
+    console.error("failed to register username/role for new user", e);
+    showToast("تعذّر تسجيل المستخدم الجديد — حاول مرة ثانية");
+    return;
+  }
+  const newUser = {username,role,authUid:uid,authEmail:email,baseSalary:0,commissionEnabled:false,commissionRate:0,commissionThreshold:0,discountEnabled:false,discountType:"amount",discountValue:0,dailyCapacity:0,productionCapacity:0,wageMen:0,wageChild:0,wageChildSmall:0};
+  state.users.push(newUser); ensureUserBoxes(username);
+  // fully normalize before saving so the server copy already has every per-user default field —
+  // otherwise the new user's OWN client would backfill a missing field locally on first login,
+  // and every one of their writes afterward would be rejected by the rules' "users must be
+  // unchanged for non-admins" check (they'd never be able to save anything, ever).
+  normalizeState();
+  saveState(); renderAll();
   logAudit("user_added", {newUsername:username, role});
   $("newUserName").value=""; $("newUserPass").value=""; showToast("تم إضافة المستخدم");
+}
+
+// ---------------- backups ----------------
+async function renderBackupsList(){
+  const el = $("backupsList");
+  if(!el) return;
+  el.innerHTML = `<p class="sub">جاري التحميل...</p>`;
+  try{
+    const snap = await BACKUPS_COL.get();
+    const dates = snap.docs.map(d=>d.id).sort().reverse();
+    if(!dates.length){ el.innerHTML = `<p class="sub">ما فيه نسخ محفوظة بعد.</p>`; return; }
+    el.innerHTML = dates.map(d=>`<div class="garment-card" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <span>${d}</span>
+      <button class="btn btn-ghost btn-sm restore-backup-btn" data-date="${d}">استرجاع هذي النسخة</button>
+    </div>`).join("");
+    el.querySelectorAll(".restore-backup-btn").forEach(btn=> btn.addEventListener("click", ()=> restoreBackup(btn.dataset.date)));
+  }catch(e){ console.error("failed to list backups", e); el.innerHTML = `<p class="sub">تعذّر تحميل قائمة النسخ.</p>`; }
 }
 
 // ---------------- events ----------------
 $("loginBtn").addEventListener("click", tryLogin);
 $("loginPass").addEventListener("keydown", e=>{ if(e.key==="Enter") tryLogin(); });
+$("firstSetupBtn").addEventListener("click", trySetupFirstAccount);
+$("setupPassConfirm").addEventListener("keydown", e=>{ if(e.key==="Enter") trySetupFirstAccount(); });
 $("logoutBtn").addEventListener("click", logout);
 $("hamburgerBtn").addEventListener("click", openNavDrawer);
 $("globalSearchInput").addEventListener("input", renderGlobalSearchResults);
@@ -929,6 +1010,7 @@ document.querySelectorAll(".tab-btn").forEach(btn=>{
   });
 });
 $("addUserBtn").addEventListener("click", addUser);
+$("refreshBackupsBtn").addEventListener("click", renderBackupsList);
 $("addSubBoxBtn").addEventListener("click", ()=>{
   const name = $("newSubBoxName").value.trim();
   if(!name){ showToast("أدخل اسم الصندوق الفرعي"); return; }
@@ -1204,15 +1286,11 @@ $("setWaPromo").addEventListener("input", ()=>{
 
 (async function init(){
   await syncServerTime();
-  await loadState();
+  applyThemeMode(); // shop-specific theme isn't known before sign-in; falls back to the default dark theme
+  const shopExists = await checkShopExists();
   $("loginLoadingState").classList.add("hidden");
-  $("loginFormState").classList.remove("hidden");
-  applyThemeMode();
-  applyShopBranding();
-  checkAgedUndeliveredLoyalty();
-  checkReadyForSaleConversions();
-  checkAllLoyaltyPointsExpiry();
-  renderUsers();
+  if(shopExists) $("loginFormState").classList.remove("hidden");
+  else $("firstSetupFormState").classList.remove("hidden");
   $("dailyDate").value = todayStr();
   $("expDate").value = todayStr();
   $("distStatusFilter").innerHTML += STATUSES.map(s=>`<option value="${s.v}">${s.label}</option>`).join("");
