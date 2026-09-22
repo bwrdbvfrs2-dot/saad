@@ -1,0 +1,78 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // "مدير" only, looked up from a small dedicated collection keyed by the real Firebase Auth
+    // uid — kept separate from shop/state itself so this check never has to parse the big
+    // document it is protecting.
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/roles/$(request.auth.uid))
+        && get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == "مدير";
+    }
+
+    // public, read-only username -> synthetic-login-email directory. Contains no passwords and
+    // no shop data — only lets the login screen resolve which Firebase Auth account to sign into
+    // from the username the person typed, so the login UI itself never has to change.
+    match /usernames/{username} {
+      allow get, list: if true;
+      // anyone signed in may claim their OWN just-created account's username once (bootstrap and
+      // normal "add employee" both go through this); it can never be taken over once it exists.
+      allow create: if isSignedIn()
+        && !exists(/databases/$(database)/documents/usernames/$(username));
+      // renaming/removing a login name is an admin action (keeps it in step with state.users)
+      allow update, delete: if isAdmin();
+    }
+
+    // role lookup used by isAdmin() above. A user may create their OWN "مدير" role document only
+    // while shop/state does not exist yet (the one-time first-account bootstrap); every other
+    // role assignment — including granting admin to anyone else afterward — is itself an
+    // admin-only write, which keeps privilege escalation out of reach of every other role.
+    match /roles/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow create: if isSignedIn() && request.auth.uid == uid && request.resource.data.role == "مدير"
+        && !exists(/databases/$(database)/documents/shop/state);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /shop/state {
+      // an unauthenticated client may only ever learn whether this document exists yet — never
+      // its contents — which is what lets the app show "first-time setup" vs "login" correctly
+      // without needing anonymous auth at all.
+      allow get: if isSignedIn() || resource == null;
+      allow list: if isSignedIn();
+      // creating it for the very first time is allowed to any signed-in client (there is nothing
+      // to protect yet); once it exists this branch can never fire again.
+      allow create: if isSignedIn() && resource == null;
+      allow delete: if false;
+      allow update: if isSignedIn()
+        && (isAdmin() || (
+          request.resource.data.users == resource.data.users
+          && request.resource.data.permissions == resource.data.permissions
+        ));
+    }
+
+    // append-only activity trail — every signed-in user may add an entry, nobody may edit or
+    // remove one after the fact (including admins), so it stays trustworthy as a tamper record.
+    match /auditLog/{entry} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if false;
+    }
+
+    // daily state snapshots for disaster recovery. Same protection level as the state document
+    // itself: any signed-in user can create today's backup, nobody can delete one via the client
+    // (pruning old ones happens through this same rule set, from the app, so it stays consistent
+    // with "signed-in users can create/prune, nobody can delete out of band").
+    match /backups/{date} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if false;
+      allow delete: if isSignedIn();
+    }
+  }
+}

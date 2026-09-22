@@ -4,18 +4,6 @@ async function sha256Hex(text){
   const buf = await crypto.subtle.digest("SHA-256", enc);
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
 }
-function genPasswordSalt(){ return genUUID(); }
-async function hashPassword(password, salt){ return sha256Hex(salt + ":" + password); }
-async function checkPassword(user, attempt){
-  if(!user) return false;
-  if(user.passwordHash) return (await hashPassword(attempt, user.passwordSalt)) === user.passwordHash;
-  return user.password === attempt; // legacy plaintext account, not migrated yet
-}
-async function setUserPassword(user, newPassword){
-  user.passwordSalt = genPasswordSalt();
-  user.passwordHash = await hashPassword(newPassword, user.passwordSalt);
-  delete user.password;
-}
 function genUUID(){
   if(crypto.randomUUID) return crypto.randomUUID();
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c=>{ const r=Math.random()*16|0; return (c==="x"?r:(r&0x3|0x8)).toString(16); });

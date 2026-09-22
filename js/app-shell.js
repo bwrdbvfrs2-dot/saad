@@ -294,43 +294,27 @@ async function saveStateWithRollback(snapshot){
   renderAll();
   return saved;
 }
-async function loadState(){
-  await ensureAuth();
+// Only ever called AFTER a real, successful sign-in — security rules reject reads of this
+// document from anyone else, so there is no "document missing, silently create a blank one"
+// branch here anymore: the only way shop/state is ever created is the explicit first-time-setup
+// flow below, and the only way it's ever written afterward is an authenticated, rule-checked
+// update. That structurally removes the failure mode that previously let a transient error cause
+// a blank state to be written over real data.
+let stateUnsubscribe = null;
+async function startListeningToState(){
   return new Promise((resolve)=>{
     let firstLoad = true;
-    STATE_DOC.onSnapshot(async snap=>{
+    stateUnsubscribe = STATE_DOC.onSnapshot(async snap=>{
       if(snap.exists){
         state = snap.data();
         typeLibrariesReseeded = false;
         addonSnapshotsBackfilled = false;
         normalizeState();
-        if(typeLibrariesReseeded || addonSnapshotsBackfilled) saveState();
-      } else if(firstLoad){
-        // A missing state document could mean genuine first-time setup, OR it could mean
-        // the document went missing after real data already existed (accidental deletion,
-        // a transient read glitch, etc). auditLog is a separate collection that is never
-        // touched by a state write, so any entries there prove this shop has real history —
-        // refuse to silently reinitialize in that case rather than risk overwriting
-        // recoverable data with a blank state.
-        // Fail-safe: if the check itself can't be completed (network blip, permission hiccup,
-        // anything), that is NOT proof the shop is new — treat it exactly like "history found"
-        // and refuse to auto-init, rather than defaulting to "no history" and silently
-        // overwriting real data with a blank state (this previously caused exactly that).
-        let hasPriorHistory = true;
-        try{
-          const priorAudit = await AUDIT_LOG_COL.limit(1).get();
-          hasPriorHistory = !priorAudit.empty;
-        }catch(e){ console.error("audit history check failed — treating as unverified, refusing to auto-init", e); }
-        if(hasPriorHistory){
-          console.error("STATE_DOC missing and prior history could not be ruled out — refusing to auto-reinitialize.");
-          showToast("تعذّر العثور على بيانات المحل — لن يتم إنشاء بيانات جديدة تلقائياً تجنباً لفقدان بياناتك. تواصل مع الدعم الفني فوراً.");
-          // shape the in-memory fallback state (users, permissions, cash boxes, ...) so the app
-          // doesn't crash on a null field while blocked here — this never touches Firestore
-          normalizeState();
-        } else {
-          normalizeState();
-          STATE_DOC.set(JSON.parse(JSON.stringify(state))).catch(e=>console.error("Firestore init failed", e));
-        }
+        // awaited so this self-triggered write always lands before any write a caller makes
+        // right after login — otherwise the two could race, both reading the same pre-reseed
+        // `state`, with the later one seeing a server document its own local copy has already
+        // drifted from.
+        if(typeLibrariesReseeded || addonSnapshotsBackfilled) await saveState();
       }
       if(firstLoad){ firstLoad=false; resolve(); }
       else if(currentUser){ renderAll(); }
@@ -341,20 +325,133 @@ async function loadState(){
     });
   });
 }
+function stopListeningToState(){
+  if(stateUnsubscribe){ stateUnsubscribe(); stateUnsubscribe=null; }
+}
+// runs once, right after a real sign-in succeeds (fresh login or first-time setup) — everything
+// that used to run unconditionally at boot but actually needs real shop data loaded first
+async function afterSignedIn(){
+  await startListeningToState();
+  applyThemeMode();
+  applyShopBranding();
+  checkAgedUndeliveredLoyalty();
+  checkReadyForSaleConversions();
+  checkAllLoyaltyPointsExpiry();
+  renderUsers();
+  maybeBackupStateToday();
+}
+
+// ---------------- daily backups (disaster recovery — keeps the last 14 days) ----------------
+const BACKUPS_COL = db.collection("backups");
+async function maybeBackupStateToday(){
+  try{
+    const today = todayStr();
+    const ref = BACKUPS_COL.doc(today);
+    const snap = await ref.get();
+    if(snap.exists) return; // already have today's snapshot
+    await ref.set({snapshot: JSON.parse(JSON.stringify(state)), backedUpAt: firebase.firestore.FieldValue.serverTimestamp()});
+    await pruneOldBackups();
+  }catch(e){ console.error("automatic backup failed", e); } // never block normal app use over this
+}
+async function pruneOldBackups(){
+  try{
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-14);
+    const cutoffStr = cutoff.toISOString().slice(0,10);
+    const snap = await BACKUPS_COL.get();
+    const deletions = [];
+    snap.forEach(doc=>{ if(doc.id < cutoffStr) deletions.push(doc.ref.delete()); });
+    await Promise.all(deletions);
+  }catch(e){ console.error("backup pruning failed", e); }
+}
+async function restoreBackup(dateId){
+  if(!currentUser || currentUser.role!=="مدير"){ showToast("استرجاع نسخة احتياطية متاح للمدير فقط"); return; }
+  if(!await confirmWithPassword(`متأكد تبي تسترجع نسخة يوم ${dateId}؟ بيتم استبدال كل البيانات الحالية (الفواتير، العملاء، الإعدادات...) ببيانات تلك النسخة. المستخدمين وصلاحياتهم يبقون كما هم الحين. أدخل كلمة مرورك للتأكيد.`)) return;
+  try{
+    const snap = await BACKUPS_COL.doc(dateId).get();
+    if(!snap.exists){ showToast("النسخة غير موجودة"); return; }
+    const restoredState = snap.data().snapshot;
+    // keep the CURRENT login-linked user records — restoring an old backup's users could lock
+    // out whoever is doing the restore, or reinstate someone removed since then
+    restoredState.users = state.users;
+    state = restoredState;
+    normalizeState();
+    await STATE_DOC.set(JSON.parse(JSON.stringify(state)));
+    showToast("تم الاسترجاع بنجاح"); renderAll();
+  }catch(e){ console.error("restore failed", e); showToast("تعذّر الاسترجاع — حاول مرة ثانية"); }
+}
 
 async function tryLogin(){
   const u=$("loginUser").value.trim(), p=$("loginPass").value;
-  const found = state.users.find(x=>x.username===u);
-  if(!found || !(await checkPassword(found, p))){ $("loginErr").textContent="اسم المستخدم أو كلمة المرور غير صحيحة"; return; }
-  if(!found.passwordHash){ await setUserPassword(found, p); saveState(); } // migrate this account off plaintext storage on successful login
+  if(!u || !p){ $("loginErr").textContent="أدخل اسم المستخدم وكلمة المرور"; return; }
+  $("loginErr").textContent = "";
+  let email;
+  try{
+    const doc = await USERNAMES_COL.doc(u).get();
+    if(!doc.exists){ $("loginErr").textContent="اسم المستخدم أو كلمة المرور غير صحيحة"; return; }
+    email = doc.data().authEmail;
+  }catch(e){ console.error("username lookup failed", e); $("loginErr").textContent = authErrorMessage(e); return; }
+  try{
+    await fbAuth.signInWithEmailAndPassword(email, p);
+  }catch(e){
+    const wrongCreds = e && ["auth/wrong-password","auth/user-not-found","auth/invalid-credential","auth/invalid-login-credentials"].includes(e.code);
+    $("loginErr").textContent = wrongCreds ? "اسم المستخدم أو كلمة المرور غير صحيحة" : authErrorMessage(e);
+    return;
+  }
+  await afterSignedIn();
+  const found = state.users.find(x=>x.authUid===fbAuth.currentUser.uid);
+  if(!found){
+    console.error("signed in but no matching state.users entry for uid", fbAuth.currentUser.uid);
+    stopListeningToState();
+    await fbAuth.signOut().catch(()=>{});
+    $("loginErr").textContent = "تعذّر العثور على حساب مطابق داخل بيانات المحل — تواصل مع الدعم الفني";
+    return;
+  }
   currentUser=found;
   $("loginScreen").classList.add("hidden"); $("app").classList.remove("hidden");
   $("curUserLbl").textContent = currentUser.username+" ("+currentUser.role+")";
   applyRolePermissions(); resetForm(); resetSaleForm(); renderAll();
 }
-function logout(){
+async function trySetupFirstAccount(){
+  const u = $("setupUser").value.trim(), p = $("setupPass").value, pc = $("setupPassConfirm").value;
+  if(!u || !p){ $("firstSetupErr").textContent="أدخل اسم المستخدم وكلمة المرور"; return; }
+  if(p.length < 6){ $("firstSetupErr").textContent="كلمة المرور لازم تكون ٦ أحرف على الأقل"; return; }
+  if(p !== pc){ $("firstSetupErr").textContent="كلمتا المرور غير متطابقتين"; return; }
+  $("firstSetupErr").textContent = "";
+  const email = synthEmailForNewAccount();
+  let cred;
+  try{
+    cred = await fbAuth.createUserWithEmailAndPassword(email, p);
+  }catch(e){
+    console.error("first-account creation failed", e);
+    $("firstSetupErr").textContent = (e && e.code==="auth/weak-password") ? "كلمة المرور ضعيفة جداً" : authErrorMessage(e);
+    return;
+  }
+  const uid = cred.user.uid;
+  try{
+    // order matters: roles/{uid} can only be self-created for "مدير" while shop/state doesn't
+    // exist yet, so it must be written before shop/state itself
+    await USERNAMES_COL.doc(u).set({authEmail: email});
+    await ROLES_COL.doc(uid).set({role:"مدير"});
+    state.users = [{username:u, role:"مدير", authUid:uid, authEmail:email, baseSalary:0, commissionEnabled:false, commissionRate:0, commissionThreshold:0, discountEnabled:false, discountType:"amount", discountValue:0, dailyCapacity:0, productionCapacity:0, wageMen:0, wageChild:0, wageChildSmall:0}];
+    normalizeState(); // state.users is already non-empty, so this only fills in everything else
+    await STATE_DOC.set(JSON.parse(JSON.stringify(state)));
+  }catch(e){
+    console.error("first-time setup failed after the auth account was already created", e);
+    $("firstSetupErr").textContent = "تعذّر إكمال الإعداد — حاول مرة ثانية";
+    return;
+  }
+  await afterSignedIn();
+  currentUser = state.users.find(x=>x.authUid===uid);
+  $("loginScreen").classList.add("hidden"); $("app").classList.remove("hidden");
+  $("curUserLbl").textContent = currentUser.username+" ("+currentUser.role+")";
+  applyRolePermissions(); resetForm(); resetSaleForm(); renderAll();
+  showToast("تم إعداد الحساب بنجاح — أهلاً بك");
+}
+async function logout(){
   currentUser=null; sensitiveUnlocked=false; $("loginUser").value=""; $("loginPass").value=""; $("loginErr").textContent="";
   $("app").classList.add("hidden"); $("loginScreen").classList.remove("hidden");
+  stopListeningToState();
+  try{ await fbAuth.signOut(); }catch(e){ console.error("sign-out failed", e); }
 }
 function applyRolePermissions(){
   const isAdmin = currentUser.role==="مدير";
