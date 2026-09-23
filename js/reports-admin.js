@@ -705,7 +705,6 @@ async function saveUserEdit(i){
     }
     try{
       await ROLES_COL.doc(uid).set({role});
-      if(prevUser.authUid) await ROLES_COL.doc(prevUser.authUid).delete().catch(()=>{});
     }catch(e){ console.error("role registration after password reset failed", e); showToast("تعذّر تحديث كلمة المرور — حاول مرة ثانية"); return; }
     updatedUser.authUid = uid; updatedUser.authEmail = email;
   } else if(prevUser.authUid && role!==prevUser.role){
@@ -721,7 +720,12 @@ async function saveUserEdit(i){
   state.users[i]=updatedUser;
   if(currentUser && currentUser.username===oldUsername){ currentUser=state.users[i]; $("curUserLbl").textContent=currentUser.username+" ("+currentUser.role+")"; applyRolePermissions(); }
   normalizeState();
-  saveState(); showToast("تم حفظ التعديل"); // no renderAll() here on purpose — re-rendering the whole list would wipe unsaved edits typed into OTHER users' rows
+  const saved = await saveState();
+  // retire the OLD login account only after the state write lands — deleting its roles/{uid}
+  // doc any earlier can make the CURRENTLY signed-in admin fail isAdmin() mid-function (their own
+  // session is still on the old uid until they log back in), rejecting that very saveState() call.
+  if(saved && newPassword && prevUser.authUid) await ROLES_COL.doc(prevUser.authUid).delete().catch(()=>{});
+  showToast("تم حفظ التعديل"); // no renderAll() here on purpose — re-rendering the whole list would wipe unsaved edits typed into OTHER users' rows
 }
 async function removeUser(i){
   const managerCount = state.users.filter(u=>u.role==="مدير").length;
