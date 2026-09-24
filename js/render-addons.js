@@ -78,7 +78,7 @@ function renderAll(){
     const tr2=document.createElement("tr"); tr2.innerHTML=`<td colspan="8" style="padding-top:0;padding-bottom:14px;">${badges}</td>`; body.appendChild(tr2);
   });
 
-  renderClosedReports(); renderGrowthReport(); renderSearch(); renderReturnResponsibleSelect(); renderTailorReportSelector(); renderBroadcastList(); renderSensitiveGate(); renderCustomers(); renderPendingList(); updateFixedShareNote(); renderLegacyItems(); renderBalancesTab(); renderDebtsTab(); renderCustomerDebts(); renderInventoryTab(); renderInventoryValuation(); renderSalesInvoicesList(); refreshSaleLineOptions(); renderAddonsList(); refreshAddonForm(); renderScanTab(); renderPayrollTab(); renderEntitlementPreview(); renderAlterationSettings(); renderAlterationsLog(); updateManualCardLabels(); renderCustomShopFields(); renderFabricOrigins(); if($("setPrintOriginOnLabel")) $("setPrintOriginOnLabel").checked = state.settings.printOriginOnLabel; renderOffers(); renderOptionLists(); renderOverdueDashboard(); renderOverdueDashboard("dashboardOverdue", true); renderDashboardKPIs(); renderDashboardWorkDistribution(); renderShiftClosingsLog(); renderQuickMenuBar(); renderQuickMenuEditor(); renderReturnsLog(); renderPromoCodesAdmin(); renderAppliedPromoBanner(); renderVouchersTab(); renderTopExpensesReport(); renderVatLedger(); renderProductionTracking(); renderSeasonsList(); renderCustomerNameDatalist("custNameDatalist"); renderCuttingImageEditor(); applyShopBranding(); renderMailTab(); if(currentUser && currentUser.role==="مدير"){ renderUsers(); renderPermissionsEditor(); }
+  renderClosedReports(); renderGrowthReport(); renderSearch(); renderReturnResponsibleSelect(); renderTailorReportSelector(); renderBroadcastList(); renderSensitiveGate(); renderCustomers(); renderPendingList(); updateFixedShareNote(); renderLegacyItems(); renderBalancesTab(); renderDebtsTab(); renderCustomerDebts(); renderInventoryTab(); renderInventoryValuation(); renderSalesInvoicesList(); refreshSaleLineOptions(); renderAddonsList(); refreshAddonForm(); renderScanTab(); renderPayrollTab(); renderEntitlementPreview(); renderAlterationSettings(); renderAlterationsLog(); updateManualCardLabels(); renderCustomShopFields(); renderFabricOrigins(); if($("setPrintOriginOnLabel")) $("setPrintOriginOnLabel").checked = state.settings.printOriginOnLabel; renderOffers(); renderOptionLists(); renderCustomMeasurementFields(); renderOverdueDashboard(); renderOverdueDashboard("dashboardOverdue", true); renderDashboardKPIs(); renderDashboardWorkDistribution(); renderShiftClosingsLog(); renderQuickMenuBar(); renderQuickMenuEditor(); renderReturnsLog(); renderPromoCodesAdmin(); renderAppliedPromoBanner(); renderVouchersTab(); renderTopExpensesReport(); renderVatLedger(); renderProductionTracking(); renderSeasonsList(); renderCustomerNameDatalist("custNameDatalist"); renderCuttingImageEditor(); applyShopBranding(); renderMailTab(); if(currentUser && currentUser.role==="مدير"){ renderUsers(); renderPermissionsEditor(); }
   applyRolePermissions();
   refreshLucideIcons();
 }
@@ -301,6 +301,28 @@ function addOptionListItem(listKey){
   } else finish(null);
 }
 function removeOptionListItem(listKey, i){ state[listKey].splice(i,1); saveState(); renderAll(); }
+
+// ---------------- custom flat measurement fields (extend the built-in MEASUREMENT_FIELDS list) ----------------
+function renderCustomMeasurementFields(){
+  const el = $("customMeasurementFieldsList");
+  if(!el) return;
+  el.innerHTML = (state.customMeasurementFields||[]).map((f,i)=>`<div class="item-row">
+      <span style="flex:1;">${esc(f.label)}</span>
+      <button class="icon-btn" onclick="removeCustomMeasurementField(${i})">حذف</button>
+    </div>`).join("") || `<p class="sub">ما فيه مقاسات إضافية بعد.</p>`;
+}
+function addCustomMeasurementField(){
+  const inp = $("newCustomMeasField");
+  const label = inp.value.trim();
+  if(!label){ showToast("أدخل اسم المقاس"); return; }
+  if(!state.customMeasurementFields) state.customMeasurementFields=[];
+  const key = "custom_"+Date.now();
+  state.customMeasurementFields.push({key, label});
+  inp.value="";
+  saveState(); renderAll();
+  showToast("تمت إضافة المقاس");
+}
+function removeCustomMeasurementField(i){ state.customMeasurementFields.splice(i,1); saveState(); renderAll(); }
 
 // ---------------- promotional offers/bundles ----------------
 function renderOffers(){

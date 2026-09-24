@@ -1101,7 +1101,7 @@ function renderSearch(){
   invs.forEach(inv=> inv.garments.forEach(g=>{
     statusTotals[g.status].count++; statusTotals[g.status].amount += garmentSalePrice(g);
     if(g.hasEmbroidery){ embroCount++; embroRevenue += (g.embroideryPrice||0); }
-    const hay=(inv.number+" "+(g.tailor||"")+" "+g.deliveryReceipt).toLowerCase();
+    const hay=(inv.number+" "+(g.tailor||"")+" "+g.deliveryReceipt+" "+(inv.customerMobile||"")).toLowerCase();
     if(!q||hay.includes(q)) rows.push({inv,g});
   }));
   $("statusReport").innerHTML = STATUSES.map(st=>`<div class="report-card"><div class="st">${st.label}</div>
@@ -1132,4 +1132,20 @@ function isDormant(lastDate){
   const last=new Date(lastDate), now=serverDate();
   const months=(now.getFullYear()-last.getFullYear())*12+(now.getMonth()-last.getMonth());
   return months>6;
+}
+function customerHasNoFabricOrder(mobile){
+  return state.invoices.some(inv=> inv.customerMobile===mobile && inv.garments.some(g=>!g.itemCardId));
+}
+// "زبون العروض" — never bought outside a discount code or an offer package, across every invoice they've ever placed
+function customerIsPromoOnly(mobile){
+  const invs = state.invoices.filter(inv=>inv.customerMobile===mobile);
+  if(!invs.length) return false;
+  return invs.every(inv=> inv.promoCodeUsed || (inv.appliedOffers&&inv.appliedOffers.length));
+}
+const CUSTOMER_FILTER_LABELS = {active:"نشط", dormant:"خامل", noFabric:"أجرة تفصيل بدون قماش", promoOnly:"زبون العروض"};
+function customerMatchesFilter(c, filter){
+  if(filter==="dormant") return isDormant(c.lastDate);
+  if(filter==="noFabric") return customerHasNoFabricOrder(c.mobile);
+  if(filter==="promoOnly") return customerIsPromoOnly(c.mobile);
+  return !isDormant(c.lastDate);
 }

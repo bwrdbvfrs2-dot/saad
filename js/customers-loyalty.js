@@ -42,6 +42,7 @@ const PAIRED_SIZE_FIELDS = {
   collarType: ["neckHeight","neckWidth","turnedCollarHeight","turnedCollarWidth"],
   chestPocketType: ["chestPocketLength","chestPocketWidth"],
   jabzourType: ["placketHeight","placketWidth"],
+  cufflinkType: ["cuffLength","cuffPocketWidth"],
 };
 // pocket groups with no image type library of their own — just a labeled box with their paired length/width fields
 const UNLINKED_SIZE_GROUPS = [

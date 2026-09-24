@@ -97,12 +97,11 @@ async function loadQrLib(){
     s.onload=resolve; s.onerror=reject; document.head.appendChild(s);
   });
 }
+// JsBarcode ships locally (js/vendor/jsbarcode.all.min.js, loaded on every page load) instead of
+// from a CDN — a barcode printed at the till can't depend on the shop's internet being up at that
+// exact moment, and a failed/slow CDN fetch used to silently print the card with no barcode at all.
 async function loadBarcodeLib(){
-  if(window.JsBarcode) return;
-  await new Promise((resolve,reject)=>{
-    const s=document.createElement("script"); s.src="https://cdnjs.cloudflare.com/ajax/libs/JsBarcode/3.11.5/JsBarcode.all.min.js";
-    s.onload=resolve; s.onerror=reject; document.head.appendChild(s);
-  });
+  if(!window.JsBarcode) throw new Error("JsBarcode failed to load from js/vendor/jsbarcode.all.min.js");
 }
 async function loadHtml2CanvasLib(){
   if(window.html2canvas) return;
@@ -186,16 +185,17 @@ function buildCuttingCardHtml(inv, gIdx){
   const PHONE_ICON = `<svg viewBox="0 0 24 24" width="24" height="24"><rect x="6" y="2" width="12" height="20" rx="2.2" fill="none" stroke="#333" stroke-width="1.4"/><line x1="10" y1="19" x2="14" y2="19" stroke="#333" stroke-width="1.4"/></svg>`;
   const WALLET_ICON = `<svg viewBox="0 0 24 24" width="24" height="24"><rect x="2" y="6" width="20" height="14" rx="2" fill="none" stroke="#333" stroke-width="1.4"/><path d="M2 10h20" stroke="#333" stroke-width="1.4"/><circle cx="17" cy="14" r="1.3" fill="#333"/></svg>`;
   // left-column identification boxes: type image + label + (optional) linked measurements
-  const infoBox = (label, item, sizeLine, iconHtml)=> `<div style="border:1px solid #999;border-radius:6px;padding:4px;margin-bottom:5px;text-align:center;background:#fafafa;">
-      <div style="font-size:9px;font-weight:700;margin-bottom:3px;">${label}</div>
+  const infoBox = (label, item, sizeLine, iconHtml, big)=> `<div style="border:1px solid #999;border-radius:6px;padding:4px;margin-bottom:5px;text-align:center;background:#fafafa;">
+      <div style="font-size:${big?"10.5px":"9px"};font-weight:700;margin-bottom:3px;">${label}</div>
       <div style="height:46px;display:flex;align-items:center;justify-content:center;overflow:hidden;">
-        ${item && item.image ? `<img src="${item.image}" style="max-width:100%;max-height:100%;">` : (iconHtml || `<span style="font-size:8.5px;color:#999;">—</span>`)}
+        ${item && item.image ? `<img src="${item.image}" style="max-width:100%;max-height:100%;">` : (iconHtml || `<span style="font-size:${big?"10px":"8.5px"};color:#999;">—</span>`)}
       </div>
-      <div style="font-size:8.5px;margin-top:3px;min-height:11px;">${item?esc(item.label):""}</div>
-      ${sizeLine ? `<div style="font-size:9px;font-weight:700;margin-top:2px;color:#333;">${sizeLine}</div>` : ""}
+      <div style="font-size:${big?"10px":"8.5px"};margin-top:3px;min-height:11px;">${item?esc(item.label):""}</div>
+      ${sizeLine ? `<div style="font-size:${big?"10.5px":"9px"};font-weight:700;margin-top:2px;color:#333;">${sizeLine}</div>` : ""}
     </div>`;
   const collarSizeLine = `سادة: ارتفاع ${val('neckHeight')} / وسع ${val('neckWidth')}`
     + ((has('turnedCollarHeight')||has('turnedCollarWidth')) ? ` — قلاب: ارتفاع ${val('turnedCollarHeight')} / وسع ${val('turnedCollarWidth')}` : "");
+  const cufflinkSizeLine = `عرض الكفة ${val('cuffLength')} / وسع الكبك ${val('cuffPocketWidth')}`;
   const leftBoxesHtml = `
     ${infoBox("نوع الياقة", collarImg, collarSizeLine)}
     ${infoBox("نوع جيب الصدر", chestPocketImg, `طول ${val('chestPocketLength')} / عرض ${val('chestPocketWidth')}`)}
@@ -207,21 +207,21 @@ function buildCuttingCardHtml(inv, gIdx){
   function buildTablesBodyHtml(){
     const TAKHALEES_ICON = s.takhaleesIcon ? `<img src="${s.takhaleesIcon}" style="max-width:100%;max-height:100%;">` : undefined;
     const choiceBoxesHtml = [
-      garmentTypeItem ? infoBox("نوع الثوب", garmentTypeItem) : "",
-      collarImg ? infoBox("نوع الياقة", collarImg, collarSizeLine) : "",
-      chestPocketImg ? infoBox("نوع جيب الصدر", chestPocketImg, `طول ${val('chestPocketLength')} / عرض ${val('chestPocketWidth')}`) : "",
-      jabzourImg ? infoBox("نوع الجبزور", jabzourImg, `طول ${val('placketHeight')} / عرض ${val('placketWidth')}`) : "",
-      cufflinkImg ? infoBox("نوع الكبك", cufflinkImg) : "",
-      pocketImg ? infoBox("نوع خياطة الجيب الجانبي", pocketImg) : "",
-      fillingItem ? infoBox("نوع الحشوة", fillingItem) : "",
-      modelItem ? infoBox("نوع الموديل", modelItem) : "",
-      (has('mobilePocketLength')||has('mobilePocketWidth')) ? infoBox("جيب الجوال", null, `طول ${val('mobilePocketLength')} / عرض ${val('mobilePocketWidth')}`, PHONE_ICON) : "",
-      (has('walletPocketLength')||has('walletPocketWidth')) ? infoBox("جيب المحفظة", null, `طول ${val('walletPocketLength')} / عرض ${val('walletPocketWidth')}`, WALLET_ICON) : "",
+      garmentTypeItem ? infoBox("نوع الثوب", garmentTypeItem, null, undefined, true) : "",
+      collarImg ? infoBox("نوع الياقة", collarImg, collarSizeLine, undefined, true) : "",
+      chestPocketImg ? infoBox("نوع جيب الصدر", chestPocketImg, `طول ${val('chestPocketLength')} / عرض ${val('chestPocketWidth')}`, undefined, true) : "",
+      jabzourImg ? infoBox("نوع الجبزور", jabzourImg, `طول ${val('placketHeight')} / عرض ${val('placketWidth')}`, undefined, true) : "",
+      cufflinkImg ? infoBox("نوع الكبك", cufflinkImg, cufflinkSizeLine, undefined, true) : "",
+      pocketImg ? infoBox("نوع خياطة الجيب الجانبي", pocketImg, null, undefined, true) : "",
+      fillingItem ? infoBox("نوع الحشوة", fillingItem, null, undefined, true) : "",
+      modelItem ? infoBox("نوع الموديل", modelItem, null, undefined, true) : "",
+      (has('mobilePocketLength')||has('mobilePocketWidth')) ? infoBox("جيب الجوال", null, `طول ${val('mobilePocketLength')} / عرض ${val('mobilePocketWidth')}`, PHONE_ICON, true) : "",
+      (has('walletPocketLength')||has('walletPocketWidth')) ? infoBox("جيب المحفظة", null, `طول ${val('walletPocketLength')} / عرض ${val('walletPocketWidth')}`, WALLET_ICON, true) : "",
     ].join("");
     // plain numeric fields not already shown above inside a type's own box (avoids duplicating طول/عرض pairs)
     const pairedKeys = new Set(Object.values(PAIRED_SIZE_FIELDS).flat().concat(UNLINKED_SIZE_GROUPS.flatMap(gr=>gr.keys)));
     const plainBoxesHtml = MEASUREMENT_FIELDS.filter(f=> has(f.key) && !pairedKeys.has(f.key))
-      .map(f=> infoBox(f.label, null, val(f.key), f.key==="takhalees" ? TAKHALEES_ICON : undefined)).join("");
+      .map(f=> infoBox(f.label, null, val(f.key), f.key==="takhalees" ? TAKHALEES_ICON : undefined, true)).join("");
     return `<div><div style="display:grid;grid-template-columns:repeat(6,1fr);gap:5px;">${choiceBoxesHtml}${plainBoxesHtml}</div></div>`;
   }
   const tablesBodyHtml = s.cuttingCardTemplate==="tables" ? buildTablesBodyHtml() : null;
@@ -283,7 +283,7 @@ function buildCuttingCardHtml(inv, gIdx){
   const customerCode = customer ? customer.code : "—";
   // "جداول" template already shows these inside their own boxes — no need to repeat them in the header line
   const extraTypesLine = tablesBodyHtml ? "" : [
-    cufflinkImg ? `نوع الكبك: ${esc(cufflinkImg.label)}` : "",
+    cufflinkImg ? `نوع الكبك: ${esc(cufflinkImg.label)} (${cufflinkSizeLine})` : "",
     pocketImg ? `نوع خياطة الجيب الجانبي: ${esc(pocketImg.label)}` : "",
     fillingItem ? `نوع الحشوة: ${esc(fillingItem.label)}` : "",
     modelItem ? `نوع الموديل: ${esc(modelItem.label)}` : "",
@@ -399,7 +399,7 @@ async function printCuttingCard(invId, gIdx){
   // removes that variable entirely and guarantees this always fits on one A4 page.
   $("dynamicPageSize").textContent = "@media print{ @page{ size:A4; margin:8mm; } }";
   $("printArea").innerHTML = buildCuttingCardHtml(inv, gIdx);
-  await loadBarcodeLib().catch(e=>{ /* barcode lib needs internet on first use — card still prints fine without it */ });
+  await loadBarcodeLib().catch(e=>{ console.error(e); });
   if(window.JsBarcode){
     const drawBarcode = (id, opts)=>{ try{ window.JsBarcode(id, inv.number, opts); }catch(e){ console.error("barcode render failed for "+id, e); } };
     drawBarcode("#cuttingBarcodeHolder", {format:"CODE128", width:1.6, height:36, fontSize:11, margin:2});

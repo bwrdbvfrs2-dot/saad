@@ -87,7 +87,7 @@ async function resetBroadcastCampaign(){
 function renderCustomers(){
   $("totalCustomersCount").textContent = `إجمالي عدد العملاء المسجّلين: ${state.customers.length}`;
   const q=($("customerSearch").value||"").trim(); const filter=$("customerFilter").value;
-  let customers = getCustomers().filter(c=>isDormant(c.lastDate)===(filter==="dormant"));
+  let customers = getCustomers().filter(c=>customerMatchesFilter(c, filter));
   if(q) customers = customers.filter(c=>c.mobile.includes(q));
   const tbody=$("customersBody"); tbody.innerHTML="";
   if(customers.length===0){ tbody.innerHTML=`<tr><td colspan="7">${emptyStateHtml("users","لا نتائج")}</td></tr>`; refreshLucideIcons(); return; }
@@ -494,6 +494,22 @@ function showGarmentInventory(){
   $("garmentInventoryView").innerHTML = html + `<button class="btn btn-ghost btn-sm" id="printGarmentInventoryBtn" style="margin-top:10px;">طباعة الجرد</button>`;
   $("printGarmentInventoryBtn").addEventListener("click", ()=>{ printHtml(html); });
 }
+function showNoFabricWageReport(){
+  const rows = [];
+  state.invoices.forEach(inv=>{
+    if(!dateMatchesPeriod("noFabricWage", inv.date, inv.originMonth)) return;
+    inv.garments.forEach(g=>{ if(!g.itemCardId && g.status!=="ملغي") rows.push({inv,g}); });
+  });
+  const title = `تقرير أجرة تفصيل بدون قماش — ${periodLabel("noFabricWage")}`;
+  let html = `<h2>${title}</h2>`;
+  html += `<p>إجمالي عدد الثياب: <b>${rows.length}</b> — إجمالي الأجرة: <b>${rows.reduce((a,{g})=>a+garmentSalePrice(g),0).toFixed(0)} ﷼</b></p>`;
+  html += `<table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>الجوال</th><th>الخياط</th><th>الأجرة</th><th>الحالة</th><th>شهر الإصدار</th></tr></thead><tbody>`;
+  rows.forEach(({inv,g})=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${esc(g.tailor||"—")}</td><td>${garmentSalePrice(g).toFixed(0)} ﷼</td><td>${STATUSES.find(s=>s.v===g.status)?.label||g.status}</td><td>${monthDisplay(inv.originMonth)}</td></tr>`);
+  if(!rows.length) html+=`<tr><td colspan="7" style="text-align:center;">لا يوجد</td></tr>`;
+  html += `</tbody></table>`;
+  $("noFabricWageView").innerHTML = html + `<button class="btn btn-ghost btn-sm" id="printNoFabricWageBtn" style="margin-top:10px;">طباعة التقرير</button>`;
+  $("printNoFabricWageBtn").addEventListener("click", ()=>{ printHtml(html); });
+}
 function printUndelivered(){
   const rows=[];
   state.invoices.forEach(inv=>{
@@ -509,15 +525,15 @@ function printUndelivered(){
 }
 function printCustomers(){
   const filter=$("customerFilter").value;
-  const customers = getCustomers().filter(c=>isDormant(c.lastDate)===(filter==="dormant"));
-  let html = `<h2>قائمة العملاء — ${filter==="dormant"?"خامل":"نشط"}</h2><table><thead><tr><th>اسم العميل</th><th>رقم الجوال</th><th>آخر فاتورة</th><th>عدد الفواتير</th></tr></thead><tbody>`;
+  const customers = getCustomers().filter(c=>customerMatchesFilter(c, filter));
+  let html = `<h2>قائمة العملاء — ${CUSTOMER_FILTER_LABELS[filter]||filter}</h2><table><thead><tr><th>اسم العميل</th><th>رقم الجوال</th><th>آخر فاتورة</th><th>عدد الفواتير</th></tr></thead><tbody>`;
   customers.forEach(c=> html+=`<tr><td>${esc(c.name)}</td><td>${c.mobile}</td><td>${c.lastDate||"—"}</td><td>${c.count}</td></tr>`);
   if(!customers.length) html+=`<tr><td colspan="4">لا يوجد</td></tr>`;
   html += `</tbody></table>`; printHtml(html);
 }
 function exportCustomersCsv(){
   const filter=$("customerFilter").value;
-  const customers = getCustomers().filter(c=>isDormant(c.lastDate)===(filter==="dormant"));
+  const customers = getCustomers().filter(c=>customerMatchesFilter(c, filter));
   const rows=[["اسم العميل","رقم الجوال","آخر فاتورة","عدد الفواتير"]];
   customers.forEach(c=> rows.push([c.name,c.mobile,c.lastDate||"",c.count]));
   const csv="\uFEFF"+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
@@ -911,6 +927,7 @@ $("customerSearch").addEventListener("input", renderCustomers);
 $("customerFilter").addEventListener("change", renderCustomers);
 $("printUndeliveredBtn").addEventListener("click", printUndelivered);
 $("showGarmentInventoryBtn").addEventListener("click", showGarmentInventory);
+$("showNoFabricWageBtn").addEventListener("click", showNoFabricWageReport);
 $("showSalesRankingBtn").addEventListener("click", showSalesRankingReport);
 $("printCustomersBtn").addEventListener("click", printCustomers);
 $("exportCustomersBtn").addEventListener("click", exportCustomersCsv);
@@ -1242,6 +1259,7 @@ $("setThemeMode").addEventListener("change", ()=>{
 });
 $("addCustomFieldBtn").addEventListener("click", addCustomShopField);
 $("addFabricOriginBtn").addEventListener("click", addFabricOrigin);
+$("addCustomMeasFieldBtn").addEventListener("click", addCustomMeasurementField);
 $("setPrintOriginOnLabel").addEventListener("change", ()=>{
   state.settings.printOriginOnLabel = $("setPrintOriginOnLabel").checked; saveState();
 });
@@ -1359,6 +1377,7 @@ $("setWaPromo").addEventListener("input", ()=>{
   $("searchReturnsBtn").addEventListener("click", renderReturns);
   $("returnSearch").addEventListener("input", renderReturns);
   $("garmInvPeriodWrap").innerHTML = periodPickerHtml("garmInv"); bindPeriodPicker("garmInv");
+  $("noFabricWagePeriodWrap").innerHTML = periodPickerHtml("noFabricWage"); bindPeriodPicker("noFabricWage");
   $("undelPeriodWrap").innerHTML = periodPickerHtml("undel"); bindPeriodPicker("undel");
   $("fullLogPeriodWrap").innerHTML = extendedPeriodPickerHtml("fullLog"); bindExtendedPeriodPicker("fullLog");
   $("showFullLogBtn").addEventListener("click", showFullActivityLog);
