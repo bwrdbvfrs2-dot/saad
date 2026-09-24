@@ -700,12 +700,12 @@ async function saveUserEdit(i){
       await secondaryAuth().signOut();
     }catch(e){
       console.error("password reset — new auth account creation failed", e);
-      showToast(e && e.code==="auth/weak-password" ? "كلمة المرور ضعيفة جداً" : "تعذّر تحديث كلمة المرور — حاول مرة ثانية");
+      showToast(e && e.code==="auth/weak-password" ? "كلمة المرور ضعيفة جداً" : "تعذّر تحديث كلمة المرور (" + (e && e.code || "بدون رمز") + ") — حاول مرة ثانية");
       return;
     }
     try{
       await ROLES_COL.doc(uid).set({role});
-    }catch(e){ console.error("role registration after password reset failed", e); showToast("تعذّر تحديث كلمة المرور — حاول مرة ثانية"); return; }
+    }catch(e){ console.error("role registration after password reset failed", e); showToast("تعذّر تحديث كلمة المرور (" + (e && e.code || "بدون رمز") + ") — حاول مرة ثانية"); return; }
     updatedUser.authUid = uid; updatedUser.authEmail = email;
   } else if(prevUser.authUid && role!==prevUser.role){
     try{ await ROLES_COL.doc(prevUser.authUid).set({role}); }
