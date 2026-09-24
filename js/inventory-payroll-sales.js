@@ -1,6 +1,54 @@
 // ---------------- inventory: item cards, suppliers, purchases, returns ----------------
 // manual expand/collapse overrides, keyed by card id — falls back to isItemCardIncomplete() when a card has no override yet
 let itemCardExpandOverrides = {};
+// item-card ids this browser session is allowed to edit the opening balance of (admin-approved, one-time use) —
+// lives only in memory so it's naturally gone on refresh, and is explicitly cleared on logout
+let openingBalanceSessionGrants = new Set();
+// pulls any admin-approved requests for the signed-in user into this session's live grants
+function checkOpeningBalanceGrants(){
+  if(!currentUser || currentUser.role==="مدير") return;
+  (state.openingBalanceEditRequests||[]).forEach(r=>{
+    if(r.status==="approved" && r.requestedBy===currentUser.username) openingBalanceSessionGrants.add(r.cardId);
+  });
+}
+function requestOpeningBalanceEdit(cardId){
+  const card = findItemCard(cardId);
+  if(!card) return;
+  if(!state.openingBalanceEditRequests) state.openingBalanceEditRequests=[];
+  if(state.openingBalanceEditRequests.some(r=>r.cardId===cardId && r.requestedBy===currentUser.username && r.status==="pending")){
+    showToast("فيه طلب سابق لنفس الصنف بانتظار موافقة المدير");
+    return;
+  }
+  state.openingBalanceEditRequests.push({id:Date.now()+"", cardId, cardName:card.name, requestedBy:currentUser.username, requestedAt:new Date().toISOString(), status:"pending"});
+  saveState(); renderAll();
+  showToast("تم إرسال طلب التعديل للمدير");
+}
+function renderOpeningBalanceRequestsPanel(){
+  const el = $("adminOnly_openingBalanceRequests");
+  if(!el) return;
+  const pending = (state.openingBalanceEditRequests||[]).filter(r=>r.status==="pending");
+  if(!pending.length){ el.innerHTML=""; return; }
+  el.innerHTML = `<div class="garment-card" style="border-color:var(--gold-soft);">
+    <span class="tag">طلبات تعديل رصيد أول المدة (${pending.length})</span>
+    ${pending.map(r=>`<div class="item-row"><span>${esc(r.requestedBy)} — الصنف: ${esc(r.cardName)}</span>
+      <button class="btn btn-ghost btn-sm" onclick="approveOpeningBalanceRequest('${r.id}')">قبول</button>
+      <button class="btn btn-ghost btn-sm" onclick="denyOpeningBalanceRequest('${r.id}')">رفض</button></div>`).join("")}
+  </div>`;
+}
+function approveOpeningBalanceRequest(reqId){
+  const req = (state.openingBalanceEditRequests||[]).find(r=>r.id===reqId);
+  if(!req) return;
+  req.status="approved"; req.approvedBy=currentUser.username; req.approvedAt=new Date().toISOString();
+  saveState(); renderAll();
+  showToast(`تمت الموافقة — يقدر ${req.requestedBy} يعدّل رصيد "${req.cardName}" مرة وحدة قبل ما يسجّل خروج`);
+}
+function denyOpeningBalanceRequest(reqId){
+  const req = (state.openingBalanceEditRequests||[]).find(r=>r.id===reqId);
+  if(!req) return;
+  req.status="denied"; req.approvedBy=currentUser.username; req.approvedAt=new Date().toISOString();
+  saveState(); renderAll();
+  showToast("تم رفض الطلب");
+}
 function isItemCardIncomplete(c){
   if(c.type==="fabric"){
     if(!c.origin || !c.season) return true;
@@ -19,6 +67,8 @@ function toggleItemCardExpand(cardId){
   renderItemCards();
 }
 function renderItemCards(){
+  checkOpeningBalanceGrants();
+  if(currentUser && currentUser.role==="مدير") renderOpeningBalanceRequestsPanel();
   const el = $("itemCardsList");
   if(!state.itemCards.length){ el.innerHTML = `<p class="sub">ما فيه أصناف بعد — تُنشأ تلقائياً أول ما تسجّل فاتورة شراء.</p>`; return; }
   const query = ($("itemCardSearchInput")?.value||"").trim().toLowerCase();
@@ -49,12 +99,19 @@ function renderItemCards(){
       </div>` : c.type==="product" ? `<div class="field"><label>سعر البيع (ريال)</label><input type="number" class="card-saleprice" data-card="${c.id}" value="${c.salePrice||""}" placeholder="0"></div>` : "";
     const typeLabelAr = c.type==="fabric"?"قماش":c.type==="product"?"منتج جاهز":"ملحق فعلي";
     const originSeasonBadge = c.type==="fabric" && (c.origin||c.season) ? ` — ${c.origin||""}${c.origin&&c.season?" / ":""}${c.season||""}` : "";
+    const isAdmin = currentUser && currentUser.role==="مدير";
+    const needsPermission = !isAdmin && c.openingBalance && !openingBalanceSessionGrants.has(c.id);
+    const myPendingReq = needsPermission && (state.openingBalanceEditRequests||[]).find(r=>r.cardId===c.id && r.requestedBy===currentUser.username && r.status==="pending");
+    const openingRequestHtml = needsPermission ? (myPendingReq
+        ? `<p class="sub" style="color:var(--gold-soft);">بانتظار موافقة المدير على طلب التعديل</p>`
+        : `<button class="btn btn-ghost btn-sm" onclick="requestOpeningBalanceEdit('${c.id}')">طلب إذن تعديل رصيد أول المدة من المدير</button>`) : "";
     const bodyHtml = expanded ? `
       ${fabricExtraFields}
       <div class="row-2">
-        <div class="field"><label>رصيد أول المدة (${c.type==="fabric"?unitLabel():"قطعة"})</label><input type="number" class="card-opening" data-card="${c.id}" step="0.1" value="${c.openingBalance||""}" placeholder="0"></div>
+        <div class="field"><label>رصيد أول المدة (${c.type==="fabric"?unitLabel():"قطعة"})</label><input type="number" class="card-opening" data-card="${c.id}" step="0.1" value="${c.openingBalance||""}" placeholder="0" ${needsPermission?"readonly":""}></div>
         <div class="field"><label>تكلفة الوحدة لرصيد أول المدة (ريال) — عدّلها يدوياً لو ما فيه فاتورة شراء</label><input type="number" class="card-cost" data-card="${c.id}" step="0.01" value="${c.currentCost||""}" placeholder="0"></div>
       </div>
+      ${openingRequestHtml}
       <div class="field"><label>حد أدنى للمخزون (${c.type==="fabric"?unitLabel():"قطعة"}) — تنبيه لو نزل تحته</label><input type="number" class="card-minstock" data-card="${c.id}" min="0" step="0.1" value="${c.minStock||""}" placeholder="0 = بدون تنبيه"></div>
       ${c.type==="fabric" ? `<div class="row-3">
         ${BODY_CATEGORIES.map(cat=>`<div class="field"><label>الحد الأدنى ${cat} (ريال)</label><input type="number" class="card-minprice-cat" data-card="${c.id}" data-cat="${cat}" min="0" step="5" value="${(c.minPrices&&c.minPrices[cat])||""}" placeholder="0"></div>`).join("")}
@@ -79,10 +136,32 @@ function renderItemCards(){
   }).join("") + `<div id="itemStatementView" style="margin-top:14px;"></div>`;
   document.querySelectorAll(".card-opening").forEach(inp=> inp.addEventListener("change", async ()=>{
     const card = findItemCard(inp.dataset.card);
+    const oldVal = card.openingBalance||0;
     const newVal = parseFloat(inp.value)||0;
-    const ok = await confirmWithPassword(`تأكيد تغيير رصيد أول المدة لصنف "${card.name}" من ${(card.openingBalance||0).toFixed(1)} إلى ${newVal.toFixed(1)}.\nأدخل كلمة مرورك للتأكيد.`);
-    if(!ok){ inp.value = card.openingBalance||""; return; }
-    card.openingBalance = newVal; saveState(); renderAll();
+    const isFirstEntry = !oldVal; // any user can enter it the first time while setting up the card
+    const isAdmin = currentUser && currentUser.role==="مدير";
+    const hasSessionGrant = openingBalanceSessionGrants.has(card.id);
+    if(!isFirstEntry && !isAdmin && !hasSessionGrant){
+      showToast("تعديل رصيد أول المدة بعد إدخاله يحتاج إذن من المدير — اطلبه بالزر بجانب الحقل");
+      inp.value = oldVal||"";
+      return;
+    }
+    if(!isFirstEntry){
+      const ok = await confirmWithPassword(`تأكيد تغيير رصيد أول المدة لصنف "${card.name}" من ${oldVal.toFixed(1)} إلى ${newVal.toFixed(1)}.\nأدخل كلمة مرورك للتأكيد.`);
+      if(!ok){ inp.value = oldVal||""; return; }
+    }
+    card.openingBalance = newVal;
+    if(!isFirstEntry){
+      if(!state.openingBalanceAdjustments) state.openingBalanceAdjustments=[];
+      state.openingBalanceAdjustments.push({id:Date.now()+"", date:todayStr(), cardId:card.id, cardName:card.name, oldValue:oldVal, newValue:newVal, username:currentUser.username});
+      if(hasSessionGrant){
+        openingBalanceSessionGrants.delete(card.id); // single use — the one-time admin approval is now spent
+        const req = (state.openingBalanceEditRequests||[]).find(r=>r.cardId===card.id && r.requestedBy===currentUser.username && r.status==="approved");
+        if(req) req.status="used";
+      }
+    }
+    saveState(); renderAll();
+    if(!isFirstEntry) logAudit("opening_balance_changed", {cardId:card.id, cardName:card.name, oldValue:oldVal, newValue:newVal});
     showToast("تم تحديث رصيد أول المدة");
   }));
   document.querySelectorAll(".card-cost").forEach(inp=> inp.addEventListener("change", ()=>{

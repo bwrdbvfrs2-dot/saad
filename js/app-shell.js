@@ -10,6 +10,8 @@ let typeLibrariesReseeded = false;
 let addonSnapshotsBackfilled = false;
 function normalizeState(){
   if(!state.customMeasurementFields) state.customMeasurementFields=[];
+  if(!state.openingBalanceAdjustments) state.openingBalanceAdjustments=[];
+  if(!state.openingBalanceEditRequests) state.openingBalanceEditRequests=[];
   // MEASUREMENT_FIELDS is a shared array read across the app — keep it in sync with admin-added custom fields on every state load
   for(let i=MEASUREMENT_FIELDS.length-1;i>=0;i--){ if(MEASUREMENT_FIELDS[i].custom) MEASUREMENT_FIELDS.splice(i,1); }
   state.customMeasurementFields.forEach(f=> MEASUREMENT_FIELDS.push({...f, custom:true}));
@@ -458,6 +460,13 @@ async function trySetupFirstAccount(){
   showToast("تم إعداد الحساب بنجاح — أهلاً بك");
 }
 async function logout(){
+  // an admin-approved opening-balance edit is only good for the session it was granted in —
+  // expire any of this user's unused approvals now so logging back in doesn't silently re-grant them
+  if(currentUser){
+    const myUnused = (state.openingBalanceEditRequests||[]).filter(r=>r.requestedBy===currentUser.username && r.status==="approved");
+    if(myUnused.length){ myUnused.forEach(r=> r.status="expired"); await saveState(); }
+  }
+  openingBalanceSessionGrants.clear();
   currentUser=null; sensitiveUnlocked=false; $("loginUser").value=""; $("loginPass").value=""; $("loginErr").textContent="";
   $("app").classList.add("hidden"); $("loginScreen").classList.remove("hidden");
   stopListeningToState();
