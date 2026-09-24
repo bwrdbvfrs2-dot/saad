@@ -340,6 +340,7 @@ async function afterSignedIn(){
   checkAgedUndeliveredLoyalty();
   checkReadyForSaleConversions();
   checkAllLoyaltyPointsExpiry();
+  checkAutoCloseMonth();
   renderUsers();
   maybeBackupStateToday();
 }
