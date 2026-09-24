@@ -577,6 +577,45 @@ async function saveDistribution(inv){
 }
 
 // ---------------- monthly closing ----------------
+// Shared close logic used by both the manual button (after password confirmation) and the
+// automatic end-of-month close (no prompt, runs silently on login — see checkAutoCloseMonth).
+// Never mutates state.users/state.permissions, so it's safe to save from any signed-in user,
+// not just an admin.
+async function closeMonthNow(m){
+  if(isMonthClosed(m)) return false;
+  const stateSnapshot = JSON.parse(JSON.stringify(state));
+  const invs = state.invoices.filter(i=>i.originMonth===m);
+  const monthlyFin = computeMonthlyFinancials(m);
+  const readyCount = totalReadyGarmentsCount(); // snapshot BEFORE status mutation below turns undelivered "جاهز" garments into "معلقة"
+  const overdueCount = overdueReadyGarments().length;
+  let garmentCount=0, embroCount=0, embroRevenue=0;
+  invs.forEach(inv=>{
+    inv.garments.forEach(g=>{ if(g.status!=="ملغي") g.costSnapshot = liveGarmentCost(g); });
+    inv.garments.forEach(g=>{
+      if(g.status==="ملغي") return;
+      garmentCount++;
+      if(g.hasEmbroidery){ embroCount++; embroRevenue += (g.embroideryPrice||0); }
+      if(g.status!=="تسليم") g.status="معلقة";
+    });
+  });
+  const pendingCustodyCarried = totalPendingCustody();
+  state.closingReports.push({
+    monthLabel:m, closedAt:serverDate().toISOString(), invoicedTotal:monthlyFin.revenue, costTotal:monthlyFin.cost, collectedTotal:monthlyFin.revenue,
+    profitInvoiced: monthlyFin.profit, profitCollected: monthlyFin.profit,
+    garmentCount, embroCount, embroRevenue, invoiceCount: invs.length, pendingCustodyCarried,
+    readyCount, overdueCount,
+  });
+  runPayrollForMonth(m);
+  state.settings.currentMonth = nextMonthLabel(m);
+  const saved = await saveState();
+  if(!saved){
+    state = stateSnapshot; // roll back the in-memory close/payroll so a retry starts clean
+    renderAll();
+    return false;
+  }
+  logAudit("month_closed", {monthLabel:m, profit:monthlyFin.profit, garmentCount, invoiceCount:invs.length});
+  return true;
+}
 async function performCloseMonth(){
   const m = state.settings.currentMonth;
   if(isMonthClosed(m)){ showToast("هذا الشهر مقفول أصلاً — ما يمكن إقفاله مرة ثانية"); return; }
@@ -592,43 +631,43 @@ async function performCloseMonth(){
   const btn = $("closeMonthBtn");
   if(btn) btn.disabled = true;
   try{
-    if(isMonthClosed(m)){ showToast("هذا الشهر مقفول أصلاً — ما يمكن إقفاله مرة ثانية"); return; }
-    const stateSnapshot = JSON.parse(JSON.stringify(state));
-    const invs = state.invoices.filter(i=>i.originMonth===m);
-    const monthlyFin = computeMonthlyFinancials(m);
-    const readyCount = totalReadyGarmentsCount(); // snapshot BEFORE status mutation below turns undelivered "جاهز" garments into "معلقة"
-    const overdueCount = overdueReadyGarments().length;
-    let garmentCount=0, embroCount=0, embroRevenue=0;
-    invs.forEach(inv=>{
-      inv.garments.forEach(g=>{ if(g.status!=="ملغي") g.costSnapshot = liveGarmentCost(g); });
-      inv.garments.forEach(g=>{
-        if(g.status==="ملغي") return;
-        garmentCount++;
-        if(g.hasEmbroidery){ embroCount++; embroRevenue += (g.embroideryPrice||0); }
-        if(g.status!=="تسليم") g.status="معلقة";
-      });
-    });
-    const pendingCustodyCarried = totalPendingCustody();
-    state.closingReports.push({
-      monthLabel:m, closedAt:serverDate().toISOString(), invoicedTotal:monthlyFin.revenue, costTotal:monthlyFin.cost, collectedTotal:monthlyFin.revenue,
-      profitInvoiced: monthlyFin.profit, profitCollected: monthlyFin.profit,
-      garmentCount, embroCount, embroRevenue, invoiceCount: invs.length, pendingCustodyCarried,
-      readyCount, overdueCount,
-    });
-    runPayrollForMonth(m);
-    state.settings.currentMonth = nextMonthLabel(m);
-    const saved = await saveState();
-    if(!saved){
-      state = stateSnapshot; // roll back the in-memory close/payroll so a retry starts clean
-      renderAll();
+    const ok = await closeMonthNow(m);
+    if(!ok){
+      if(isMonthClosed(m)){ showToast("هذا الشهر مقفول أصلاً — ما يمكن إقفاله مرة ثانية"); return; }
       showToast("تعذّر حفظ إقفال الشهر بالسحابة — لم يُقفل الشهر، تأكد من الاتصال بالإنترنت وحاول مرة ثانية");
       return;
     }
     renderAll();
-    logAudit("month_closed", {monthLabel:m, profit:monthlyFin.profit, garmentCount, invoiceCount:invs.length});
     showToast("تم إقفال الشهر وتجميد التقرير");
   } finally {
     if(btn) btn.disabled = false;
+  }
+}
+// Runs on every login (any role) — closes any month(s) whose last calendar day has already
+// passed, with no prompt. Safe to run from a non-admin session: closeMonthNow() never touches
+// state.users/permissions, so the write isn't admin-gated. Loops in case the app wasn't opened
+// for more than one month.
+let autoCloseInFlight = false;
+async function checkAutoCloseMonth(){
+  if(autoCloseInFlight) return;
+  autoCloseInFlight = true;
+  try{
+    let closedAny = false;
+    for(let guard=0; guard<24; guard++){ // hard cap so a bug can't loop forever
+      const m = state.settings.currentMonth;
+      if(isMonthClosed(m)) break;
+      const [y,mo] = m.split("-").map(Number);
+      const lastDayOfMonth = new Date(y, mo, 0);
+      if(serverDate() <= lastDayOfMonth) break; // month hasn't ended yet
+      const label = monthDisplay(m);
+      const ok = await closeMonthNow(m);
+      if(!ok) break; // save failed (offline, etc.) — try again next login
+      closedAny = true;
+      showToast(`تم إقفال شهر ${label} تلقائياً`);
+    }
+    if(closedAny) renderAll();
+  } finally {
+    autoCloseInFlight = false;
   }
 }
 function garmentQualifiesForCommission(g){
