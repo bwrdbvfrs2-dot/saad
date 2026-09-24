@@ -10,6 +10,7 @@ let typeLibrariesReseeded = false;
 let addonSnapshotsBackfilled = false;
 function normalizeState(){
   if(!state.customMeasurementFields) state.customMeasurementFields=[];
+  if(!state.openingBalanceAdjustments) state.openingBalanceAdjustments=[];
   // MEASUREMENT_FIELDS is a shared array read across the app — keep it in sync with admin-added custom fields on every state load
   for(let i=MEASUREMENT_FIELDS.length-1;i>=0;i--){ if(MEASUREMENT_FIELDS[i].custom) MEASUREMENT_FIELDS.splice(i,1); }
   state.customMeasurementFields.forEach(f=> MEASUREMENT_FIELDS.push({...f, custom:true}));

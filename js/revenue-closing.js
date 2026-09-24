@@ -61,7 +61,7 @@ async function loadAndRenderAuditLog(){
     if(userFilter) rows = rows.filter(r=>r.username===userFilter);
     if(fromFilter) rows = rows.filter(r=>(r.clientDate||"")>=fromFilter);
     if(!rows.length){ el.innerHTML = `<p class="sub">ما فيه سجلات مطابقة.</p>`; return; }
-    const actionLabels = {expense_recorded:"مصروف", month_closed:"إقفال شهر", price_changed:"تعديل سعر", funds_transferred:"تحويل أموال", invoice_returned:"مرتجع فاتورة", user_added:"إضافة مستخدم", user_removed:"حذف مستخدم", permission_changed:"تغيير صلاحية"};
+    const actionLabels = {expense_recorded:"مصروف", month_closed:"إقفال شهر", price_changed:"تعديل سعر", funds_transferred:"تحويل أموال", invoice_returned:"مرتجع فاتورة", user_added:"إضافة مستخدم", user_removed:"حذف مستخدم", permission_changed:"تغيير صلاحية", opening_balance_changed:"تعديل رصيد أول المدة"};
     el.innerHTML = rows.map(r=>{
       const when = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate().toLocaleString("ar-SA") : (r.clientDate||"—");
       return `<div class="garment-card">

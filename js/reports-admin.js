@@ -191,11 +191,12 @@ function buildDailyReport(day){
   const vouchersToday = state.vouchers.filter(v=>v.date===day);
   const expensesToday = state.expenses.filter(e=>e.date===day);
   const expensesTotal = expensesToday.reduce((a,e)=>a+e.amount,0);
+  const openingAdjustmentsToday = (state.openingBalanceAdjustments||[]).filter(a=>a.date===day);
   let cash=0, network=0, discount=0; const paymentRows=[];
   state.invoices.forEach(inv=> (inv.payments||[]).forEach(p=>{
     if(p.date===day){ cash+=p.cash; network+=p.network; discount+=p.discount||0; paymentRows.push({inv,p}); }
   }));
-  return {newInvoices, deliveredThisMonth, deliveredOverdue, legacyDelivered, vouchersToday, expensesToday, expensesTotal, cash, network, discount, paymentRows};
+  return {newInvoices, deliveredThisMonth, deliveredOverdue, legacyDelivered, vouchersToday, expensesToday, expensesTotal, openingAdjustmentsToday, cash, network, discount, paymentRows};
 }
 function renderDailyPreview(){
   const day = $("dailyDate").value || todayStr();
@@ -241,6 +242,10 @@ function buildDailyReportHtml(day, r){
   html += `<h3>المصروفات اليوم (${r.expensesToday.length}) — الإجمالي: ${r.expensesTotal.toFixed(0)} ﷼</h3><table><thead><tr><th>البند</th><th>المبلغ</th><th>صُرف لـ</th><th>ملاحظات</th></tr></thead><tbody>`;
   r.expensesToday.forEach(e=>{ const cat = state.expenseCategories.find(c=>c.id===e.categoryId); html+=`<tr><td>${cat?esc(cat.label):"—"}</td><td>${e.amount.toFixed(0)} ﷼</td><td>${esc(e.paidTo||"—")}</td><td>${esc(e.note||"—")}</td></tr>`; });
   if(!r.expensesToday.length) html+=`<tr><td colspan="4">لا يوجد</td></tr>`;
+  html += `</tbody></table>`;
+  html += `<h3>تعديلات رصيد أول المدة اليوم (${r.openingAdjustmentsToday.length})</h3><table><thead><tr><th>الصنف</th><th>من</th><th>إلى</th><th>بواسطة</th></tr></thead><tbody>`;
+  r.openingAdjustmentsToday.forEach(a=> html+=`<tr><td>${esc(a.cardName)}</td><td>${a.oldValue.toFixed(1)}</td><td>${a.newValue.toFixed(1)}</td><td>${esc(a.username)}</td></tr>`);
+  if(!r.openingAdjustmentsToday.length) html+=`<tr><td colspan="4">لا يوجد</td></tr>`;
   html += `</tbody></table>`;
   html += `<div id="dailyReceiptSearchWrap" class="no-print"><div class="field"><label>بحث برقم الإيصال (كاش أو شبكة)</label><input type="text" id="dailyReceiptSearchInput" placeholder="اكتب رقم الإيصال..."></div></div>`;
   html += `<h3>الدفعات اليوم — كاش: ${r.cash.toFixed(0)} ﷼ / شبكة: ${r.network.toFixed(0)} ﷼ / خصم: ${r.discount.toFixed(0)} ﷼</h3><table id="dailyPaymentsTable"><thead><tr><th>رقم الفاتورة</th><th>كاش</th><th>سند الكاش</th><th>شبكة</th><th>سند الشبكة</th><th>خصم</th></tr></thead><tbody>`;
@@ -393,6 +398,9 @@ function buildFullActivityLog(from, to){
   state.alterations.forEach(a=>{
     if(inDateRange(a.dateReceived, from, to)) rows.push({date:a.dateReceived, section:"تعديلات", desc:`استلام تعديل — فاتورة ${a.invoiceNumber} — ${a.reason}`, amount:0});
     if(a.dateCompleted && inDateRange(a.dateCompleted, from, to)) rows.push({date:a.dateCompleted, section:"تعديلات", desc:`إكمال تعديل — فاتورة ${a.invoiceNumber}`, amount:0});
+  });
+  (state.openingBalanceAdjustments||[]).forEach(a=>{
+    if(inDateRange(a.date, from, to)) rows.push({date:a.date, section:"تعديل المخزون", desc:`تعديل رصيد أول المدة لصنف "${esc(a.cardName)}" من ${a.oldValue.toFixed(1)} إلى ${a.newValue.toFixed(1)} — بواسطة ${esc(a.username)}`, amount:0});
   });
   state.stockWriteOffs.forEach(w=>{
     if(inDateRange(w.date, from, to)){

@@ -79,10 +79,25 @@ function renderItemCards(){
   }).join("") + `<div id="itemStatementView" style="margin-top:14px;"></div>`;
   document.querySelectorAll(".card-opening").forEach(inp=> inp.addEventListener("change", async ()=>{
     const card = findItemCard(inp.dataset.card);
+    const oldVal = card.openingBalance||0;
     const newVal = parseFloat(inp.value)||0;
-    const ok = await confirmWithPassword(`تأكيد تغيير رصيد أول المدة لصنف "${card.name}" من ${(card.openingBalance||0).toFixed(1)} إلى ${newVal.toFixed(1)}.\nأدخل كلمة مرورك للتأكيد.`);
-    if(!ok){ inp.value = card.openingBalance||""; return; }
-    card.openingBalance = newVal; saveState(); renderAll();
+    const isFirstEntry = !oldVal; // any user can enter it the first time while setting up the card
+    if(!isFirstEntry && (!currentUser || currentUser.role!=="مدير")){
+      showToast("تعديل رصيد أول المدة بعد إدخاله صلاحية المدير فقط");
+      inp.value = oldVal||"";
+      return;
+    }
+    if(!isFirstEntry){
+      const ok = await confirmWithPassword(`تأكيد تغيير رصيد أول المدة لصنف "${card.name}" من ${oldVal.toFixed(1)} إلى ${newVal.toFixed(1)}.\nأدخل كلمة مرورك للتأكيد.`);
+      if(!ok){ inp.value = oldVal||""; return; }
+    }
+    card.openingBalance = newVal;
+    if(!isFirstEntry){
+      if(!state.openingBalanceAdjustments) state.openingBalanceAdjustments=[];
+      state.openingBalanceAdjustments.push({id:Date.now()+"", date:todayStr(), cardId:card.id, cardName:card.name, oldValue:oldVal, newValue:newVal, username:currentUser.username});
+    }
+    saveState(); renderAll();
+    if(!isFirstEntry) logAudit("opening_balance_changed", {cardId:card.id, cardName:card.name, oldValue:oldVal, newValue:newVal});
     showToast("تم تحديث رصيد أول المدة");
   }));
   document.querySelectorAll(".card-cost").forEach(inp=> inp.addEventListener("change", ()=>{
