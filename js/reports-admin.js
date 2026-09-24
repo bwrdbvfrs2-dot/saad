@@ -707,8 +707,11 @@ async function saveUserEdit(i){
       await ROLES_COL.doc(uid).set({role});
     }catch(e){
       console.error("role registration after password reset failed", e);
-      const hint = e && e.code==="permission-denied" ? (" — معرف حسابك: " + (fbAuth.currentUser ? fbAuth.currentUser.uid : "غير معروف")) : "";
-      showToast("تعذّر تحديث كلمة المرور (" + (e && e.code || "بدون رمز") + ")" + hint + " — حاول مرة ثانية");
+      if(e && e.code==="permission-denied"){
+        alert("تعذّر تحديث كلمة المرور (permission-denied) — معرف حسابك:\n" + (fbAuth.currentUser ? fbAuth.currentUser.uid : "غير معروف"));
+        return;
+      }
+      showToast("تعذّر تحديث كلمة المرور (" + (e && e.code || "بدون رمز") + ") — حاول مرة ثانية");
       return;
     }
     updatedUser.authUid = uid; updatedUser.authEmail = email;
