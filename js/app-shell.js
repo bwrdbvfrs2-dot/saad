@@ -9,6 +9,10 @@ function ensureUserBoxes(username){
 let typeLibrariesReseeded = false;
 let addonSnapshotsBackfilled = false;
 function normalizeState(){
+  if(!state.customMeasurementFields) state.customMeasurementFields=[];
+  // MEASUREMENT_FIELDS is a shared array read across the app — keep it in sync with admin-added custom fields on every state load
+  for(let i=MEASUREMENT_FIELDS.length-1;i>=0;i--){ if(MEASUREMENT_FIELDS[i].custom) MEASUREMENT_FIELDS.splice(i,1); }
+  state.customMeasurementFields.forEach(f=> MEASUREMENT_FIELDS.push({...f, custom:true}));
   if(!state.settings.fixedItems) state.settings.fixedItems=[];
   if(!state.settings.embroideryWage) state.settings.embroideryWage=15;
   if(state.settings.allowDiscount===undefined) state.settings.allowDiscount=false;
@@ -196,7 +200,7 @@ function normalizeState(){
   if(!state.alterationReasons) state.alterationReasons=[];
   if(!state.alterationResponsibles || !state.alterationResponsibles.length) state.alterationResponsibles=["الخياط","القصاص","ماخذ المقاسات","الزبون نفسه"];
   if(!state.permissions){
-    const allTabs = ["invoice","dashboard","advisoryBalances","sensitiveFinancials","shiftClose","vouchers","production","mail","salesInvoice","invoicesList","distribution","scan","alteration","debts","customerDebts","legacy","itemCards","suppliers","purchases","purchaseReturns","balances","expenses","payroll","report-broadcastCampaign","report-tailorMonthly","report-fullLog","report-search","report-undelivered","report-garmentInventory","report-salesRanking","report-vatCalc","report-returns","report-customers","report-daily","report-missingReceipt","report-topExpenses","report-auditLog","growth","archive","settingsShop","settingsFinance","settingsUsers","settingsProducts","settingsMarketing"];
+    const allTabs = ["invoice","dashboard","advisoryBalances","sensitiveFinancials","shiftClose","vouchers","production","mail","salesInvoice","invoicesList","distribution","scan","alteration","debts","customerDebts","legacy","itemCards","suppliers","purchases","purchaseReturns","balances","expenses","payroll","report-broadcastCampaign","report-tailorMonthly","report-fullLog","report-search","report-undelivered","report-garmentInventory","report-noFabricWage","report-salesRanking","report-vatCalc","report-returns","report-customers","report-daily","report-missingReceipt","report-topExpenses","report-auditLog","growth","archive","settingsShop","settingsFinance","settingsUsers","settingsProducts","settingsMarketing"];
     const allSections = ["fullLog","search","undelivered","garmentInventory","salesRanking","vatCalc","returns","customers","daily","missingReceipt"];
     state.permissions = {
       "مدير": { tabs: [...allTabs], reportSections: [...allSections] },
@@ -218,6 +222,8 @@ function normalizeState(){
   if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("expenses")) state.permissions["مدير"].tabs.push("expenses");
   if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("report-topExpenses")) state.permissions["مدير"].tabs.push("report-topExpenses");
   if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("report-auditLog")) state.permissions["مدير"].tabs.push("report-auditLog");
+  if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("report-noFabricWage")) state.permissions["مدير"].tabs.push("report-noFabricWage");
+  if(state.permissions["محاسب"] && !state.permissions["محاسب"].tabs.includes("report-noFabricWage")) state.permissions["محاسب"].tabs.push("report-noFabricWage");
   if(state.permissions["محاسب"] && !state.permissions["محاسب"].tabs.includes("report-topExpenses")) state.permissions["محاسب"].tabs.push("report-topExpenses");
   if(state.permissions["محاسب"] && !state.permissions["محاسب"].tabs.includes("expenses")) state.permissions["محاسب"].tabs.push("expenses");
   if(state.permissions["محاسب"] && !state.permissions["محاسب"].tabs.includes("customerDebts")) state.permissions["محاسب"].tabs.push("customerDebts");
@@ -496,6 +502,7 @@ const NAV_GROUPS = [
     {tab:"debts", label:"مديونية الثياب"},
     {tab:"report-undelivered", label:"الثياب غير المسلّمة"},
     {tab:"report-garmentInventory", label:"جرد الثياب حسب الحالة"},
+    {tab:"report-noFabricWage", label:"أجرة تفصيل بدون قماش"},
   ]},
   {title:"العملاء", color:"#1f9d5c", items:[
     {tab:"customerDebts", label:"مديونيات العملاء"},
@@ -543,7 +550,7 @@ const TAB_ICONS = {
   dashboard:"layout-dashboard", invoice:"file-text", salesInvoice:"shopping-bag", "report-returns":"rotate-ccw",
   "report-missingReceipt":"receipt", invoicesList:"list", distribution:"scissors", production:"shirt",
   scan:"scan-line", alteration:"refresh-cw", debts:"credit-card", "report-undelivered":"package",
-  "report-garmentInventory":"clipboard-list", customerDebts:"wallet", "report-customers":"users",
+  "report-garmentInventory":"clipboard-list", "report-noFabricWage":"scissors", customerDebts:"wallet", "report-customers":"users",
   "report-broadcastCampaign":"megaphone", itemCards:"layers", suppliers:"factory", purchases:"shopping-cart",
   purchaseReturns:"corner-up-left", legacy:"archive", balances:"wallet", expenses:"receipt", vouchers:"file-text",
   shiftClose:"calculator", payroll:"banknote", archive:"lock", advisoryBalances:"clipboard",
