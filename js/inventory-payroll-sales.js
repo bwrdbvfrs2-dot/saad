@@ -957,6 +957,14 @@ function refreshSaleLineOptions(){
   });
 }
 
+function updateExpSubItemOptions(){
+  const sel = $("expSubItem");
+  if(!sel) return;
+  const cat = state.expenseCategories.find(c=>c.id===$("expCategory").value);
+  const curSub = sel.value;
+  const items = (cat && cat.subItems) || [];
+  sel.innerHTML = `<option value="">-- بدون بند فرعي --</option>` + items.map(s=>`<option value="${s.id}" ${s.id===curSub?"selected":""}>${esc(s.label)}</option>`).join("");
+}
 function renderBalancesTab(){
   if(!currentUser) return;
   const isAdmin = currentUser.role==="مدير";
@@ -1026,6 +1034,7 @@ function renderBalancesTab(){
   const curExpCat = $("expCategory").value, curExpBox = $("expSourceBox").value;
   $("expCategory").innerHTML = state.expenseCategories.map(c=>`<option value="${c.id}" ${c.id===curExpCat?"selected":""}>${c.label}</option>`).join("");
   $("expSourceBox").innerHTML = myBoxes.map(b=>`<option value="${b.id}" ${b.id===curExpBox?"selected":""}>${b.name} (${typeLabel(b.type)}) — ${boxTotal(b).toFixed(0)} ﷼</option>`).join("");
+  updateExpSubItemOptions();
 
   // expenses log
   const expTbody = $("expensesBody");
@@ -1033,8 +1042,8 @@ function renderBalancesTab(){
   expTbody.innerHTML = visibleExpenses.length ? visibleExpenses.map(e=>{
     const cat = state.expenseCategories.find(c=>c.id===e.categoryId);
     const box = findCashBox(e.sourceBoxId);
-    return `<tr><td>${e.date}</td><td>${cat?esc(cat.label):"—"}</td><td>${e.amount.toFixed(0)} ﷼</td><td>${esc(e.paidTo||"—")}</td><td>${esc(e.storeName||"—")}</td><td>${box?esc(box.name):"—"}</td></tr>`;
-  }).join("") : `<tr><td colspan="6">${emptyStateHtml("receipt","ما فيه مصروفات مسجّلة بعد.")}</td></tr>`;
+    return `<tr><td>${e.date}</td><td>${cat?esc(cat.label):"—"}</td><td>${esc(e.subItemLabel||"—")}</td><td>${e.amount.toFixed(0)} ﷼</td><td>${esc(e.paidTo||"—")}</td><td>${esc(e.storeName||"—")}</td><td>${box?esc(box.name):"—"}</td></tr>`;
+  }).join("") : `<tr><td colspan="7">${emptyStateHtml("receipt","ما فيه مصروفات مسجّلة بعد.")}</td></tr>`;
 }
 function renderClosedReports(){
   const el=$("archiveList");

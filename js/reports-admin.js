@@ -518,6 +518,29 @@ function showNoFabricWageReport(){
   $("noFabricWageView").innerHTML = html + `<button class="btn btn-ghost btn-sm" id="printNoFabricWageBtn" style="margin-top:10px;">طباعة التقرير</button>`;
   $("printNoFabricWageBtn").addEventListener("click", ()=>{ printHtml(html); });
 }
+function showExpenseSubItemsReport(){
+  const groups = {};
+  state.expenses.forEach(e=>{
+    if(!dateMatchesPeriod("expSub", e.date)) return;
+    const cat = state.expenseCategories.find(c=>c.id===e.categoryId);
+    const catLabel = cat ? cat.label : "—";
+    const subLabel = e.subItemLabel || "بدون بند فرعي";
+    const key = catLabel+"|"+subLabel;
+    if(!groups[key]) groups[key] = {catLabel, subLabel, count:0, total:0};
+    groups[key].count++; groups[key].total += e.amount;
+  });
+  const list = Object.values(groups).sort((a,b)=> b.total-a.total);
+  const grandTotal = list.reduce((a,g)=>a+g.total,0);
+  const title = `تقرير المصروفات حسب البند الفرعي — ${periodLabel("expSub")}`;
+  let html = `<h2>${title}</h2>`;
+  html += `<p>إجمالي المصروفات: <b>${grandTotal.toFixed(0)} ﷼</b></p>`;
+  html += `<table><thead><tr><th>التصنيف</th><th>البند الفرعي</th><th>عدد المصروفات</th><th>الإجمالي</th></tr></thead><tbody>`;
+  list.forEach(g=> html+=`<tr><td>${esc(g.catLabel)}</td><td>${esc(g.subLabel)}</td><td>${g.count}</td><td>${g.total.toFixed(0)} ﷼</td></tr>`);
+  if(!list.length) html+=`<tr><td colspan="4" style="text-align:center;">لا يوجد</td></tr>`;
+  html += `</tbody></table>`;
+  $("expenseSubItemsReportView").innerHTML = html + `<button class="btn btn-ghost btn-sm" id="printExpenseSubItemsBtn" style="margin-top:10px;">طباعة التقرير</button>`;
+  $("printExpenseSubItemsBtn").addEventListener("click", ()=>{ printHtml(html); });
+}
 function printUndelivered(){
   const rows=[];
   state.invoices.forEach(inv=>{
@@ -936,6 +959,7 @@ $("customerFilter").addEventListener("change", renderCustomers);
 $("printUndeliveredBtn").addEventListener("click", printUndelivered);
 $("showGarmentInventoryBtn").addEventListener("click", showGarmentInventory);
 $("showNoFabricWageBtn").addEventListener("click", showNoFabricWageReport);
+$("showExpenseSubItemsBtn").addEventListener("click", showExpenseSubItemsReport);
 $("showSalesRankingBtn").addEventListener("click", showSalesRankingReport);
 $("printCustomersBtn").addEventListener("click", printCustomers);
 $("exportCustomersBtn").addEventListener("click", exportCustomersCsv);
@@ -1089,11 +1113,13 @@ $("doTransferBtn").addEventListener("click", ()=>{
     showToast(result.instant ? "تم التحويل بنجاح" : "تم إرسال طلب التحويل، بانتظار تأكيد الاستلام");
   });
 });
+$("expCategory").addEventListener("change", updateExpSubItemOptions);
 $("addExpenseBtn").addEventListener("click", ()=>{
   const invoiceNumber = $("expInvNumber").value.trim();
   const taxNumber = $("expTaxNumber").value.trim();
   const date = $("expDate").value || todayStr();
   const categoryId = $("expCategory").value;
+  const subItemId = $("expSubItem").value;
   const amount = parseFloat($("expAmount").value)||0;
   const paidTo = $("expPaidTo").value.trim();
   const storeName = $("expStoreName").value.trim();
@@ -1103,11 +1129,11 @@ $("addExpenseBtn").addEventListener("click", ()=>{
   if(amount<=0){ showToast("أدخل مبلغ صحيح"); return; }
   if(!sourceBoxId){ showToast("اختر مصدر الدفع"); return; }
   const expenseSnapshot = JSON.parse(JSON.stringify(state));
-  const result = addExpense({invoiceNumber, taxNumber, date, categoryId, amount, paidTo, storeName, notes, sourceBoxId, vatStatus});
+  const result = addExpense({invoiceNumber, taxNumber, date, categoryId, subItemId, amount, paidTo, storeName, notes, sourceBoxId, vatStatus});
   if(!result.ok){ showToast(result.msg); return; }
   saveStateWithRollback(expenseSnapshot).then(saved=>{
     if(!saved) return;
-    $("expInvNumber").value=""; $("expTaxNumber").value=""; $("expAmount").value=""; $("expPaidTo").value=""; $("expStoreName").value=""; $("expNotes").value="";
+    $("expInvNumber").value=""; $("expTaxNumber").value=""; $("expAmount").value=""; $("expPaidTo").value=""; $("expStoreName").value=""; $("expNotes").value=""; $("expSubItem").value="";
     showToast("تم حفظ المصروف");
   });
 });
@@ -1386,6 +1412,7 @@ $("setWaPromo").addEventListener("input", ()=>{
   $("returnSearch").addEventListener("input", renderReturns);
   $("garmInvPeriodWrap").innerHTML = periodPickerHtml("garmInv"); bindPeriodPicker("garmInv");
   $("noFabricWagePeriodWrap").innerHTML = periodPickerHtml("noFabricWage"); bindPeriodPicker("noFabricWage");
+  $("expenseSubItemsPeriodWrap").innerHTML = periodPickerHtml("expSub"); bindPeriodPicker("expSub");
   $("undelPeriodWrap").innerHTML = periodPickerHtml("undel"); bindPeriodPicker("undel");
   $("fullLogPeriodWrap").innerHTML = extendedPeriodPickerHtml("fullLog"); bindExtendedPeriodPicker("fullLog");
   $("showFullLogBtn").addEventListener("click", showFullActivityLog);

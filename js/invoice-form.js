@@ -399,12 +399,15 @@ function addExpense(data){
   box.balance -= data.amount;
   const cat = state.expenseCategories.find(c=>c.id===data.categoryId);
   if(cat && cat.advisoryKey) state.advisory[cat.advisoryKey] -= data.amount;
+  // snapshot the sub-item's label so this expense's history stays readable even if the sub-item is later renamed/deleted
+  const subItem = cat && data.subItemId ? (cat.subItems||[]).find(s=>s.id===data.subItemId) : null;
   state.expenses.push({
     id: Date.now()+"", invoiceNumber:data.invoiceNumber, taxNumber:data.taxNumber, date:data.date,
-    categoryId:data.categoryId, amount:data.amount, paidTo:data.paidTo, storeName:data.storeName,
+    categoryId:data.categoryId, subItemId: subItem?subItem.id:"", subItemLabel: subItem?subItem.label:"",
+    amount:data.amount, paidTo:data.paidTo, storeName:data.storeName,
     notes:data.notes, sourceBoxId:data.sourceBoxId, recordedBy: currentUser.username, vatStatus:data.vatStatus,
   });
-  logAudit("expense_recorded", {amount:data.amount, paidTo:data.paidTo, categoryId:data.categoryId, date:data.date});
+  logAudit("expense_recorded", {amount:data.amount, paidTo:data.paidTo, categoryId:data.categoryId, subItemLabel: subItem?subItem.label:undefined, date:data.date});
   return {ok:true};
 }
 
