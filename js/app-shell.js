@@ -38,6 +38,10 @@ function normalizeState(){
     {id:"c3", label:"شراء حشوات وخيوط", advisoryKey:"padding"},
     {id:"c4", label:"أجور تطريز", advisoryKey:"embroidery"},
   ];
+  // unlinked categories for expenses that don't belong to any advisory balance — without these, a
+  // maintenance/general expense had nowhere to go except being wrongly charged against a linked category
+  if(!state.expenseCategories.some(c=>c.label==="صيانة")) state.expenseCategories.push({id:"c5", label:"صيانة"});
+  if(!state.expenseCategories.some(c=>c.label==="مصاريف عامة")) state.expenseCategories.push({id:"c6", label:"مصاريف عامة"});
   if(!state.expenses) state.expenses=[];
   if(!state.transferRequests) state.transferRequests=[];
   if(!state.itemCards) state.itemCards=[];
