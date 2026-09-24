@@ -277,7 +277,10 @@ async function saveState(){
   catch(e){
     console.error("Firestore save failed", e);
     let msg = "تعذّر الحفظ — تحقق من الاتصال بالإنترنت";
-    if(e && e.code==="permission-denied") msg = "تعذّر الحفظ (permission-denied) — معرف حسابك: " + (fbAuth.currentUser ? fbAuth.currentUser.uid : "غير معروف");
+    if(e && e.code==="permission-denied"){
+      alert("تعذّر الحفظ (permission-denied) — معرف حسابك:\n" + (fbAuth.currentUser ? fbAuth.currentUser.uid : "غير معروف"));
+      return false;
+    }
     else if(e && e.code==="unauthenticated") msg = "تعذّر الحفظ — الدخول المجهول (Anonymous Auth) مو شغّال، فعّله من لوحة Firebase ← Authentication";
     else if(e && e.code==="unavailable") msg = "تعذّر الحفظ — تحقق من الاتصال بالإنترنت";
     showToast(msg);
