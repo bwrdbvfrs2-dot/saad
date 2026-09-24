@@ -719,11 +719,14 @@ async function saveUserEdit(i){
     try{ await ROLES_COL.doc(prevUser.authUid).set({role}); }
     catch(e){ console.error("role update failed", e); showToast("تعذّر تحديث الصلاحية — حاول مرة ثانية"); return; }
   }
-  if(username!==oldUsername){
+  if(username!==oldUsername || newPassword){
+    // a password change points the username at a brand-new synthetic email (new auth account) —
+    // the login lookup has to be repointed even when the username itself didn't change, or the
+    // new password silently can't be logged in with (it still resolves to the OLD account's email)
     try{
       await USERNAMES_COL.doc(username).set({authEmail: updatedUser.authEmail});
-      await USERNAMES_COL.doc(oldUsername).delete();
-    }catch(e){ console.error("username rename failed", e); showToast("تعذّر تغيير اسم المستخدم — حاول مرة ثانية"); return; }
+      if(username!==oldUsername) await USERNAMES_COL.doc(oldUsername).delete();
+    }catch(e){ console.error("username/login-email update failed", e); showToast("تعذّر تحديث بيانات الدخول — حاول مرة ثانية"); return; }
   }
   state.users[i]=updatedUser;
   if(currentUser && currentUser.username===oldUsername){ currentUser=state.users[i]; $("curUserLbl").textContent=currentUser.username+" ("+currentUser.role+")"; applyRolePermissions(); }
