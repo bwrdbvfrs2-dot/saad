@@ -42,6 +42,7 @@ function normalizeState(){
   // maintenance/general expense had nowhere to go except being wrongly charged against a linked category
   if(!state.expenseCategories.some(c=>c.label==="صيانة")) state.expenseCategories.push({id:"c5", label:"صيانة"});
   if(!state.expenseCategories.some(c=>c.label==="مصاريف عامة")) state.expenseCategories.push({id:"c6", label:"مصاريف عامة"});
+  state.expenseCategories.forEach(c=>{ if(!c.subItems) c.subItems=[]; });
   if(!state.expenses) state.expenses=[];
   if(!state.transferRequests) state.transferRequests=[];
   if(!state.itemCards) state.itemCards=[];
@@ -206,7 +207,7 @@ function normalizeState(){
   if(!state.alterationReasons) state.alterationReasons=[];
   if(!state.alterationResponsibles || !state.alterationResponsibles.length) state.alterationResponsibles=["الخياط","القصاص","ماخذ المقاسات","الزبون نفسه"];
   if(!state.permissions){
-    const allTabs = ["invoice","dashboard","advisoryBalances","sensitiveFinancials","shiftClose","vouchers","production","mail","salesInvoice","invoicesList","distribution","scan","alteration","debts","customerDebts","legacy","itemCards","suppliers","purchases","purchaseReturns","balances","expenses","payroll","report-broadcastCampaign","report-tailorMonthly","report-fullLog","report-search","report-undelivered","report-garmentInventory","report-noFabricWage","report-salesRanking","report-vatCalc","report-returns","report-customers","report-daily","report-missingReceipt","report-topExpenses","report-auditLog","growth","archive","settingsShop","settingsFinance","settingsUsers","settingsProducts","settingsMarketing"];
+    const allTabs = ["invoice","dashboard","advisoryBalances","sensitiveFinancials","shiftClose","vouchers","production","mail","salesInvoice","invoicesList","distribution","scan","alteration","debts","customerDebts","legacy","itemCards","suppliers","purchases","purchaseReturns","balances","expenses","payroll","report-broadcastCampaign","report-tailorMonthly","report-fullLog","report-search","report-undelivered","report-garmentInventory","report-noFabricWage","report-salesRanking","report-vatCalc","report-returns","report-customers","report-daily","report-missingReceipt","report-topExpenses","report-expenseSubItems","report-auditLog","growth","archive","settingsShop","settingsFinance","settingsUsers","settingsProducts","settingsMarketing"];
     const allSections = ["fullLog","search","undelivered","garmentInventory","salesRanking","vatCalc","returns","customers","daily","missingReceipt"];
     state.permissions = {
       "مدير": { tabs: [...allTabs], reportSections: [...allSections] },
@@ -231,6 +232,8 @@ function normalizeState(){
   if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("report-noFabricWage")) state.permissions["مدير"].tabs.push("report-noFabricWage");
   if(state.permissions["محاسب"] && !state.permissions["محاسب"].tabs.includes("report-noFabricWage")) state.permissions["محاسب"].tabs.push("report-noFabricWage");
   if(state.permissions["محاسب"] && !state.permissions["محاسب"].tabs.includes("report-topExpenses")) state.permissions["محاسب"].tabs.push("report-topExpenses");
+  if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("report-expenseSubItems")) state.permissions["مدير"].tabs.push("report-expenseSubItems");
+  if(state.permissions["محاسب"] && !state.permissions["محاسب"].tabs.includes("report-expenseSubItems")) state.permissions["محاسب"].tabs.push("report-expenseSubItems");
   if(state.permissions["محاسب"] && !state.permissions["محاسب"].tabs.includes("expenses")) state.permissions["محاسب"].tabs.push("expenses");
   if(state.permissions["محاسب"] && !state.permissions["محاسب"].tabs.includes("customerDebts")) state.permissions["محاسب"].tabs.push("customerDebts");
   if(state.permissions["كاشير"] && !state.permissions["كاشير"].tabs.includes("customerDebts")) state.permissions["كاشير"].tabs.push("customerDebts");
@@ -540,6 +543,7 @@ const NAV_GROUPS = [
     {tab:"sensitiveFinancials", label:"الإحصائيات المالية الحساسة"},
     {tab:"report-vatCalc", label:"حاسبة الضريبة"},
     {tab:"report-topExpenses", label:"أعلى المصاريف"},
+    {tab:"report-expenseSubItems", label:"تقرير المصروفات حسب البند"},
   ]},
   {title:"التقارير", color:"#7d5fb0", items:[
     {tab:"report-fullLog", label:"السجل الشامل"},
@@ -567,7 +571,7 @@ const TAB_ICONS = {
   "report-broadcastCampaign":"megaphone", itemCards:"layers", suppliers:"factory", purchases:"shopping-cart",
   purchaseReturns:"corner-up-left", legacy:"archive", balances:"wallet", expenses:"receipt", vouchers:"file-text",
   shiftClose:"calculator", payroll:"banknote", archive:"lock", advisoryBalances:"clipboard",
-  sensitiveFinancials:"shield", "report-vatCalc":"percent", "report-topExpenses":"trending-down",
+  sensitiveFinancials:"shield", "report-vatCalc":"percent", "report-topExpenses":"trending-down", "report-expenseSubItems":"receipt",
   "report-fullLog":"scroll-text", "report-search":"search", "report-salesRanking":"trophy",
   "report-daily":"calendar", "report-tailorMonthly":"hard-hat", "report-auditLog":"history", growth:"trending-up",
   settingsShop:"store", settingsFinance:"circle-dollar-sign", settingsUsers:"user-cog",

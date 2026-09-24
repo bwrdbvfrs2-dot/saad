@@ -242,6 +242,7 @@
   <button class="tab-btn" data-tab="report-customers">👥<span>تقرير العملاء</span></button>
   <button class="tab-btn" data-tab="report-daily">📅<span>التقرير اليومي</span></button>
   <button class="tab-btn" data-tab="report-topExpenses">💸<span>أعلى المصاريف</span></button>
+  <button class="tab-btn" data-tab="report-expenseSubItems">🧾<span>تقرير المصروفات حسب البند</span></button>
   <button class="tab-btn adminOnly" data-tab="report-auditLog">📜<span>سجل التدقيق</span></button>
   <button class="tab-btn" data-tab="report-missingReceipt">🧾<span>فواتير بدون سند</span></button>
   <button class="tab-btn" data-tab="invoicesList">📊<span>سجل الفواتير</span></button>
@@ -1047,6 +1048,18 @@
 </div>
 </div>
 
+<div class="tab-panel" id="tab-report-expenseSubItems">
+<div class="panel">
+
+  <h3 style="margin:0 0 10px;font-size:14px;">تقرير المصروفات حسب البند الفرعي</h3>
+  <p class="sub">تجميع كل المصروفات (بأي تصنيف) حسب البند الفرعي المختار لها — يفيد بمعرفة تفصيل أدق للمصاريف، مثل صيانة مكيفات مقابل صيانة مقصات تحت نفس تصنيف الصيانة.</p>
+  <div id="expenseSubItemsPeriodWrap"></div>
+  <button class="btn btn-ghost btn-sm" id="showExpenseSubItemsBtn">عرض التقرير</button>
+  <div id="expenseSubItemsReportView" style="margin-top:12px;"></div>
+
+</div>
+</div>
+
 <div class="tab-panel" id="tab-report-auditLog">
 <div class="panel">
 
@@ -1203,8 +1216,12 @@
     <div class="field"><label>التصنيف</label><select id="expCategory"></select></div>
   </div>
   <div class="row-2">
+    <div class="field"><label>البند الفرعي (اختياري)</label><select id="expSubItem"></select></div>
     <div class="field"><label>المبلغ (ريال)</label><input type="number" id="expAmount" min="0" placeholder="0"></div>
+  </div>
+  <div class="row-2">
     <div class="field"><label>دفع لمن</label><input type="text" id="expPaidTo"></div>
+    <div class="field"></div>
   </div>
   <div class="row-2">
     <div class="field"><label>اسم المحل</label><input type="text" id="expStoreName"></div>
@@ -1215,7 +1232,7 @@
   <button class="btn btn-gold btn-sm" id="addExpenseBtn">حفظ المصروف</button>
   <div class="stitch"></div>
   <h3 style="margin:0 0 10px;font-size:14px;">سجل المصروفات</h3>
-  <div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>التصنيف</th><th>المبلغ</th><th>دفع لمن</th><th>المحل</th><th>مصدر الدفع</th></tr></thead><tbody id="expensesBody"></tbody></table></div>
+  <div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>التصنيف</th><th>البند الفرعي</th><th>المبلغ</th><th>دفع لمن</th><th>المحل</th><th>مصدر الدفع</th></tr></thead><tbody id="expensesBody"></tbody></table></div>
 </div>
 </div>
 

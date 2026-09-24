@@ -136,19 +136,48 @@ const ADVISORY_LABELS = {fabric:"الأقمشة", padding:"الحشوات", wage
 function renderExpenseCategories(){
   const el = $("expenseCategoriesList");
   if(!el) return;
-  el.innerHTML = state.expenseCategories.map((c,i)=>`
-    <div class="item-row"><span>${c.label}${c.advisoryKey?` — مرتبط بـ${ADVISORY_LABELS[c.advisoryKey]}`:""}</span>
-      <button class="icon-btn" onclick="removeExpenseCategory(${i})">حذف</button></div>`).join("") ||
-    `<p class="sub">ما فيه تصنيفات بعد.</p>`;
+  el.innerHTML = state.expenseCategories.map((c,i)=>{
+    const subItemsHtml = (c.subItems||[]).map((s,si)=>`<div class="item-row">
+        <span style="flex:1;">${esc(s.label)}</span>
+        <button class="icon-btn" onclick="removeExpenseSubItem('${c.id}', ${si})">حذف</button>
+      </div>`).join("") || `<p class="sub" style="margin:4px 0;">ما فيه بنود فرعية بعد.</p>`;
+    return `<div class="garment-card">
+      <div class="item-row"><span>${esc(c.label)}${c.advisoryKey?` — مرتبط بـ${ADVISORY_LABELS[c.advisoryKey]}`:""}</span>
+        <button class="icon-btn" onclick="removeExpenseCategory(${i})">حذف التصنيف</button></div>
+      <p class="sub" style="margin:8px 0 4px;">البنود الفرعية (اختياري — لتفصيل أكثر بتقارير المصروفات)</p>
+      ${subItemsHtml}
+      <div class="row-2" style="margin-top:4px;">
+        <div class="field" style="margin-bottom:0;"><input type="text" class="new-subitem-input" data-cat="${c.id}" placeholder="مثلاً: صيانة مكيفات"></div>
+        <div class="field" style="margin-bottom:0;"><button class="btn btn-ghost btn-sm" onclick="addExpenseSubItem('${c.id}')" style="width:100%;">إضافة بند</button></div>
+      </div>
+    </div>`;
+  }).join("") || `<p class="sub">ما فيه تصنيفات بعد.</p>`;
 }
 function addExpenseCategory(){
   const label=$("newCatLabel").value.trim(), advisoryKey=$("newCatAdvisory").value||null;
   if(!label){ showToast("أدخل اسم التصنيف"); return; }
-  state.expenseCategories.push({id:Date.now()+"", label, advisoryKey});
+  state.expenseCategories.push({id:Date.now()+"", label, advisoryKey, subItems:[]});
   $("newCatLabel").value=""; $("newCatAdvisory").value="";
   saveState(); renderAll();
 }
 function removeExpenseCategory(i){ state.expenseCategories.splice(i,1); saveState(); renderAll(); }
+function addExpenseSubItem(catId){
+  const cat = state.expenseCategories.find(c=>c.id===catId);
+  if(!cat) return;
+  const inp = document.querySelector(`.new-subitem-input[data-cat="${catId}"]`);
+  const label = inp.value.trim();
+  if(!label){ showToast("أدخل اسم البند"); return; }
+  if(!cat.subItems) cat.subItems=[];
+  cat.subItems.push({id:Date.now()+"", label});
+  saveState(); renderAll();
+  showToast("تمت إضافة البند");
+}
+function removeExpenseSubItem(catId, subIdx){
+  const cat = state.expenseCategories.find(c=>c.id===catId);
+  if(!cat || !cat.subItems) return;
+  cat.subItems.splice(subIdx,1);
+  saveState(); renderAll();
+}
 
 // ---------------- addons/services ----------------
 function renderAddonsList(){
