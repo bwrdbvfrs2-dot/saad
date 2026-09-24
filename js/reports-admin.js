@@ -705,7 +705,12 @@ async function saveUserEdit(i){
     }
     try{
       await ROLES_COL.doc(uid).set({role});
-    }catch(e){ console.error("role registration after password reset failed", e); showToast("تعذّر تحديث كلمة المرور (" + (e && e.code || "بدون رمز") + ") — حاول مرة ثانية"); return; }
+    }catch(e){
+      console.error("role registration after password reset failed", e);
+      const hint = e && e.code==="permission-denied" ? (" — معرف حسابك: " + (fbAuth.currentUser ? fbAuth.currentUser.uid : "غير معروف")) : "";
+      showToast("تعذّر تحديث كلمة المرور (" + (e && e.code || "بدون رمز") + ")" + hint + " — حاول مرة ثانية");
+      return;
+    }
     updatedUser.authUid = uid; updatedUser.authEmail = email;
   } else if(prevUser.authUid && role!==prevUser.role){
     try{ await ROLES_COL.doc(prevUser.authUid).set({role}); }
