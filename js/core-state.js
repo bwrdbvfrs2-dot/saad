@@ -15,7 +15,9 @@ const AUDIT_LOG_COL = db.collection("auditLog"); // separate top-level collectio
 async function logAudit(action, details){
   try{
     await AUDIT_LOG_COL.add({
-      action, details: details||{},
+      // round-trip through JSON so an optional field left `undefined` is dropped instead of making
+      // Firestore reject the whole entry (the audit trail would then silently miss this action)
+      action, details: JSON.parse(JSON.stringify(details||{})),
       userId: fbAuth.currentUser ? fbAuth.currentUser.uid : "unknown",
       username: (typeof currentUser!=="undefined" && currentUser) ? currentUser.username : "unknown",
       timestamp: firebase.firestore.FieldValue.serverTimestamp(),
@@ -213,7 +215,7 @@ let state = {
   transferRequests:[],
   loyaltyLedger:[],
   itemCards:[], suppliers:[], purchases:[], purchaseReturns:[],
-  customers:[], salesInvoices:[], addonDefs:[], tailorScans:[], payrollLedger:[], vatPayments:[], legacyPayments:[],
+  customers:[], salesInvoices:[], salesReturns:[], addonDefs:[], tailorScans:[], payrollLedger:[], vatPayments:[], legacyPayments:[],
   alterations:[], alterationReasons:[], alterationResponsibles:["الخياط","القصاص","ماخذ المقاسات","الزبون نفسه"],
   fabricOrigins:["ياباني","كوري","تايلاندي","صيني"], offers:[], shiftClosings:[],
   invoiceReturns:[], deletedInvoicesLog:[], vouchers:[], mailRequests:[], decisions:[], seasons:[], broadcastCampaign:{sentMobiles:[]}, writtenOffLosses:[], operationalLosses:[], promoCodes:[],
@@ -241,6 +243,10 @@ function esc(s){ if(s===undefined||s===null) return ""; return String(s).replace
 // whole riyals show with no decimals; fractional amounts (e.g. from a fractional qty × unit price) show
 // 2 decimals instead of silently rounding away halalas — a flat toFixed(0) elsewhere made a real 71.5
 // total display as "72", which looked like a calculation bug even though the underlying total was correct
+// record ids: time first (so they still sort chronologically as before) plus a random tail — a bare
+// Date.now() gave two records made in the same millisecond the same id, and every find-by-id then
+// hit the first one (e.g. a second transfer could never be accepted or rejected: money stuck in transit)
+function newId(){ return Date.now()+"-"+Math.random().toString(36).slice(2,8); }
 function fmtSar(n){ n = n||0; return Number.isInteger(Math.round(n*100)/100) ? n.toFixed(0) : n.toFixed(2); }
 // shared anatomical overlay positions for collar/chest-pocket/jabzour/cufflink images on the front
 // mannequin -- used by both the on-screen measurement-card preview and the printed cutting card,

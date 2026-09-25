@@ -19,7 +19,7 @@ function requestOpeningBalanceEdit(cardId){
     showToast("فيه طلب سابق لنفس الصنف بانتظار موافقة المدير");
     return;
   }
-  state.openingBalanceEditRequests.push({id:Date.now()+"", cardId, cardName:card.name, requestedBy:currentUser.username, requestedAt:new Date().toISOString(), status:"pending"});
+  state.openingBalanceEditRequests.push({id:newId(), cardId, cardName:card.name, requestedBy:currentUser.username, requestedAt:new Date().toISOString(), status:"pending"});
   saveState(); renderAll();
   showToast("تم إرسال طلب التعديل للمدير");
 }
@@ -66,7 +66,37 @@ function toggleItemCardExpand(cardId){
   itemCardExpandOverrides[cardId] = !isItemCardExpanded(findItemCard(cardId));
   renderItemCards();
 }
+// price card for "أجرة تفصيل (بدون قماش)": sale price + minimum price per category (no stock — the
+// customer brings the fabric). The invoice form fills the price from here and enforces the minimum
+// exactly like a fabric's, so a cashier can't go below it without discount permission.
+function renderTailoringOnlyCard(){
+  const el = $("tailoringOnlyCard");
+  if(!el) return;
+  const t = state.settings.tailoringOnly;
+  el.innerHTML = `<div class="garment-card" style="border-color:var(--gold);">
+    <span class="tag">كرت صنف: أجرة تفصيل (بدون قماش)</span>
+    <p class="sub" style="margin:6px 0;">للثوب اللي يجيب العميل قماشه — سعر البيع يتعبّى تلقائياً بالفاتورة حسب الفئة، والحد الأدنى يمنع البيع بأقل منه إلا لمن عنده صلاحية خصم (وضمن حدّه). تعديل سعر الرجال يحسب الولادي والطفل تلقائياً.</p>
+    <div class="row-3">${BODY_CATEGORIES.map(cat=>`<div class="field"><label>سعر ${cat} (ريال)</label><input type="number" class="to-price" data-cat="${cat}" min="0" value="${t.prices[cat]||""}" placeholder="0"></div>`).join("")}</div>
+    <div class="row-3">${BODY_CATEGORIES.map(cat=>`<div class="field"><label>الحد الأدنى ${cat} (ريال)</label><input type="number" class="to-minprice" data-cat="${cat}" min="0" step="5" value="${t.minPrices[cat]||""}" placeholder="0"></div>`).join("")}</div>
+  </div>`;
+  const bind = (cls, field)=> el.querySelectorAll(cls).forEach(inp=> inp.addEventListener("change", ()=>{
+    // read it fresh: any save reloads `state`, so an object captured at render time goes stale and
+    // a second edit would be written to a copy that's no longer saved
+    const t = state.settings.tailoringOnly;
+    const old = t[field][inp.dataset.cat];
+    t[field][inp.dataset.cat] = parseFloat(inp.value)||0;
+    if(inp.dataset.cat==="رجال"){
+      autoCalcCategoryPricing(t, field, true);
+      el.querySelectorAll(cls).forEach(sib=>{ if(sib!==inp) sib.value = t[field][sib.dataset.cat]||""; });
+    }
+    saveState();
+    logAudit("price_changed", {cardName:"أجرة تفصيل (بدون قماش)", field, category:inp.dataset.cat, oldPrice:old, newPrice:t[field][inp.dataset.cat]});
+  }));
+  bind(".to-price", "prices");
+  bind(".to-minprice", "minPrices");
+}
 function renderItemCards(){
+  renderTailoringOnlyCard();
   checkOpeningBalanceGrants();
   if(currentUser && currentUser.role==="مدير") renderOpeningBalanceRequestsPanel();
   const el = $("itemCardsList");
@@ -121,7 +151,7 @@ function renderItemCards(){
       <div class="actions-row" style="margin-top:8px;">
         <button class="btn btn-ghost btn-sm" onclick="toggleItemCardActive('${c.id}')">${c.active?"⏸ إيقاف":"▶ تفعيل"}</button>
         <button class="btn btn-ghost btn-sm" onclick="showItemStatement('${c.id}')">كشف حساب الصنف</button>
-        ${c.type==="fabric" ? `<button class="btn btn-ghost btn-sm" onclick="openPrintLabelModal('${c.id}')">طباعة ملصق الصنف</button>` : ""}
+        ${c.type==="fabric"||c.type==="product" ? `<button class="btn btn-ghost btn-sm" onclick="openPrintLabelModal('${c.id}')">طباعة ملصق السعر والباركود</button>` : ""}
         <button class="btn btn-danger btn-sm" onclick="writeOffItemCard('${c.id}')">إتلاف الصنف</button>
       </div>` : "";
     return `<div class="garment-card">
@@ -153,7 +183,7 @@ function renderItemCards(){
     card.openingBalance = newVal;
     if(!isFirstEntry){
       if(!state.openingBalanceAdjustments) state.openingBalanceAdjustments=[];
-      state.openingBalanceAdjustments.push({id:Date.now()+"", date:todayStr(), cardId:card.id, cardName:card.name, oldValue:oldVal, newValue:newVal, username:currentUser.username});
+      state.openingBalanceAdjustments.push({id:newId(), date:todayStr(), cardId:card.id, cardName:card.name, oldValue:oldVal, newValue:newVal, username:currentUser.username});
       if(hasSessionGrant){
         openingBalanceSessionGrants.delete(card.id); // single use — the one-time admin approval is now spent
         const req = (state.openingBalanceEditRequests||[]).find(r=>r.cardId===card.id && r.requestedBy===currentUser.username && r.status==="approved");
@@ -242,24 +272,37 @@ function confirmPrintLabel(){
   printItemCardLabel(printLabelTargetId, copies);
   closePrintLabelModal();
 }
-function printItemCardLabel(cardId, copies){
+// what an item's barcode encodes: "P" + its unique item code — can't be mistaken for an invoice
+// number (plain digits) when scanned into any of the scan fields
+function itemBarcodeValue(c){ return "P" + (c.code!==undefined ? c.code : c.id); }
+function findItemCardByBarcode(text){
+  const t = String(text||"").trim().toUpperCase();
+  const m = t.match(/^P?(\d+)$/);
+  return m ? state.itemCards.find(c=>String(c.code)===m[1]) : null;
+}
+async function printItemCardLabel(cardId, copies){
   const c = findItemCard(cardId);
   if(!c) return;
   const rootWidth = (state.settings.thermalPaperWidth||58)===80 ? 280 : 200;
   const showOrigin = state.settings.printOriginOnLabel && c.origin;
-  const oneLabel = `
+  const priceRows = c.type==="fabric" && c.prices
+    ? BODY_CATEGORIES.map(cat=>`<tr><td style="text-align:right;padding:2px;font-weight:700;">${cat}</td><td style="text-align:left;padding:2px;">${(c.prices[cat]||0).toFixed(0)} ﷼</td></tr>`).join("")
+    : `<tr><td style="text-align:right;padding:2px;font-weight:700;">السعر</td><td style="text-align:left;padding:2px;font-size:14px;font-weight:800;">${(c.salePrice||0).toFixed(0)} ﷼</td></tr>`;
+  const oneLabel = i=> `
     <div style="width:100%;max-width:${rootWidth}px;font-family:'Cairo',sans-serif;direction:rtl;text-align:center;font-size:12px;margin:0 auto;background:#fff;color:#000;padding:8px;border-bottom:1px dashed #999;">
       <h3 style="margin:0 0 4px;font-size:14px;">${esc(c.name)}</h3>
       <p style="margin:0 0 4px;font-size:11px;font-weight:700;">كود الصنف: #${c.code!==undefined?c.code:"—"}</p>
       ${showOrigin ? `<p style="margin:2px 0;font-size:11px;">الصناعة: ${esc(c.origin)}</p>` : ""}
-      <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:6px;">
-        <tr><td style="text-align:right;padding:2px;font-weight:700;">رجال</td><td style="text-align:left;padding:2px;">${(c.prices["رجال"]||0).toFixed(0)} ﷼</td></tr>
-        <tr><td style="text-align:right;padding:2px;font-weight:700;">ولادي</td><td style="text-align:left;padding:2px;">${(c.prices["ولادي"]||0).toFixed(0)} ﷼</td></tr>
-        <tr><td style="text-align:right;padding:2px;font-weight:700;">طفل</td><td style="text-align:left;padding:2px;">${(c.prices["طفل"]||0).toFixed(0)} ﷼</td></tr>
-      </table>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:6px;">${priceRows}</table>
+      <div style="margin-top:6px;"><svg class="item-label-barcode" id="itemLabelBarcode${i}"></svg></div>
     </div>`;
-  const fullHtml = `<div id="labelShareRoot">${Array(copies).fill(oneLabel).join("")}</div>`;
+  const fullHtml = `<div id="labelShareRoot">${Array.from({length:copies},(_,i)=>oneLabel(i)).join("")}</div>`;
   $("printArea").innerHTML = fullHtml;
+  try{
+    await loadBarcodeLib();
+    if(window.JsBarcode) document.querySelectorAll("#labelShareRoot .item-label-barcode").forEach(svg=>
+      window.JsBarcode(svg, itemBarcodeValue(c), {format:"CODE128", width:1.6, height:34, fontSize:11, margin:2}));
+  }catch(e){ console.error("label barcode failed", e); }
   // "auto" for the page height silently makes some print/PDF engines (verified: Chromium's own
   // print-to-PDF) drop the whole @page size and fall back to a default Letter/A4-sized page —
   // which is what was actually causing thermal receipts/labels/vouchers to print at the wrong
@@ -279,7 +322,7 @@ async function writeOffItemCard(id){
   const snapshot = JSON.parse(JSON.stringify(state));
   card.stockQty = (card.stockQty||0) - avail; // brings cardAvailableQty(card) to exactly 0
   card.active = false;
-  state.stockWriteOffs.push({id:Date.now()+"", itemCardId:id, date:todayStr(), qty:avail, recordedBy:currentUser.username});
+  state.stockWriteOffs.push({id:newId(), itemCardId:id, date:todayStr(), qty:avail, recordedBy:currentUser.username});
   if(await saveStateWithRollback(snapshot)){
     logAudit("item_written_off", {cardName:card.name, qty:avail});
     showToast("تم إتلاف الصنف وتصفير رصيده");
@@ -303,7 +346,7 @@ function renderSuppliers(){
 function addSupplier(){
   const name = $("newSupplierName").value.trim(), phone = $("newSupplierPhone").value.trim();
   if(!name){ showToast("أدخل اسم المورد"); return; }
-  state.suppliers.push({id:Date.now()+"", name, phone, notes:"", balance:0});
+  state.suppliers.push({id:newId(), name, phone, notes:"", balance:0});
   $("newSupplierName").value=""; $("newSupplierPhone").value="";
   saveState(); renderAll(); showToast("تم إضافة المورد");
 }
@@ -319,6 +362,8 @@ async function paySupplier(supId){
   if(boxTotal(box) < amount){ showToast(`الرصيد غير كافٍ بالصندوق (المتاح ${boxTotal(box).toFixed(0)} ريال)`); return; }
   const snapshot = JSON.parse(JSON.stringify(state));
   box.balance -= amount; s.balance -= amount;
+  s.payments = s.payments||[];
+  s.payments.push({id:newId(), date:todayStr(), amount, boxId:box.id, recordedBy:currentUser.username});
   if(await saveStateWithRollback(snapshot)){
     logAudit("supplier_paid", {supplierName:s.name, amount});
     showToast("تم تسديد المورد");
@@ -378,7 +423,7 @@ function addManualItemCard(){
     origin = $("manualCardOrigin").value; season = $("manualCardSeason").value;
     if(!origin || !season){ showToast("صنف قماش جديد — لازم تحدد الصناعة والموسم قبل الحفظ"); return; }
   }
-  const card = {id:Date.now()+"", code:nextItemCode(), name, type, unit: type==="fabric"?state.settings.measureUnit:"piece",
+  const card = {id:newId(), code:nextItemCode(), name, type, unit: type==="fabric"?state.settings.measureUnit:"piece",
     currentCost:cost, openingBalance:qty, stockQty:0, reservedQty:0, active:true, minSalePrice:0, minPrices: type==="fabric"?{"رجال":0,"ولادي":0,"طفل":0}:{},
     origin: type==="fabric" ? origin : undefined, season: type==="fabric" ? season : undefined,
     prices: type==="fabric" ? {"رجال":0,"ولادي":0,"طفل":0} : undefined,
@@ -408,7 +453,7 @@ async function addPurchase(){
       origin = $("purchOrigin").value; season = $("purchSeason").value;
       if(!origin || !season){ showToast("صنف قماش جديد — لازم تحدد الصناعة والموسم قبل الحفظ"); return; }
     }
-    card = {id:Date.now()+"", code:nextItemCode(), name:itemName, type, unit: type==="fabric"?state.settings.measureUnit:"piece",
+    card = {id:newId(), code:nextItemCode(), name:itemName, type, unit: type==="fabric"?state.settings.measureUnit:"piece",
       currentCost:0, openingBalance:0, stockQty:0, reservedQty:0, active:true, minSalePrice:0, minPrices: type==="fabric"?{"رجال":0,"ولادي":0,"طفل":0}:{},
       origin: type==="fabric" ? origin : undefined, season: type==="fabric" ? season : undefined,
       prices: type==="fabric" ? {"رجال":0,"ولادي":0,"طفل":0} : undefined,
@@ -429,6 +474,9 @@ async function addPurchase(){
   }
   card.stockQty = (card.stockQty||0) + qty;
   card.currentCost = unitPrice;
+  // fabric bought through purchases (the normal way) draws the fabric guideline balance down —
+  // before, only a "شراء قماش" expense did, so this balance only ever grew
+  if(type==="fabric") state.advisory.fabric -= qty*unitPrice;
   const invoiceNo = nextPurchaseInvoiceNo();
   const imageFile = $("purchImageFile").files[0];
   let imageData = null;
@@ -442,7 +490,7 @@ async function addPurchase(){
     });
   }
   const vatStatus = $("purchVatStatus").value;
-  state.purchases.push({id:Date.now()+"", invoiceNo, date:todayStr(), supplierId, itemCardId:card.id, quantity:qty, unitPrice, total, payStatus, sourceBoxId: payStatus==="paid"?sourceBoxId:null, recordedBy:currentUser.username, supplierInvoiceNo, imageData, vatStatus});
+  state.purchases.push({id:newId(), invoiceNo, date:todayStr(), supplierId, itemCardId:card.id, quantity:qty, unitPrice, total, payStatus, sourceBoxId: payStatus==="paid"?sourceBoxId:null, recordedBy:currentUser.username, supplierInvoiceNo, imageData, vatStatus});
   if(await saveStateWithRollback(purchaseSnapshot)){
     logAudit("purchase_recorded", {invoiceNo, itemName, qty, unitPrice, total, payStatus});
     $("purchQty").value=""; $("purchUnitPrice").value=""; $("purchItemName").value=""; $("purchTotal").value=""; $("purchItemStatus").textContent=""; $("purchOrigin").value=""; $("purchSeason").value=""; $("purchFabricExtraWrap").style.display="none"; $("purchSupplierInvNo").value=""; $("purchImageFile").value="";
@@ -532,14 +580,16 @@ function renderPayrollTab(){
     const balance = employeeBalance(u.username);
     const history = state.payrollLedger.filter(e=>e.username===u.username).slice().reverse().slice(0,15);
     const historyHtml = history.length ? history.map(e=>{
-      const lbl = e.type==="entitlement"?"استحقاق":e.type==="payment"?"دفعة":e.type==="advance"?"سلفة":"خصم";
-      const sign = e.type==="entitlement" ? "+" : "-";
-      const color = e.type==="entitlement" ? "var(--profit)" : "var(--loss)";
+      const credit = e.type==="entitlement" || e.type==="bonus";
+      const lbl = e.type==="entitlement"?"استحقاق":e.type==="bonus"?"مكافأة":e.type==="payment"?"دفعة":e.type==="advance"?"سلفة":"خصم";
+      const sign = credit ? "+" : "-";
+      const color = credit ? "var(--profit)" : "var(--loss)";
       return `<div class="payment-row"><span style="color:${color};">${sign}${e.amount.toFixed(0)} ﷼</span><span>${lbl}</span><span style="color:var(--muted);">${e.date}</span>${e.note?`<span style="color:var(--muted);">${e.note}</span>`:""}</div>`;
     }).join("") : `<p class="sub">ما فيه حركات بعد.</p>`;
     return `<div class="garment-card">
       <span class="tag">${u.username} — ${u.role}</span>
       <p style="margin:6px 0;font-weight:700;color:${balance>0?'var(--loss)':'var(--profit)'};">المستحق له: ${balance.toFixed(0)} ريال</p>
+      ${(()=>{ const el = advanceEligibility(u.username); return `<p class="sub" style="margin:0 0 6px;color:${el.ok?"var(--profit)":"var(--muted)"};">${el.ok ? `السلفة متاحة (حتى ${el.balance.toFixed(0)} ريال)` : `السلفة غير متاحة: ${esc(el.msg)}`}${u.joinedDate?` — بداية العمل ${u.joinedDate}`:""}</p>`; })()}
       <div class="row-3">
         <div class="field"><label>نوع الحركة</label><select class="pr-type" data-user="${u.username}"><option value="payment">دفعة راتب</option><option value="advance">سلفة</option><option value="deduction">خصم</option></select></div>
         <div class="field"><label>المبلغ</label><input type="number" class="pr-amount" data-user="${u.username}" min="0" placeholder="0"></div>
@@ -576,18 +626,32 @@ async function addPurchaseReturn(){
   const card = findItemCard(cardId);
   if(!card){ showToast("اختر صنف"); return; }
   if(qty<=0){ showToast("أدخل كمية صحيحة"); return; }
-  const snapshot = JSON.parse(JSON.stringify(state));
-  const value = qty * card.currentCost;
-  card.stockQty = (card.stockQty||0) - qty;
-  if(payStatus==="deferred"){
-    const sup = state.suppliers.find(s=>s.id===supplierId);
-    if(sup) sup.balance = Math.max(0, sup.balance - value);
-  } else {
-    const box = findCashBox(boxId);
-    if(box) box.balance += value;
-  }
+  // every check runs before anything is touched — a failed check used to leave a half-applied return
+  if(qty - cardAvailableQty(card) > 0.001){ showToast(`الكمية أكبر من المتاح بالمخزون (${cardAvailableQty(card).toFixed(1)})`); return; }
+  const sup = state.suppliers.find(s=>s.id===supplierId);
+  if(!sup){ showToast("اختر المورد"); return; }
   const linkedPurchase = linkedPurchaseId ? state.purchases.find(p=>p.id===linkedPurchaseId) : null;
-  state.purchaseReturns.push({id:Date.now()+"", date:todayStr(), itemCardId:cardId, quantity:qty, value, supplierId, payStatus, recordedBy:currentUser.username,
+  if(linkedPurchase){
+    if(linkedPurchase.itemCardId!==card.id || linkedPurchase.supplierId!==supplierId){ showToast("فاتورة الشراء المرتبطة لصنف أو مورد مختلف"); return; }
+    const alreadyReturned = state.purchaseReturns.filter(r=>r.linkedPurchaseId===linkedPurchase.id).reduce((a,r)=>a+r.quantity,0);
+    if(qty - (linkedPurchase.quantity - alreadyReturned) > 0.001){ showToast(`الكمية أكبر من المتبقي بفاتورة الشراء #${linkedPurchase.invoiceNo} (${(linkedPurchase.quantity-alreadyReturned).toFixed(1)})`); return; }
+  }
+  // valued at what was actually paid for it when the purchase is known — the card's latest cost
+  // (from a newer purchase at a different price) used to over/under-credit the refund
+  const value = qty * (linkedPurchase ? linkedPurchase.unitPrice : card.currentCost);
+  let box = null;
+  if(payStatus==="deferred"){
+    // the excess over what's owed used to be silently dropped (balance clamped at 0)
+    if(value - sup.balance > 0.01){ showToast(`قيمة المرتجع (${value.toFixed(0)} ريال) أكبر من المستحق للمورد (${sup.balance.toFixed(0)} ريال) — لو كانت الفاتورة مدفوعة اختر "مدفوعة"`); return; }
+  } else {
+    box = findCashBox(boxId);
+    if(!box){ showToast("اختر الصندوق المستلم للمبلغ"); return; }
+  }
+  const snapshot = JSON.parse(JSON.stringify(state));
+  card.stockQty = (card.stockQty||0) - qty;
+  if(box) box.balance += value; else sup.balance -= value;
+  if(card.type==="fabric") state.advisory.fabric += value;
+  state.purchaseReturns.push({id:newId(), date:todayStr(), itemCardId:cardId, quantity:qty, value, supplierId, payStatus, boxId: box ? box.id : null, recordedBy:currentUser.username,
     linkedPurchaseId: linkedPurchaseId||null, purchaseInvoiceNo: linkedPurchase?linkedPurchase.invoiceNo:null, supplierInvoiceNo: linkedPurchase?linkedPurchase.supplierInvoiceNo:null});
   if(!await saveStateWithRollback(snapshot)) return;
   logAudit("purchase_return_recorded", {cardName:card.name, qty, value});
@@ -654,11 +718,29 @@ function updateSaleTotal(){
   }
   return total;
 }
+// a scanner types the code and presses Enter: add that item as a line, or +1 on an existing line
+function addSaleLineByBarcode(text){
+  const c = findItemCardByBarcode(text);
+  $("saleScanInput").value = "";
+  if(!c){ showToast("ما فيه صنف بهذا الباركود"); return; }
+  if(c.type!=="product" && c.type!=="fabric"){ showToast("هذا الصنف ما يُباع بفاتورة المبيعات"); return; }
+  const lines = Array.from(document.querySelectorAll("#saleItemsHolder .garment-card"));
+  const existing = lines.find(d=>d.querySelector(".sl-item").value===c.id);
+  if(existing){ const q=existing.querySelector(".sl-qty"); q.value = (parseFloat(q.value)||0) + 1; }
+  else {
+    const blank = lines.length===1 && !(parseFloat(lines[0].querySelector(".sl-price").value)>0) ? lines[0] : null;
+    if(blank) blank.remove();
+    renderSaleLine({itemCardId:c.id, qty:1, price:c.salePrice||0});
+  }
+  updateSaleTotal();
+  showToast(`تمت إضافة ${c.name}`);
+}
 function resetSaleForm(){
   $("saleNumber").value = state.settings.nextSalesInvoiceNumber;
   $("saleDate").value = todayStr();
   $("saleCustName").value=""; $("saleCustMobile").value="";
   $("salePickerWrap").style.display="none"; $("salePickerWrap").innerHTML="";
+  $("saleCustomerAlertWrap").style.display="none"; $("saleCustomerAlertWrap").innerHTML="";
   $("saleItemsHolder").innerHTML="";
   renderSaleLine();
   saleCashTouched = false;
@@ -696,10 +778,10 @@ async function saveSaleInvoice(){
   const lowStock = items.filter(it=>{ const c=findItemCard(it.itemCardId); return c && cardAvailableQty(c) < it.qty; });
   const snapshot = JSON.parse(JSON.stringify(state));
   items.forEach(it=>{ const c=findItemCard(it.itemCardId); if(c) c.stockQty -= it.qty; });
-  const payment = {id:Date.now()+"", date, cash, network, receipt};
+  const payment = {id:newId(), date, cash, network, receipt};
   applyPaymentToBalances(payment);
   ensureCustomerIndividual(custMobile, custName);
-  state.salesInvoices.push({id:Date.now()+"", number, date, customerName:custName, customerMobile:custMobile, items, payment, recordedBy:currentUser.username});
+  state.salesInvoices.push({id:newId(), number, date, customerName:custName, customerMobile:custMobile, items, payment, recordedBy:currentUser.username});
   state.settings.nextSalesInvoiceNumber++;
   if(!await saveStateWithRollback(snapshot)) return; // form stays filled in so the cashier can just retry
   logAudit("sale_invoice_recorded", {number, total, cash, network});
@@ -713,6 +795,68 @@ function renderSalesInvoicesList(){
     const total = inv.items.reduce((a,it)=>a+it.qty*it.price,0);
     return `<tr><td>${esc(inv.number)}</td><td>${inv.date}</td><td>${esc(inv.customerName)}</td><td>${fmtSar(total)} ﷼</td></tr>`;
   }).join("") : `<tr><td colspan="4">${emptyStateHtml("shopping-bag","ما فيه فواتير مبيعات بعد.")}</td></tr>`;
+  renderSaleReturnsLog();
+}
+// ---------------- sales invoice returns ----------------
+function renderSaleReturnsLog(){
+  const panel = $("saleReturnPanel");
+  if(!panel || !currentUser) return;
+  panel.style.display = currentUser.role==="مدير" ? "" : "none";
+  const rows = (state.salesReturns||[]).slice().reverse();
+  $("saleReturnsBody").innerHTML = rows.length ? rows.map(r=>`<tr><td>${r.date}</td><td>${esc(r.saleInvoiceNumber)}</td><td>${r.lines.map(l=>`${esc(l.name)} ×${l.qty}`).join("، ")}</td><td>${fmtSar(r.refundAmount||0)} ﷼</td><td>${esc(r.reason||"—")}</td><td>${esc(r.recordedBy)}</td></tr>`).join("")
+    : `<tr><td colspan="6" class="sub" style="text-align:center;padding:12px;">ما فيه مرتجعات مبيعات بعد.</td></tr>`;
+}
+function loadSaleReturnLines(){
+  const wrap = $("saleReturnLines");
+  const num = $("saleReturnNumber").value.trim();
+  const inv = state.salesInvoices.find(s=>s.number===num);
+  if(!inv){ wrap.innerHTML = ""; showToast("ما فيه فاتورة مبيعات بهذا الرقم"); return; }
+  const lines = inv.items.map((it,i)=>({it, i, left: it.qty - saleLineReturnedQty(inv, i)}));
+  if(!lines.some(l=>l.left>0.0001)){ wrap.innerHTML = `<p class="sub">كل أصناف هذي الفاتورة مرتجعة بالكامل مسبقاً.</p>`; return; }
+  wrap.innerHTML = `<p class="sub" style="margin:0 0 8px;">فاتورة ${esc(inv.number)} — ${inv.date} — ${esc(inv.customerName||"—")}</p>` +
+    lines.map(({it,i,left})=>`<div class="garment-card"><div class="row-3" style="align-items:flex-end;">
+      <div class="field" style="margin-bottom:0;"><label>${esc(it.name)} — ${fmtSar(it.price)} ﷼ للوحدة</label><p class="sub" style="margin:0;">المباع ${it.qty}${left<it.qty?` — المتبقي القابل للترجيع ${left}`:""}</p></div>
+      <div class="field" style="margin-bottom:0;"><label>الكمية المرتجعة</label><input type="number" class="sr-qty" data-line="${i}" min="0" max="${left}" step="0.1" placeholder="0" ${left<=0.0001?"disabled":""}></div>
+    </div></div>`).join("") +
+    `<div class="row-2" style="margin-top:8px;">
+      <div class="field"><label>الصندوق اللي يُرد منه المبلغ</label><select id="saleReturnBox">${userBoxes(currentUser.username).map(b=>`<option value="${b.id}">${esc(b.name)} (${typeLabel(b.type)}) — ${boxTotal(b).toFixed(0)} ﷼</option>`).join("")}</select></div>
+      <div class="field"><label>سبب الترجيع</label><input type="text" id="saleReturnReason" placeholder="مثلاً: مقاس غير مناسب"></div>
+    </div>
+    <p class="sub" id="saleReturnTotalNote">المبلغ المسترد: 0 ﷼</p>
+    <button class="btn btn-gold btn-sm" onclick="submitSaleReturn('${inv.id}')">تسجيل المرتجع</button>`;
+  wrap.querySelectorAll(".sr-qty").forEach(inp=> inp.addEventListener("input", ()=>{
+    const total = Array.from(wrap.querySelectorAll(".sr-qty")).reduce((a,x)=>a+(parseFloat(x.value)||0)*inv.items[+x.dataset.line].price,0);
+    $("saleReturnTotalNote").textContent = `المبلغ المسترد: ${fmtSar(total)} ﷼`;
+  }));
+}
+async function submitSaleReturn(invId){
+  if(!currentUser || currentUser.role!=="مدير"){ showToast("ترجيع فواتير المبيعات متاح للمدير فقط"); return; }
+  const inv = state.salesInvoices.find(s=>s.id===invId);
+  if(!inv){ showToast("الفاتورة غير موجودة"); return; }
+  const reason = ($("saleReturnReason").value||"").trim();
+  if(!reason){ showToast("أدخل سبب الترجيع"); return; }
+  const lines = [];
+  for(const inp of document.querySelectorAll("#saleReturnLines .sr-qty")){
+    const qty = parseFloat(inp.value)||0;
+    if(qty<=0) continue;
+    const i = +inp.dataset.line, it = inv.items[i];
+    const left = it.qty - saleLineReturnedQty(inv, i);
+    if(qty - left > 0.0001){ showToast(`كمية "${it.name}" المرتجعة أكبر من المتبقي بالفاتورة (${left})`); return; }
+    lines.push({lineIdx:i, itemCardId:it.itemCardId, name:it.name, qty, price:it.price, costAtSale:it.costAtSale||0});
+  }
+  if(!lines.length){ showToast("أدخل كمية مرتجعة لصنف واحد على الأقل"); return; }
+  const refundAmount = lines.reduce((a,l)=>a+l.qty*l.price,0);
+  const box = findCashBox($("saleReturnBox").value);
+  if(!box){ showToast("اختر الصندوق"); return; }
+  if(boxTotal(box) < refundAmount){ showToast(`رصيد الصندوق (${boxTotal(box).toFixed(0)} ريال) أقل من المبلغ المسترد`); return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
+  lines.forEach(l=>{ const c=findItemCard(l.itemCardId); if(c) c.stockQty = (c.stockQty||0) + l.qty; });
+  box.balance -= refundAmount;
+  state.salesReturns.push({id:newId(), saleInvoiceId:inv.id, saleInvoiceNumber:inv.number, saleRecordedBy:inv.recordedBy, lines, refundAmount, boxId:box.id, reason, date:todayStr(), recordedBy:currentUser.username});
+  if(!await saveStateWithRollback(snapshot)) return;
+  logAudit("sale_invoice_returned", {number:inv.number, refundAmount, items:lines.map(l=>`${l.name} x${l.qty}`).join(", "), reason});
+  $("saleReturnNumber").value=""; $("saleReturnLines").innerHTML="";
+  showToast(`تم تسجيل مرتجع فاتورة المبيعات ${inv.number} — المبلغ المسترد ${fmtSar(refundAmount)} ﷼ ورجعت الكمية للمخزون`);
 }
 
 function computeItemSalesTotals(){
@@ -728,6 +872,11 @@ function computeItemSalesTotals(){
     if(!totals[it.itemCardId]) totals[it.itemCardId] = {qty:0, revenue:0};
     totals[it.itemCardId].qty += it.qty||0;
     totals[it.itemCardId].revenue += (it.qty||0)*(it.price||0);
+  }));
+  (state.salesReturns||[]).forEach(r=> r.lines.forEach(l=>{
+    if(!totals[l.itemCardId]) totals[l.itemCardId] = {qty:0, revenue:0};
+    totals[l.itemCardId].qty -= l.qty;
+    totals[l.itemCardId].revenue -= l.qty*l.price;
   }));
   return totals;
 }
@@ -745,6 +894,11 @@ function computeVatSummary(from, to){
     if(!inDateRange(inv.date, from, to)) return;
     const total = inv.items.reduce((a,it)=>a+it.qty*it.price,0);
     outputVat += outputVatFromTotal(total); salesTotal += total;
+  });
+  // returned goods reverse their output VAT in the period the return happens
+  salesReturnsInRange(from, to).forEach(r=>{
+    const total = saleReturnValue(r);
+    outputVat -= outputVatFromTotal(total); salesTotal -= total;
   });
   state.purchases.forEach(p=>{
     if(!inDateRange(p.date, from, to)) return;
@@ -1067,6 +1221,32 @@ function sameQuarterLastYear(qLabel){ let [y,q]=qLabel.split("-Q").map(Number); 
 function quarterDisplay(qLabel){ const [y,q]=qLabel.split("-Q"); return `الربع ${q} — ${y}`; }
 function pctGrowth(cur,prev){ if(prev===undefined||prev===null) return null; if(prev===0) return cur===0?0:null; return ((cur-prev)/Math.abs(prev))*100; }
 function fmtGrowth(v){ if(v===null||v===undefined) return "لا توجد بيانات للمقارنة"; const sign=v>=0?"+":""; const cls=v>0?"var(--profit)":(v<0?"var(--loss)":"var(--muted)"); return `<span style="color:${cls};font-weight:700;">${sign}${v.toFixed(1)}%</span>`; }
+// half-year and year totals built only from the frozen monthly closing reports — one closing
+// report per month, so a month can never be counted twice or left out; incomplete periods say so
+function periodRollups(reports){
+  const acc = {};
+  const addTo = (key, label, size, r)=>{
+    const a = acc[key] || (acc[key] = {key, label, size, months:0, revenue:0, cost:0, profit:0, collected:0, garments:0, invoices:0});
+    a.months++; a.revenue += r.invoicedTotal||0; a.cost += r.costTotal||0; a.profit += r.profitInvoiced||0;
+    a.collected += r.collectedTotal||0; a.garments += r.garmentCount||0; a.invoices += r.invoiceCount||0;
+  };
+  reports.forEach(r=>{
+    const {y,m} = monthParts(r.monthLabel);
+    const h = m<=6 ? 1 : 2;
+    addTo(`${y}-H${h}`, `${h===1?"النصف الأول":"النصف الثاني"} ${y}`, 6, r);
+    addTo(`${y}`, `سنة ${y}`, 12, r);
+  });
+  return Object.values(acc).sort((a,b)=>b.key.localeCompare(a.key));
+}
+function renderPeriodRollups(reports){
+  const el = $("periodRollupsView");
+  if(!el) return;
+  const rows = periodRollups(reports);
+  if(!rows.length){ el.innerHTML = `<p class="sub">ما فيه أشهر مقفلة بعد.</p>`; return; }
+  el.innerHTML = `<div class="table-wrap"><table><thead><tr><th>الفترة</th><th>الأشهر المقفلة</th><th>الإيرادات المحققة</th><th>التكاليف</th><th>صافي الربح</th><th>المقبوض فعلياً</th><th>فواتير / ثياب</th></tr></thead><tbody>${
+    rows.map(p=>`<tr><td><b>${p.label}</b></td><td>${p.months} من ${p.size}${p.months<p.size?` <span style="color:var(--gold-soft);">(ناقصة)</span>`:""}</td><td>${p.revenue.toFixed(0)} ﷼</td><td>${p.cost.toFixed(0)} ﷼</td><td style="color:${p.profit>=0?"var(--profit)":"var(--loss)"};font-weight:700;">${p.profit.toFixed(0)} ﷼</td><td>${p.collected.toFixed(0)} ﷼</td><td>${p.invoices} / ${p.garments}</td></tr>`).join("")
+  }</tbody></table></div>`;
+}
 function renderGrowthReport(){
   const reports = state.closingReports.slice().sort((a,b)=>a.monthLabel.localeCompare(b.monthLabel));
   const monthlyEl = $("monthlyGrowthList"), qEl = $("quarterlyGrowthList");
@@ -1079,6 +1259,7 @@ function renderGrowthReport(){
     return;
   }
   const byMonth={}; reports.forEach(r=>byMonth[r.monthLabel]=r);
+  renderPeriodRollups(reports);
 
   // ===== Card 1: work-volume growth (sales + garment count) =====
   monthlyEl.innerHTML = reports.slice().reverse().map(r=>{

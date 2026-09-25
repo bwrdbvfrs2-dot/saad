@@ -51,6 +51,15 @@ function normalizeState(){
   if(!state.purchaseReturns) state.purchaseReturns=[];
   if(!state.customers) state.customers=[];
   if(!state.salesInvoices) state.salesInvoices=[];
+  if(!state.salesReturns) state.salesReturns=[];
+  if(!state.boxTransfers) state.boxTransfers=[];
+  // records created in the same millisecond used to share an id; find-by-id then always hit the
+  // first one, leaving the other stuck for good (a transfer that could never be accepted/rejected).
+  // Nothing else references these ids, so a duplicate can safely get a fresh one.
+  ["transferRequests","mailRequests"].forEach(k=>{
+    const seen = new Set();
+    (state[k]||[]).forEach(r=>{ if(seen.has(r.id)) r.id = newId(); seen.add(r.id); });
+  });
   if(!state.addonDefs) state.addonDefs=[];
   if(!state.tailorScans) state.tailorScans=[];
   state.invoices.forEach(inv=> inv.garments.forEach(g=>{
@@ -223,6 +232,14 @@ function normalizeState(){
   Object.values(state.permissions).forEach(p=>{ if(p.tabs && !p.tabs.includes("vouchers")) p.tabs.push("vouchers"); });
   Object.values(state.permissions).forEach(p=>{ if(p.tabs && !p.tabs.includes("production")) p.tabs.push("production"); });
   Object.values(state.permissions).forEach(p=>{ if(p.tabs && !p.tabs.includes("mail")) p.tabs.push("mail"); });
+  if(!state.settings.qcTabGranted){ // one-time: hand the new quality-check tab to every employee role
+    Object.values(state.permissions).forEach(p=>{ if(p.tabs && !p.tabs.includes("qc")) p.tabs.push("qc"); });
+    state.settings.qcTabGranted = true;
+  }
+  if(!state.qcLog) state.qcLog=[];
+  // the "أجرة تفصيل (بدون قماش)" line (customer brings their own fabric) has its own price card:
+  // a default sale price and a minimum price per body category, like a fabric card
+  if(!state.settings.tailoringOnly) state.settings.tailoringOnly = {prices:{"رجال":0,"ولادي":0,"طفل":0}, minPrices:{"رجال":0,"ولادي":0,"طفل":0}};
   if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("sensitiveFinancials")) state.permissions["مدير"].tabs.push("sensitiveFinancials");
   if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("advisoryBalances")) state.permissions["مدير"].tabs.push("advisoryBalances");
   if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("customerDebts")) state.permissions["مدير"].tabs.push("customerDebts");
@@ -287,9 +304,64 @@ function normalizeState(){
     if(u.wageChildSmall===undefined) u.wageChildSmall=0;
   });
 }
-async function saveState(){
-  try{ await STATE_DOC.set(JSON.parse(JSON.stringify(state))); return true; }
+// Every save writes the WHOLE shop document, so two devices saving around the same moment used to
+// be last-writer-wins: the second save silently erased whatever the first one had just added
+// (an invoice, a payment, an expense...) even though both screens said "saved". Each save now
+// carries a revision number and commits in a transaction only if the server copy is still the
+// exact revision this device last loaded; otherwise nothing is written, the latest data is pulled
+// in, and the person is told to redo that one step.
+let stateSaveConflict = false; // true when the most recent failed save was rejected for this reason
+const ownCommittedRevs = new Map(); // base revision -> revision this device's own save moved it to
+let saveQueue = Promise.resolve();
+// While this device has saves in flight, server snapshots are held back (see the listener below):
+// applying one mid-flight replaced `state` with a copy that lacked the still-pending change, and the
+// next save — chained onto that pending one — then wrote that older copy over it (a lost update on
+// a single device). Local state therefore always = last server copy + every change of our own.
+let pendingSaves = 0;
+let deferredSnapshot = null;
+let latestOwnRev = 0;
+function saveState(){
+  // captured now, so a later in-memory change can't leak into this save; queued so this device's
+  // own back-to-back saves never race (and reject) each other
+  const payload = JSON.parse(JSON.stringify(state));
+  pendingSaves++;
+  const run = saveQueue.then(()=> commitStatePayload(payload)).finally(()=>{
+    pendingSaves--;
+    if(pendingSaves===0 && deferredSnapshot){ const snap = deferredSnapshot; deferredSnapshot = null; applyServerSnapshot(snap, false); }
+  });
+  saveQueue = run.catch(()=>{});
+  return run;
+}
+async function commitStatePayload(payload){
+  stateSaveConflict = false;
+  // a save captured before this device's own previous save landed was built on top of that save's
+  // changes too, so it continues from the revision that save produced
+  let baseRev = payload._rev||0;
+  while(ownCommittedRevs.has(baseRev)) baseRev = ownCommittedRevs.get(baseRev);
+  payload._rev = baseRev + 1;
+  try{
+    await db.runTransaction(async tx=>{
+      const cur = await tx.get(STATE_DOC);
+      const curRev = (cur.exists && cur.data()._rev) || 0;
+      if(curRev !== baseRev){ const err = new Error("shop/state changed since it was loaded"); err.code = "state-conflict"; throw err; }
+      tx.set(STATE_DOC, payload);
+    });
+    ownCommittedRevs.set(baseRev, payload._rev);
+    latestOwnRev = Math.max(latestOwnRev, payload._rev);
+    return true;
+  }
   catch(e){
+    if(e && e.code==="state-conflict"){
+      stateSaveConflict = true;
+      console.warn("save rejected — another device saved first; reloading latest data", e);
+      try{
+        const snap = await STATE_DOC.get({source:"server"});
+        if(snap.exists){ state = snap.data(); normalizeState(); }
+      }catch(fetchErr){ console.error("reloading latest state after a save conflict failed", fetchErr); }
+      if(currentUser) renderAll();
+      alert("ما انحفظ آخر إجراء — مستخدم ثاني حفظ تعديلات بنفس اللحظة.\nتم تحديث البيانات لآخر نسخة، أعد الخطوة الأخيرة مرة ثانية.");
+      return false;
+    }
     console.error("Firestore save failed", e);
     let msg = "تعذّر الحفظ — تحقق من الاتصال بالإنترنت";
     if(e && e.code==="permission-denied"){
@@ -308,7 +380,9 @@ async function saveState(){
 // that only lives in this tab until the next real sync silently erases it.
 async function saveStateWithRollback(snapshot){
   const saved = await saveState();
-  if(!saved){ state = snapshot; }
+  // after a conflict `state` already holds the freshly reloaded server copy — rolling back to the
+  // older snapshot would throw that away and make the retry conflict all over again
+  if(!saved && !stateSaveConflict){ state = snapshot; }
   renderAll();
   return saved;
 }
@@ -319,23 +393,30 @@ async function saveStateWithRollback(snapshot){
 // update. That structurally removes the failure mode that previously let a transient error cause
 // a blank state to be written over real data.
 let stateUnsubscribe = null;
+async function applyServerSnapshot(snap, isFirstLoad){
+  // an older copy than this device's own latest save (its snapshot is on the way) is skipped
+  if(!isFirstLoad && ((snap.data()._rev||0) < latestOwnRev)) return;
+  state = snap.data();
+  typeLibrariesReseeded = false;
+  addonSnapshotsBackfilled = false;
+  normalizeState();
+  // awaited so this self-triggered write always lands before any write a caller makes
+  // right after login — otherwise the two could race, both reading the same pre-reseed
+  // `state`, with the later one seeing a server document its own local copy has already
+  // drifted from.
+  if(typeLibrariesReseeded || addonSnapshotsBackfilled) await saveState();
+  if(!isFirstLoad && currentUser) renderAll();
+}
 async function startListeningToState(){
   return new Promise((resolve)=>{
     let firstLoad = true;
     stateUnsubscribe = STATE_DOC.onSnapshot(async snap=>{
       if(snap.exists){
-        state = snap.data();
-        typeLibrariesReseeded = false;
-        addonSnapshotsBackfilled = false;
-        normalizeState();
-        // awaited so this self-triggered write always lands before any write a caller makes
-        // right after login — otherwise the two could race, both reading the same pre-reseed
-        // `state`, with the later one seeing a server document its own local copy has already
-        // drifted from.
-        if(typeLibrariesReseeded || addonSnapshotsBackfilled) await saveState();
+        if(!firstLoad && pendingSaves>0){ deferredSnapshot = snap; return; } // applied once our saves land
+        const wasFirst = firstLoad;
+        await applyServerSnapshot(snap, wasFirst);
       }
       if(firstLoad){ firstLoad=false; resolve(); }
-      else if(currentUser){ renderAll(); }
     }, err=>{
       console.error("Firestore listen error", err);
       showToast("تعذّر الاتصال بقاعدة البيانات السحابية");
@@ -392,9 +473,12 @@ async function restoreBackup(dateId){
     // keep the CURRENT login-linked user records — restoring an old backup's users could lock
     // out whoever is doing the restore, or reinstate someone removed since then
     restoredState.users = state.users;
+    // continue from the live revision, not the backup's old one, so the restore goes through the
+    // same conflict-checked save as everything else
+    restoredState._rev = state._rev;
     state = restoredState;
     normalizeState();
-    await STATE_DOC.set(JSON.parse(JSON.stringify(state)));
+    if(!await saveState()) return;
     showToast("تم الاسترجاع بنجاح"); renderAll();
   }catch(e){ console.error("restore failed", e); showToast("تعذّر الاسترجاع — حاول مرة ثانية"); }
 }
@@ -451,7 +535,7 @@ async function trySetupFirstAccount(){
     // exist yet, so it must be written before shop/state itself
     await USERNAMES_COL.doc(u).set({authEmail: email});
     await ROLES_COL.doc(uid).set({role:"مدير"});
-    state.users = [{username:u, role:"مدير", authUid:uid, authEmail:email, baseSalary:0, commissionEnabled:false, commissionRate:0, commissionThreshold:0, discountEnabled:false, discountType:"amount", discountValue:0, dailyCapacity:0, productionCapacity:0, wageMen:0, wageChild:0, wageChildSmall:0}];
+    state.users = [{username:u, role:"مدير", authUid:uid, authEmail:email, joinedDate:todayStr(), baseSalary:0, commissionEnabled:false, commissionRate:0, commissionThreshold:0, discountEnabled:false, discountType:"amount", discountValue:0, dailyCapacity:0, productionCapacity:0, wageMen:0, wageChild:0, wageChildSmall:0}];
     normalizeState(); // state.users is already non-empty, so this only fills in everything else
     await STATE_DOC.set(JSON.parse(JSON.stringify(state)));
   }catch(e){
@@ -482,21 +566,23 @@ async function logout(){
 function applyRolePermissions(){
   const isAdmin = currentUser.role==="مدير";
   const isTailor = currentUser.role==="خياط";
+  const isQc = currentUser.role==="فاحص جودة";
   $("payrollToggleBtn").style.display = isAdmin ? "" : "none";
   SETTINGS_TABS.forEach(t=>{
     const el = $("adminOnly_"+t); if(el) el.style.display = isAdmin?"":"none";
   });
-  const allowedTabs = isTailor ? ["scan","mail"] : (state.permissions[currentUser.role]?.tabs || []);
+  let allowedTabs = isTailor ? ["scan","mail"] : isQc ? ["qc","mail"] : (state.permissions[currentUser.role]?.tabs || []);
+  if(!state.settings.qcEnabled && !isQc) allowedTabs = allowedTabs.filter(t=>t!=="qc");
   document.querySelectorAll(".tab-btn").forEach(btn=>{
     btn.style.display = allowedTabs.includes(btn.dataset.tab) ? "" : "none";
   });
-  $("hamburgerBtn").style.display = isTailor ? "none" : "";
+  $("hamburgerBtn").style.display = (isTailor||isQc) ? "none" : "";
   renderNavDrawer();
   renderSidebar();
   renderBottomNav();
   const activeTab = document.querySelector(".tab-panel.active")?.id?.replace("tab-","");
   if(activeTab && !allowedTabs.includes(activeTab)){
-    switchTab(allowedTabs[0] || (isTailor?"scan":"invoice"));
+    switchTab(allowedTabs[0] || (isTailor?"scan":isQc?"qc":"invoice"));
   }
 }
 const NAV_GROUPS = [
@@ -515,6 +601,7 @@ const NAV_GROUPS = [
     {tab:"production", label:"متابعة الإنتاج"},
     {tab:"scan", label:"مسح الباركود"},
     {tab:"alteration", label:"ثوب معاد للتعديل"},
+    {tab:"qc", label:"فحص الجودة"},
     {tab:"debts", label:"مديونية الثياب"},
     {tab:"report-undelivered", label:"الثياب غير المسلّمة"},
     {tab:"report-garmentInventory", label:"جرد الثياب حسب الحالة"},
@@ -566,7 +653,7 @@ function allNavItemsFlat(){ return NAV_GROUPS.flatMap(g=>g.items); }
 const TAB_ICONS = {
   dashboard:"layout-dashboard", invoice:"file-text", salesInvoice:"shopping-bag", "report-returns":"rotate-ccw",
   "report-missingReceipt":"receipt", invoicesList:"list", distribution:"scissors", production:"shirt",
-  scan:"scan-line", alteration:"refresh-cw", debts:"credit-card", "report-undelivered":"package",
+  scan:"scan-line", alteration:"refresh-cw", qc:"badge-check", debts:"credit-card", "report-undelivered":"package",
   "report-garmentInventory":"clipboard-list", "report-noFabricWage":"scissors", customerDebts:"wallet", "report-customers":"users",
   "report-broadcastCampaign":"megaphone", itemCards:"layers", suppliers:"factory", purchases:"shopping-cart",
   purchaseReturns:"corner-up-left", legacy:"archive", balances:"wallet", expenses:"receipt", vouchers:"file-text",
@@ -630,7 +717,7 @@ function renderBottomNav(){
   const activeTab = document.querySelector(".tab-panel.active")?.id?.replace("tab-","");
   const flat = allNavItemsFlat();
   const isTailor = currentUser.role==="خياط";
-  const candidateTabs = isTailor ? ["scan","mail"] : BOTTOM_NAV_TABS;
+  const candidateTabs = isTailor ? ["scan","mail"] : currentUser.role==="فاحص جودة" ? ["qc","mail"] : BOTTOM_NAV_TABS;
   const items = candidateTabs.map(t=>{
     if(t==="mail") return {tab:"mail", label:"البريد"};
     const src = document.querySelector(`.tab-btn[data-tab="${t}"]`);

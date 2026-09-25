@@ -3,10 +3,19 @@ function garmentPriceShare(g, inv){
   const totalPrice = inv.garments.reduce((a,gg)=>a+(gg.status==="ملغي"?0:garmentSalePrice(gg)),0);
   return totalPrice>0 ? garmentSalePrice(g)/totalPrice : 0;
 }
-function garmentRevenueEvents(g, inv){
+// a cancelled garment's share of the payments as it stood when it was cancelled — among the
+// garments still active at that moment (itself and anything cancelled together with or after it).
+// garmentPriceShare() leaves every cancelled garment out, so for a cancelled garment it gave 0 (or,
+// on a partial return, the wrong share) and the revenue it had earned was never reversed.
+function garmentShareAtCancellation(g, inv){
+  const at = g.cancelledDate || "";
+  const totalPrice = inv.garments.reduce((a,gg)=> a + ((gg.status!=="ملغي" || (gg.cancelledDate||"") >= at) ? garmentSalePrice(gg) : 0), 0);
+  return totalPrice>0 ? garmentSalePrice(g)/totalPrice : 0;
+}
+function garmentRevenueEvents(g, inv, shareOverride){
   // returns [{month, amount}] — deposits collected pre-cut accumulate and release at cutDate's month;
   // anything paid on/after cutDate is recognized in its own payment month.
-  const share = garmentPriceShare(g, inv);
+  const share = shareOverride!==undefined ? shareOverride : garmentPriceShare(g, inv);
   const events = [];
   let preCutAccumulated = 0;
   (inv.payments||[]).forEach(p=>{
@@ -61,7 +70,7 @@ async function loadAndRenderAuditLog(){
     if(userFilter) rows = rows.filter(r=>r.username===userFilter);
     if(fromFilter) rows = rows.filter(r=>(r.clientDate||"")>=fromFilter);
     if(!rows.length){ el.innerHTML = `<p class="sub">ما فيه سجلات مطابقة.</p>`; return; }
-    const actionLabels = {expense_recorded:"مصروف", month_closed:"إقفال شهر", price_changed:"تعديل سعر", funds_transferred:"تحويل أموال", invoice_returned:"مرتجع فاتورة", user_added:"إضافة مستخدم", user_removed:"حذف مستخدم", permission_changed:"تغيير صلاحية", opening_balance_changed:"تعديل رصيد أول المدة"};
+    const actionLabels = {expense_recorded:"مصروف", month_closed:"إقفال شهر", price_changed:"تعديل سعر", funds_transferred:"تحويل أموال", invoice_returned:"مرتجع فاتورة", sale_invoice_returned:"مرتجع فاتورة مبيعات", user_added:"إضافة مستخدم", user_removed:"حذف مستخدم", permission_changed:"تغيير صلاحية", opening_balance_changed:"تعديل رصيد أول المدة"};
     el.innerHTML = rows.map(r=>{
       const when = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate().toLocaleString("ar-SA") : (r.clientDate||"—");
       return `<div class="garment-card">
@@ -73,6 +82,127 @@ async function loadAndRenderAuditLog(){
   }catch(e){
     el.innerHTML = `<p class="sub">تعذّر تحميل السجل: ${esc(e.message||"خطأ غير معروف")}</p>`;
   }
+}
+// ---------------- accounts & inventory integrity check ----------------
+// Rebuilds every box balance, supplier balance and stock figure purely from the recorded movements
+// and compares them with the stored figures. Read-only. A difference means money/stock moved
+// without a record (or a record without the movement) — exactly what an audit has to surface.
+// every recorded movement of money into or out of a box, with its date — the single source both
+// the integrity check (all dates) and the daily report (one day) are built from
+function collectBoxMovements(){
+  const fee = state.settings.bankFeePercent||0;
+  const out = [];
+  const mainId = (u,t)=>{ const b=mainBoxOf(u,t); return b ? b.id : null; };
+  const add = (boxId, amount, label, date)=> out.push({boxId, amount, label, date});
+  const pay = (p, label, date)=>{
+    if((p.cash||0)+(p.network||0)<=0) return;
+    if(!p.recordedBy){ out.push({boxId:null, amount:(p.cash||0)+(p.network||0), label, date}); return; }
+    if(p.cash) add(mainId(p.recordedBy,"cash"), p.cash, label, date);
+    if(p.network) add(mainId(p.recordedBy,"network"), p.network*(1-fee/100), label, date);
+  };
+  state.invoices.forEach(inv=> (inv.payments||[]).forEach(p=> pay(p, `دفعة فاتورة ${inv.number}`, p.date)));
+  state.salesInvoices.forEach(s=>{ if(s.payment) pay(s.payment, `فاتورة مبيعات ${s.number}`, s.payment.date||s.date); });
+  (state.legacyPayments||[]).forEach(l=> add(l.recordedBy ? mainId(l.recordedBy,"cash") : null, l.amount, l.recordedBy ? "تحصيل قطعة قديمة" : "تحصيل قطعة قديمة (سجل قديم بدون مستخدم)", l.date));
+  state.vouchers.forEach(v=> add(v.boxId, v.type==="receipt" ? v.amount : -v.amount, `سند ${v.type==="receipt"?"قبض":"صرف"} ${v.voucherNo}`, v.date));
+  state.expenses.forEach(e=> add(e.sourceBoxId, -e.amount, "مصروف", e.date));
+  state.invoiceReturns.forEach(r=>{ if(r.refundAmount) add(r.boxId, -r.refundAmount, `استرداد مرتجع فاتورة ${r.invoiceNumber}`, r.date); });
+  (state.salesReturns||[]).forEach(r=> add(r.boxId, -r.refundAmount, `استرداد مرتجع مبيعات ${r.saleInvoiceNumber}`, r.date));
+  state.purchases.forEach(p=>{ if(p.payStatus==="paid") add(p.sourceBoxId, -p.total, `فاتورة شراء ${p.invoiceNo}`, p.date); });
+  state.purchaseReturns.forEach(r=>{ if(r.payStatus==="paid") add(r.boxId, r.value, "مرتجع مشتريات", r.date); });
+  state.suppliers.forEach(s=> (s.payments||[]).forEach(sp=> add(sp.boxId, -sp.amount, `تسديد مورد ${s.name}`, sp.date)));
+  state.payrollLedger.forEach(e=>{ if(e.type==="payment"||e.type==="advance") add(e.boxId, -e.amount, `${e.type==="advance"?"سلفة":"راتب"} ${e.username}`, e.date); });
+  state.transferRequests.forEach(t=>{
+    add(t.fromBoxId, -t.amount, "تحويل مرسل", t.createdAt);
+    if(t.status==="accepted") add(mainId(t.toOwner,"cash"), t.amount, "تحويل مستلم", t.resolvedAt);
+    if(t.status==="rejected") add(t.fromBoxId, t.amount, "تحويل مرفوض راجع", t.resolvedAt);
+  });
+  (state.boxTransfers||[]).forEach(t=>{ add(t.fromBoxId, -t.amount, "تحويل بين صناديقك", t.date); add(t.toBoxId, t.amount, "تحويل بين صناديقك", t.date); });
+  return out;
+}
+function computeIntegrityCheck(){
+  const exp = {}; state.cashBoxes.forEach(b=> exp[b.id]=0);
+  const untraceable = [];
+  collectBoxMovements().forEach(m=>{
+    if(!m.boxId || exp[m.boxId]===undefined){ untraceable.push({why:m.label, amount:m.amount}); return; }
+    exp[m.boxId] += m.amount;
+  });
+  const boxes = state.cashBoxes.map(b=>({name:`${b.owner} — ${b.name} (${typeLabel(b.type)})`, actual:b.balance, rebuilt:exp[b.id], diff:b.balance-exp[b.id]}));
+  const suppliers = state.suppliers.map(s=>{
+    let e = 0;
+    state.purchases.forEach(p=>{ if(p.supplierId===s.id && p.payStatus==="deferred") e += p.total; });
+    state.purchaseReturns.forEach(r=>{ if(r.supplierId===s.id && r.payStatus==="deferred") e -= r.value; });
+    (s.payments||[]).forEach(sp=> e -= sp.amount);
+    return {name:s.name, actual:s.balance, rebuilt:e, diff:s.balance-e};
+  });
+  const st = {}, rs = {};
+  state.itemCards.forEach(c=>{ st[c.id]=0; rs[c.id]=0; });
+  const bump = (m,id,q)=>{ if(m[id]!==undefined) m[id]+=q; };
+  state.purchases.forEach(p=> bump(st, p.itemCardId, p.quantity));
+  state.purchaseReturns.forEach(r=> bump(st, r.itemCardId, -r.quantity));
+  state.salesInvoices.forEach(s=> s.items.forEach(it=> bump(st, it.itemCardId, -it.qty)));
+  (state.salesReturns||[]).forEach(r=> r.lines.forEach(l=> bump(st, l.itemCardId, l.qty)));
+  (state.stockWriteOffs||[]).forEach(w=> bump(st, w.itemCardId, -w.qty));
+  state.invoices.forEach(inv=>{
+    (inv.freeGifts||[]).forEach(f=> bump(st, f.itemCardId, -f.qty));
+    inv.garments.forEach(g=>{
+      if(g.itemCardId && (g.stockApplied==="consumed" || (g.status==="ملغي" && g.cutDate && !g.stockApplied))) bump(st, g.itemCardId, -(g.qtyUsed||0));
+      if(g.itemCardId && g.stockApplied==="reserved") bump(rs, g.itemCardId, g.qtyUsed||0);
+      if(g.addonsStockApplied) garmentAddonsInfo(g).filter(a=>a.kind==="physical").forEach(a=> bump(st, a.itemCardId, -(a.qtyPerGarment||1)));
+    });
+  });
+  const stock = state.itemCards.map(c=>({name:c.name, actual:c.stockQty||0, rebuilt:st[c.id], diff:(c.stockQty||0)-st[c.id], reserved:c.reservedQty||0, reservedRebuilt:rs[c.id], reservedDiff:(c.reservedQty||0)-rs[c.id], available:cardAvailableQty(c)}));
+  const seenPay = {}, dupPayroll = [];
+  state.payrollLedger.filter(e=>e.type==="entitlement").forEach(e=>{ const k=e.username+" — "+e.monthLabel; if(seenPay[k]) dupPayroll.push(k); seenPay[k]=1; });
+  const seenNum = {}, dupNumbers = [];
+  state.invoices.forEach(i=>{ if(seenNum[i.number]) dupNumbers.push(i.number); seenNum[i.number]=1; });
+  const twins = [];
+  state.invoices.forEach((a,ai)=> state.invoices.slice(ai+1).forEach(b=>{
+    if(a.customerMobile && a.customerMobile===b.customerMobile && a.date===b.date &&
+       a.garments.map(g=>g.price||0).sort().join()===b.garments.map(g=>g.price||0).sort().join()) twins.push(`${a.number} و ${b.number}`);
+  }));
+  const deliveredUnpaid = [];
+  state.invoices.forEach(inv=> inv.garments.forEach((g,i)=>{
+    if(g.status==="تسليم" && !g.creditDelivered && garmentRemaining(g, inv) > 0.5) deliveredUnpaid.push(`فاتورة ${inv.number} ثوب ${i+1}: ${garmentRemaining(g, inv).toFixed(0)} ﷼`);
+  }));
+  const pendingTransfers = state.transferRequests.filter(t=>t.status==="pending");
+  const pendingRequests = state.mailRequests.filter(r=>r.status==="pending");
+  const negativeBoxes = state.cashBoxes.filter(b=>boxTotal(b) < -0.01);
+  const negativeStock = state.itemCards.filter(c=>cardAvailableQty(c) < -0.001);
+  return {boxes, suppliers, stock, untraceable, dupPayroll, dupNumbers, twins, deliveredUnpaid, pendingTransfers, pendingRequests, negativeBoxes, negativeStock,
+    openingAdjustments:(state.openingBalanceAdjustments||[]).length};
+}
+function renderIntegrityCheck(){
+  const el = $("integrityCheckView");
+  if(!el) return;
+  const r = computeIntegrityCheck();
+  const ok = v=> Math.abs(v) < 0.01;
+  const mark = good=> good ? `<span style="color:var(--profit);font-weight:800;">✓</span>` : `<span style="color:var(--loss);font-weight:800;">✗</span>`;
+  const table = (head, rows)=> `<div class="table-wrap"><table><thead><tr>${head.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.join("")||`<tr><td colspan="${head.length}">—</td></tr>`}</tbody></table></div>`;
+  const list = (title, items, goodText, reviewOnly)=> `<p style="margin:10px 0 4px;font-weight:700;">${items.length && reviewOnly ? `<span style="color:var(--gold);font-weight:800;">⚠</span>` : mark(!items.length)} ${title}</p>` + (items.length ? `<p class="sub" style="margin:0;">${items.map(esc).join("<br>")}</p>` : `<p class="sub" style="margin:0;">${goodText}</p>`);
+  const badBoxes = r.boxes.filter(b=>!ok(b.diff)).length, badSup = r.suppliers.filter(s=>!ok(s.diff)).length, badStock = r.stock.filter(s=>!ok(s.diff)||!ok(s.reservedDiff)).length;
+  const issues = badBoxes + badSup + badStock + r.dupPayroll.length + r.dupNumbers.length + r.negativeBoxes.length + r.negativeStock.length;
+  let html = `<div class="remaining-box" style="border-color:${issues?"var(--loss)":"var(--profit)"};"><span><b>${issues ? `يوجد ${issues} ملاحظة تحتاج مراجعة` : "كل الأرصدة مطابقة للحركات المسجّلة"}</b></span><span class="amt">${todayStr()}</span></div>`;
+  html += `<h4 style="margin:14px 0 6px;">1) الصناديق — الرصيد الفعلي مقابل المعاد بناؤه من الحركات</h4>` +
+    table(["","الصندوق","الفعلي","من الحركات","الفرق"], r.boxes.map(b=>`<tr><td>${mark(ok(b.diff))}</td><td>${esc(b.name)}</td><td>${fmtSar(b.actual)}</td><td>${fmtSar(b.rebuilt)}</td><td style="color:${ok(b.diff)?"inherit":"var(--loss)"};">${fmtSar(b.diff)}</td></tr>`));
+  if(r.untraceable.length){
+    const total = r.untraceable.reduce((a,u)=>a+u.amount,0);
+    html += `<p class="sub" style="margin:6px 0;">ℹ حركات قديمة بدون صندوق محدد (سُجّلت قبل تحديث التتبع — تفسّر جزءاً من أي فرق أعلاه): ${r.untraceable.length} حركة بصافي ${fmtSar(total)} ﷼.</p>`;
+  }
+  html += `<h4 style="margin:14px 0 6px;">2) مستحقات الموردين</h4>` +
+    table(["","المورد","الفعلي","من الحركات","الفرق"], r.suppliers.map(s=>`<tr><td>${mark(ok(s.diff))}</td><td>${esc(s.name)}</td><td>${fmtSar(s.actual)}</td><td>${fmtSar(s.rebuilt)}</td><td>${fmtSar(s.diff)}</td></tr>`));
+  html += `<h4 style="margin:14px 0 6px;">3) المخزون — الرصيد والمحجوز مقابل الحركات</h4>` +
+    table(["","الصنف","الرصيد","من الحركات","المحجوز","المحجوز من الفواتير","المتاح"], r.stock.map(s=>`<tr><td>${mark(ok(s.diff)&&ok(s.reservedDiff))}</td><td>${esc(s.name)}</td><td>${fmtSar(s.actual)}</td><td>${fmtSar(s.rebuilt)}</td><td>${fmtSar(s.reserved)}</td><td>${fmtSar(s.reservedRebuilt)}</td><td>${fmtSar(s.available)}</td></tr>`));
+  html += list("أرصدة صناديق بالسالب", r.negativeBoxes.map(b=>`${b.owner} — ${b.name}: ${fmtSar(boxTotal(b))} ﷼`), "ما فيه صندوق بالسالب");
+  html += list("أصناف رصيدها المتاح بالسالب", r.negativeStock.map(c=>`${c.name}: ${fmtSar(cardAvailableQty(c))}`), "ما فيه صنف بالسالب");
+  html += list("استحقاق راتب مكرر لنفس الموظف ونفس الشهر", r.dupPayroll, "ما فيه تكرار");
+  html += list("أرقام فواتير مكررة", r.dupNumbers, "ما فيه تكرار");
+  html += `<h4 style="margin:14px 0 6px;">للمراجعة (ليست بالضرورة أخطاء)</h4>`;
+  html += list("فواتير محتملة الازدواجية (نفس العميل ونفس اليوم ونفس الأسعار)", r.twins, "ما فيه", true);
+  html += list("ثياب مسلّمة وعليها مبلغ غير مسدد بدون تسجيلها كتسليم بدين", r.deliveredUnpaid, "ما فيه", true);
+  html += list("مبالغ قيد التحويل (خصمت من المرسل ولم يستلمها أحد بعد)", r.pendingTransfers.map(t=>`${t.fromOwner} ← ${t.toOwner}: ${fmtSar(t.amount)} ﷼ منذ ${t.createdAt}`), "ما فيه", true);
+  html += list("طلبات بريد معلقة بانتظار قرار", r.pendingRequests.map(q=>`طلب #${q.seq} (${q.type==="advance"?"سلفة":q.type==="leave"?"إجازة":"مرتجع خلل"})${q.amount?` — ${fmtSar(q.amount)} ﷼`:""}`), "ما فيه", true);
+  html += `<p class="sub" style="margin-top:10px;">تعديلات يدوية مسجلة على أرصدة أول المدة للأصناف: ${r.openingAdjustments} (تفاصيلها بسجل التدقيق أدناه).</p>`;
+  el.innerHTML = html;
 }
 function renderTopExpensesReport(){
   const el = $("topExpensesView");
@@ -107,8 +237,11 @@ function computeMonthlyFinancials(monthLabel){
         // clean reversal if never cut; permanent fabric+fixed-share loss if it WAS cut before cancellation
         if(g.cutDate && g.cutDate.slice(0,7)===monthLabel) cost += garmentFabricCost(g) + currentFixedShare(0, monthLabel);
         if(g.cancelledDate && g.cancelledDate.slice(0,7)===monthLabel && g.cutDate){
-          // revenue that had been recognized pre-cancellation is reversed as a return/loss THIS month
-          const alreadyRecognized = garmentRevenueEvents(g, inv).reduce((a,e)=>a+e.amount,0);
+          // revenue that had been recognized in EARLIER months is reversed as a return/loss THIS month
+          // (a cancelled garment is skipped entirely in its own and later months, so anything dated
+          // from this month on was never counted and must not be taken off again)
+          const alreadyRecognized = garmentRevenueEvents(g, inv, garmentShareAtCancellation(g, inv))
+            .filter(e=>e.month < monthLabel).reduce((a,e)=>a+e.amount,0);
           revenue -= alreadyRecognized;
         }
         return;
@@ -123,6 +256,9 @@ function computeMonthlyFinancials(monthLabel){
   cost += operationalLosses + generalExpenses;
   const rawFixed = totalFixed();
   const salesProfit = totalSalesProfitForMonth(monthLabel);
+  // fixed costs normally ride on the garments cut this month; with none cut they still have to be
+  // paid — charge them (net of ready-made sales profit) as a lump instead of letting them vanish
+  if(garmentsCutInMonth(monthLabel)===0) cost += Math.max(0, rawFixed - salesProfit);
   const excessSalesProfit = Math.max(0, salesProfit - rawFixed); // ready-made sales profit beyond what's needed to fully cover fixed costs adds straight to net profit
   cost -= excessSalesProfit;
   return {revenue, cost, profit:revenue-cost, garmentsCut, generalExpenses, operationalLosses, salesProfit, excessSalesProfit};
@@ -226,7 +362,9 @@ function renderSensitiveFinancials(){
   const issued = computeIssuedInvoicesStats(state.settings.currentMonth);
   const rfs = readyForSaleReport();
   const fixedCosts = totalFixed();
-  const remainingToBreakEven = fixedCosts - monthlyFin.revenue;
+  // break-even = the month's revenue covers its direct costs AND all fixed costs, i.e. profit ≥ 0
+  // (it compared revenue alone with fixed costs, ignoring fabric, wages and every other direct cost)
+  const remainingToBreakEven = -monthlyFin.profit;
   $("sensitiveStatsGrid").innerHTML = `
     <div class="stat-card sales"><div class="lbl">إجمالي المبيعات المحقّقة (الشهر الحالي)</div><div class="val">${monthlyFin.revenue.toFixed(0)} ﷼</div></div>
     <div class="stat-card cost"><div class="lbl">إجمالي التكاليف المحقّقة (الشهر الحالي)</div><div class="val">${monthlyFin.cost.toFixed(0)} ﷼</div></div>
@@ -269,14 +407,20 @@ function buildTailorMonthlyReport(username, monthLabel){
   if(!username) return `<p class="sub">اختر خياط.</p>`;
   const rows = [];
   let totalGarments = 0;
+  const cancelled = [];
   state.invoices.forEach(inv=>{
-    const matching = inv.garments.filter(g=> g.tailor===username && g.tailorCompletedDate && g.tailorCompletedDate.slice(0,7)===monthLabel);
+    const sewn = inv.garments.filter(g=> g.tailor===username && g.tailorCompletedDate && g.tailorCompletedDate.slice(0,7)===monthLabel && g.status!=="قص" && g.status!=="جديد");
+    // a garment cancelled before the month closes earns no wage, even though it was sewn — listed
+    // apart so the tailor isn't led to expect pay for it
+    const matching = sewn.filter(g=>g.status!=="ملغي");
+    sewn.filter(g=>g.status==="ملغي").forEach(()=> cancelled.push(inv.number));
     if(matching.length){ rows.push({inv, count:matching.length}); totalGarments += matching.length; }
   });
-  if(!rows.length) return `<p class="sub">ما فيه ثياب فصّلها هذا الخياط هذا الشهر.</p>`;
+  const cancelledNote = cancelled.length ? `<p class="sub" style="margin-top:6px;color:var(--loss);">ثياب ملغاة بدون أجر: ${cancelled.length} (فاتورة ${[...new Set(cancelled)].map(n=>"#"+esc(n)).join("، ")}) — أي ثوب يُلغى قبل إقفال الشهر ما يُصرف عليه أجر حتى لو تمت خياطته.</p>` : "";
+  if(!rows.length) return `<p class="sub">ما فيه ثياب فصّلها هذا الخياط هذا الشهر.</p>` + cancelledNote;
   const tableRows = rows.map(({inv,count})=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${inv.date}</td><td>${count}</td></tr>`).join("");
   return `<div class="table-wrap"><table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>التاريخ</th><th>عدد الثياب</th></tr></thead><tbody>${tableRows}</tbody></table></div>
-    <p style="margin-top:8px;font-weight:700;">إجمالي: ${rows.length} فاتورة — ${totalGarments} ثوب هذا الشهر</p>`;
+    <p style="margin-top:8px;font-weight:700;">إجمالي: ${rows.length} فاتورة — ${totalGarments} ثوب هذا الشهر</p>` + cancelledNote;
 }
 function buildInvoiceStatusReport(inv){
   const rows = inv.garments.map((g,idx)=>{
@@ -314,6 +458,7 @@ async function advanceGarmentStatus(inv, idx){
   const next = nextStatusOf(g.status);
   if(!next){ showToast("هذا الثوب وصل آخر مرحلة أصلاً"); return; }
   if(next==="تفصيل"){ showToast("هذي الخطوة تخص حساب الخياط بس — يمسحها من شاشته الخاصة"); return; }
+  if(next==="جاهز" && state.settings.qcEnabled){ showToast("هذا الثوب ينتظر فحص الجودة — يصير \"جاهز\" من شاشة فحص الجودة بعد اجتيازه"); return; }
   if(next==="تسليم"){
     const remaining = invoiceRemaining(inv);
     if(Math.abs(remaining)>0.01){ showQuickDeliveryPayment(inv, idx, remaining); return; }
@@ -417,11 +562,11 @@ function renderDebtsTab(){
   const el = $("debtsList");
   const debts = [];
   state.invoices.forEach(inv=> inv.garments.forEach((g,i)=>{
-    if(g.creditDelivered && (g.creditAmount-g.creditPaid) > 0.01) debts.push({inv, g, idx:i});
+    if(g.creditDelivered && creditGarmentOwed(g, inv) > 0.01) debts.push({inv, g, idx:i});
   }));
   if(!debts.length){ el.innerHTML = emptyStateHtml("credit-card","ما فيه ديون مسجّلة حالياً."); return; }
   el.innerHTML = debts.map(({inv,g,idx})=>{
-    const owed = g.creditAmount - g.creditPaid;
+    const owed = creditGarmentOwed(g, inv);
     return `<div class="garment-card">
       <span class="tag">فاتورة ${esc(inv.number)} — ${esc(inv.customerName||"—")} (${esc(g.fabricType)})</span>
       <p class="sub" style="margin:6px 0;">القيمة الأصلية: ${g.creditAmount.toFixed(0)} ﷼ — المسدد: ${g.creditPaid.toFixed(0)} ﷼</p>
@@ -509,10 +654,10 @@ async function payCreditDebt(invId, idx){
   const receipt = receiptInp.value.trim();
   if(cash<=0 && network<=0){ showToast("أدخل مبلغ كاش أو شبكة"); return; }
   if(network>0 && !receipt){ showToast("أدخل رقم السند لدفعة الشبكة"); return; }
-  const owed = g.creditAmount - g.creditPaid;
+  const owed = creditGarmentOwed(g, inv);
   if((cash+network) - owed > 0.01){ showToast(`المبلغ أكبر من المتبقي على هذا الثوب (${owed.toFixed(0)} ريال)`); return; }
   const snapshot = JSON.parse(JSON.stringify(state));
-  const payment = {id:Date.now()+"", date:todayStr(), cash, network, receipt, discount:0};
+  const payment = {id:newId(), date:todayStr(), cash, network, receipt, discount:0};
   inv.payments = inv.payments || [];
   inv.payments.push(payment);
   applyPaymentToBalances(payment);
@@ -538,6 +683,7 @@ async function saveDistribution(inv){
     if(intent.newStatus==="ملغي" && !isAdmin){ showToast("إلغاء الثوب متاح للمدير فقط"); return; }
     if(intent.newStatus==="تفصيل"){ showToast("الانتقال لـ\"تم التفصيل\" يخص حساب الخياط بس — يمسحها من شاشته الخاصة"); return; }
     if(intent.newStatus==="جاهز" && g.status!=="جاهز"){ showToast(`لا يمكن تحويل ثوب ${i+1} إلى "جاهز" مباشرة — لازم يخلص "تم التفصيل" من شاشة الخياط أولاً`); return; }
+    if(intent.newStatus==="جاهز" && state.settings.qcEnabled && !g.qcPassedDate){ showToast(`ثوب ${i+1} لازم يجتاز فحص الجودة (من شاشة فحص الجودة) قبل ما يصير "جاهز"`); return; }
     if(intent.newStatus==="تسليم"){
       if(g.status!=="جاهز"){ showToast(`لا يمكن تسليم ثوب ${i+1} قبل اكتمال التفصيل فعلياً ووصوله لمرحلة "جاهز"`); return; }
       if(Math.abs(remaining)>0.01){ showToast(`لا يمكن التسليم قبل سداد كامل الفاتورة (المتبقي ${remaining.toFixed(0)} ريال)`); return; }
@@ -595,12 +741,23 @@ async function closeMonthNow(m){
       if(g.status==="ملغي") return;
       garmentCount++;
       if(g.hasEmbroidery){ embroCount++; embroRevenue += (g.embroideryPrice||0); }
-      if(g.status!=="تسليم") g.status="معلقة";
+      // only a garment that was READY and not picked up is "معلقة" (stuck) — that's what every screen
+      // reads it as. One still being cut/sewn/checked keeps its real stage so it can carry on normally
+      // (turning it into معلقة froze it: no next step, and it showed as ready when it wasn't)
+      if(g.status==="جاهز") g.status="معلقة";
     });
   });
   const pendingCustodyCarried = totalPendingCustody();
+  // money actually received in the month (tailoring payments + ready-made sales + old-stock
+  // collections, minus refunds) — this field just repeated the recognized revenue before
+  const inMonth = d=> (d||"").slice(0,7)===m;
+  const collectedTotal = state.invoices.reduce((a,inv)=> a + (inv.payments||[]).filter(p=>inMonth(p.date)).reduce((s,p)=>s+(p.cash||0)+(p.network||0),0), 0)
+    + state.salesInvoices.filter(s=>inMonth(s.date) && s.payment).reduce((a,s)=>a+(s.payment.cash||0)+(s.payment.network||0),0)
+    + (state.legacyPayments||[]).filter(l=>inMonth(l.date)).reduce((a,l)=>a+l.amount,0)
+    - state.invoiceReturns.filter(r=>inMonth(r.date)).reduce((a,r)=>a+(r.refundAmount||0),0)
+    - (state.salesReturns||[]).filter(r=>inMonth(r.date)).reduce((a,r)=>a+(r.refundAmount||0),0);
   state.closingReports.push({
-    monthLabel:m, closedAt:serverDate().toISOString(), invoicedTotal:monthlyFin.revenue, costTotal:monthlyFin.cost, collectedTotal:monthlyFin.revenue,
+    monthLabel:m, closedAt:serverDate().toISOString(), invoicedTotal:monthlyFin.revenue, costTotal:monthlyFin.cost, collectedTotal,
     profitInvoiced: monthlyFin.profit, profitCollected: monthlyFin.profit,
     garmentCount, embroCount, embroRevenue, invoiceCount: invs.length, pendingCustodyCarried,
     readyCount, overdueCount,
@@ -609,7 +766,7 @@ async function closeMonthNow(m){
   state.settings.currentMonth = nextMonthLabel(m);
   const saved = await saveState();
   if(!saved){
-    state = stateSnapshot; // roll back the in-memory close/payroll so a retry starts clean
+    if(!stateSaveConflict) state = stateSnapshot; // roll back the in-memory close/payroll so a retry starts clean (a conflict already reloaded the latest data)
     renderAll();
     return false;
   }
@@ -625,7 +782,7 @@ async function performCloseMonth(){
     const lastDayOfMonth = new Date(y, mo, 0);
     if(serverDate() <= lastDayOfMonth){ showToast("ما يمكن إقفال الشهر قبل انتهائه فعلياً — هذا متاح للمدير بس قبل نهاية الشهر"); return; }
   }
-  if(!await confirmWithPassword(`بيتم إقفال شهر ${monthDisplay(m)}:\n- يتجمّد تقرير أرباح/خسائر نهائي لهذا الشهر.\n- أي ثوب ما انسلّم يتحول لحالة "معلقة" وينتقل لقائمة المتعثرة.\nأدخل كلمة مرورك للتأكيد.`)) return;
+  if(!await confirmWithPassword(`بيتم إقفال شهر ${monthDisplay(m)}:\n- يتجمّد تقرير أرباح/خسائر نهائي لهذا الشهر.\n- أي ثوب جاهز ما انسلّم يتحول لحالة "معلقة" وينتقل لقائمة المتعثرة (الثياب اللي لسا بالإنتاج تكمل مرحلتها).\nأدخل كلمة مرورك للتأكيد.`)) return;
   // guard against a double-click (or a retry after a silent save failure) re-closing the same
   // month and re-running payroll a second time while the first close is still in flight
   const btn = $("closeMonthBtn");
@@ -670,20 +827,36 @@ async function checkAutoCloseMonth(){
     autoCloseInFlight = false;
   }
 }
+// when the sewing counts as done: the quality-check pass when there is one; a garment sent back
+// for repair (back at قص) or still waiting for its check doesn't count yet
+function garmentSewnDate(g){
+  if(g.qcPassedDate) return g.qcPassedDate;
+  if(!g.tailorCompletedDate) return null;
+  if(g.status==="جديد" || g.status==="قص") return null;
+  if(state.settings.qcEnabled && g.status==="تفصيل") return null;
+  return g.tailorCompletedDate;
+}
 function garmentQualifiesForCommission(g){
   const basis = state.settings.commissionBasis||"تسليم";
-  return basis==="تفصيل" ? !!g.tailorCompletedDate : g.status==="تسليم";
+  return basis==="تفصيل" ? !!garmentSewnDate(g) : g.status==="تسليم";
 }
 function commissionQualifyingDate(g){
   const basis = state.settings.commissionBasis||"تسليم";
-  return basis==="تفصيل" ? g.tailorCompletedDate : g.deliveredDate;
+  return basis==="تفصيل" ? garmentSewnDate(g) : g.deliveredDate;
+}
+// a garment's wage is paid in exactly one month: once payroll has run for it, a later date change
+// (re-sewn after a failed check, then passed in a later month) must not pay it a second time
+function garmentWagePaidElsewhere(g, monthLabel){
+  return !!(g.wagePaidOut && g.wagePaidMonth && g.wagePaidMonth!==monthLabel);
 }
 function computeEmployeeEntitlement(user, monthLabel){
   let garmentCount = 0, commission = 0, base = 0;
   if(user.role==="خياط"){
     state.invoices.forEach(inv=> inv.garments.forEach(g=>{
+      // policy: a garment cancelled before the month is closed earns no wage — even if cutting or
+      // sewing had already started. Payroll runs only at month close, so its status then decides.
       if(g.tailor!==user.username || g.status==="ملغي") return;
-      if(!garmentQualifiesForCommission(g)) return;
+      if(!garmentQualifiesForCommission(g) || garmentWagePaidElsewhere(g, monthLabel)) return;
       const qd = commissionQualifyingDate(g);
       if(qd && qd.slice(0,7)===monthLabel){
         garmentCount++;
@@ -703,6 +876,9 @@ function computeEmployeeEntitlement(user, monthLabel){
     state.salesInvoices.forEach(inv=>{
       if(inv.recordedBy===user.username && (inv.date||"").slice(0,7)===monthLabel) garmentCount += inv.items.reduce((a,it)=>a+it.qty,0);
     });
+    (state.salesReturns||[]).forEach(r=>{
+      if(r.saleRecordedBy===user.username && (r.date||"").slice(0,7)===monthLabel) garmentCount -= r.lines.reduce((a,l)=>a+l.qty,0);
+    });
     base = user.baseSalary||0;
     if(user.commissionEnabled) commission = garmentCount * (user.commissionRate||0);
   }
@@ -721,7 +897,7 @@ function runPayrollForMonth(monthLabel){
         state.invoices.forEach(inv=> inv.garments.forEach(g=>{
           if(g.tailor===u.username && garmentQualifiesForCommission(g)){
             const qd = commissionQualifyingDate(g);
-            if(qd && qd.slice(0,7)===monthLabel) g.wagePaidOut = true;
+            if(qd && qd.slice(0,7)===monthLabel && !garmentWagePaidElsewhere(g, monthLabel)){ g.wagePaidOut = true; g.wagePaidMonth = monthLabel; }
           }
         }));
       }
@@ -731,8 +907,26 @@ function runPayrollForMonth(monthLabel){
 function employeeBalance(username){
   return state.payrollLedger.filter(e=>e.username===username).reduce((sum,e)=> (e.type==="entitlement"||e.type==="bonus") ? sum+e.amount : sum-e.amount, 0);
 }
+// Advance policy: no advance until the employee's first month of work has been fully completed
+// AND closed (payroll run), and only against a balance actually due to them.
+// Employees added before the start date was recorded qualify once any month has been closed with
+// an entitlement for them (their first month is by then necessarily behind them).
+function advanceEligibility(username){
+  const u = state.users.find(x=>x.username===username);
+  if(!u) return {ok:false, msg:"الموظف غير موجود"};
+  if(u.joinedDate){
+    const firstMonth = u.joinedDate.slice(0,7);
+    if(!isMonthClosed(firstMonth)) return {ok:false, msg:`ما يمكن صرف سلفة لـ${username} قبل إتمام وإقفال أول شهر عمل له (${monthDisplay(firstMonth)})`};
+  } else if(!state.payrollLedger.some(e=>e.username===username && e.type==="entitlement")){
+    return {ok:false, msg:`ما يمكن صرف سلفة لـ${username} قبل إقفال أول شهر له وتسجيل استحقاق (حدّد تاريخ بداية عمله من إعدادات المستخدمين)`};
+  }
+  const balance = employeeBalance(username);
+  if(balance <= 0.01) return {ok:false, msg:`ما يمكن صرف سلفة لـ${username} — ما له رصيد مستحق حالياً`};
+  return {ok:true, balance};
+}
 function addPayrollEntry(username, type, amount, boxId, note){
   if(amount<=0) return {ok:false,msg:"أدخل مبلغ صحيح"};
+  if(type==="advance"){ const el = advanceEligibility(username); if(!el.ok) return el; }
   if(type==="deduction" && !note.trim()) return {ok:false,msg:"أدخل ملاحظة توضح سبب الخصم"};
   const balance = employeeBalance(username);
   if((type==="payment"||type==="advance") && amount - balance > 0.01) return {ok:false,msg:`المبلغ أكبر من المستحق (${balance.toFixed(0)} ريال)`};
@@ -742,7 +936,11 @@ function addPayrollEntry(username, type, amount, boxId, note){
     if(boxTotal(box) < amount) return {ok:false,msg:`الرصيد غير كافٍ بالصندوق (المتاح ${boxTotal(box).toFixed(0)} ريال)`};
     box.balance -= amount;
   }
-  state.payrollLedger.push({id:Date.now()+"", username, type, amount, date:todayStr(), note, recordedBy:currentUser.username});
+  state.payrollLedger.push({id:newId(), username, type, amount, date:todayStr(), note, recordedBy:currentUser.username, boxId:(type==="payment"||type==="advance") ? boxId : null});
+  // tailors are paid through payroll, not the expenses screen — so their pay has to draw the
+  // "wages" guideline balance down here, or it only ever grew
+  const payee = state.users.find(u=>u.username===username);
+  if(payee && payee.role==="خياط" && (type==="payment"||type==="advance")) state.advisory.wages -= amount;
   return {ok:true};
 }
 

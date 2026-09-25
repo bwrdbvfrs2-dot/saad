@@ -285,3 +285,6 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   @page{ margin:14mm 10mm; }
 }
 #printArea{display:none;}
+/* the on-screen tables' 760px minimum must never apply to anything printed or shared as an image —
+   on 58/80mm paper it pushed the qty/price/total columns off the edge */
+#printArea table, #receiptShareRoot table, #labelShareRoot table{ min-width:0 !important; }

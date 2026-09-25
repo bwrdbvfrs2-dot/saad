@@ -110,7 +110,7 @@ function renderCustomers(){
   document.querySelectorAll(".cust-vip-toggle").forEach(cb=> cb.addEventListener("change", ()=>{
     const mobile = cb.dataset.mobile;
     let cust = findCustomerByMobile(mobile);
-    if(!cust){ cust = {id:Date.now()+"", code:nextCustomerCode(), mobile, individuals:[], loyaltyPoints:0, vip:false}; state.customers.push(cust); }
+    if(!cust){ cust = {id:newId(), code:nextCustomerCode(), mobile, individuals:[], loyaltyPoints:0, vip:false}; state.customers.push(cust); }
     cust.vip = cb.checked;
     if(cust.vip) cust.loyaltyPoints = 0;
     saveState(); renderAll();
@@ -120,7 +120,7 @@ function renderCustomers(){
 }
 function saveCustomerNotes(mobile){
   let cust = findCustomerByMobile(mobile);
-  if(!cust){ cust = {id:Date.now()+"", code:nextCustomerCode(), mobile, individuals:[], loyaltyPoints:0, vip:false}; state.customers.push(cust); }
+  if(!cust){ cust = {id:newId(), code:nextCustomerCode(), mobile, individuals:[], loyaltyPoints:0, vip:false}; state.customers.push(cust); }
   cust.notes = $("customerNotesInput").value;
   saveState();
   showToast("تم حفظ الملاحظات");
@@ -194,9 +194,18 @@ function buildDailyReport(day){
   const openingAdjustmentsToday = (state.openingBalanceAdjustments||[]).filter(a=>a.date===day);
   let cash=0, network=0, discount=0; const paymentRows=[];
   state.invoices.forEach(inv=> (inv.payments||[]).forEach(p=>{
-    if(p.date===day){ cash+=p.cash; network+=p.network; discount+=p.discount||0; paymentRows.push({inv,p}); }
+    if(p.date===day){ cash+=p.cash||0; network+=p.network||0; discount+=p.discount||0; paymentRows.push({inv,p}); }
   }));
-  return {newInvoices, deliveredThisMonth, deliveredOverdue, legacyDelivered, vouchersToday, expensesToday, expensesTotal, openingAdjustmentsToday, cash, network, discount, paymentRows};
+  // ready-made sales, their returns and tailoring refunds of the day — none of these were in the report
+  const salesToday = state.salesInvoices.filter(s=>(s.payment&&s.payment.date||s.date)===day);
+  const saleReturnsToday = (state.salesReturns||[]).filter(r=>r.date===day);
+  const refundsToday = state.invoiceReturns.filter(r=>r.date===day && r.refundAmount);
+  // every box movement of the day, split by box type — the real in/out of cash and of network
+  const boxType = id=> (findCashBox(id)||{}).type;
+  const moves = collectBoxMovements().filter(m=>m.date===day);
+  const sumType = (t, sign)=> moves.filter(m=>boxType(m.boxId)===t && Math.sign(m.amount)===sign).reduce((a,m)=>a+m.amount,0);
+  const flows = {cashIn:sumType("cash",1), cashOut:-sumType("cash",-1), netIn:sumType("network",1), netOut:-sumType("network",-1)};
+  return {newInvoices, deliveredThisMonth, deliveredOverdue, legacyDelivered, vouchersToday, expensesToday, expensesTotal, openingAdjustmentsToday, cash, network, discount, paymentRows, salesToday, saleReturnsToday, refundsToday, flows, moves};
 }
 function renderDailyPreview(){
   const day = $("dailyDate").value || todayStr();
@@ -240,7 +249,7 @@ function buildDailyReportHtml(day, r){
   if(!r.vouchersToday.length) html+=`<tr><td colspan="5">لا يوجد</td></tr>`;
   html += `</tbody></table>`;
   html += `<h3>المصروفات اليوم (${r.expensesToday.length}) — الإجمالي: ${r.expensesTotal.toFixed(0)} ﷼</h3><table><thead><tr><th>البند</th><th>المبلغ</th><th>صُرف لـ</th><th>ملاحظات</th></tr></thead><tbody>`;
-  r.expensesToday.forEach(e=>{ const cat = state.expenseCategories.find(c=>c.id===e.categoryId); html+=`<tr><td>${cat?esc(cat.label):"—"}</td><td>${e.amount.toFixed(0)} ﷼</td><td>${esc(e.paidTo||"—")}</td><td>${esc(e.note||"—")}</td></tr>`; });
+  r.expensesToday.forEach(e=>{ const cat = state.expenseCategories.find(c=>c.id===e.categoryId); html+=`<tr><td>${cat?esc(cat.label):"—"}</td><td>${e.amount.toFixed(0)} ﷼</td><td>${esc(e.paidTo||"—")}</td><td>${esc(e.notes||"—")}</td></tr>`; });
   if(!r.expensesToday.length) html+=`<tr><td colspan="4">لا يوجد</td></tr>`;
   html += `</tbody></table>`;
   html += `<h3>تعديلات رصيد أول المدة اليوم (${r.openingAdjustmentsToday.length})</h3><table><thead><tr><th>الصنف</th><th>من</th><th>إلى</th><th>بواسطة</th></tr></thead><tbody>`;
@@ -252,12 +261,25 @@ function buildDailyReportHtml(day, r){
   r.paymentRows.forEach(({inv,p})=> html+=`<tr data-receipt="${esc((p.cashReceiptNo||"")+" "+(p.networkReceiptNo||p.receipt||""))}"><td>${esc(inv.number)}</td><td>${p.cash.toFixed(0)} ﷼</td><td>${p.cashReceiptNo||"—"}</td><td>${p.network.toFixed(0)} ﷼</td><td>${p.networkReceiptNo||p.receipt||"—"}</td><td>${p.discount?p.discount.toFixed(0)+" ﷼":"—"}</td></tr>`);
   if(!r.paymentRows.length) html+=`<tr><td colspan="6">لا يوجد</td></tr>`;
   html += `</tbody></table>`;
-  const netCash = r.cash - r.expensesTotal;
+  const saleTotal = s=> s.items.reduce((a,it)=>a+it.qty*it.price,0);
+  html += `<h3>فواتير المبيعات (أصناف جاهزة) اليوم (${r.salesToday.length})</h3><table><thead><tr><th>رقم</th><th>العميل</th><th>كاش</th><th>شبكة</th><th>الإجمالي</th></tr></thead><tbody>`;
+  r.salesToday.forEach(s=> html+=`<tr><td>${esc(s.number)}</td><td>${esc(s.customerName||"—")}</td><td>${((s.payment||{}).cash||0).toFixed(0)} ﷼</td><td>${((s.payment||{}).network||0).toFixed(0)} ﷼</td><td>${saleTotal(s).toFixed(0)} ﷼</td></tr>`);
+  if(!r.salesToday.length) html+=`<tr><td colspan="5">لا يوجد</td></tr>`;
+  html += `</tbody></table>`;
+  html += `<h3>المرتجعات والمبالغ المستردة اليوم (${r.refundsToday.length + r.saleReturnsToday.length})</h3><table><thead><tr><th>النوع</th><th>الفاتورة</th><th>المبلغ المسترد</th><th>السبب</th></tr></thead><tbody>`;
+  r.refundsToday.forEach(x=> html+=`<tr><td>مرتجع فاتورة تفصيل</td><td>${esc(x.invoiceNumber)}</td><td>${x.refundAmount.toFixed(0)} ﷼</td><td>${esc(x.reason||"—")}</td></tr>`);
+  r.saleReturnsToday.forEach(x=> html+=`<tr><td>مرتجع مبيعات</td><td>${esc(x.saleInvoiceNumber)}</td><td>${x.refundAmount.toFixed(0)} ﷼</td><td>${esc(x.reason||"—")}</td></tr>`);
+  if(!r.refundsToday.length && !r.saleReturnsToday.length) html+=`<tr><td colspan="4">لا يوجد</td></tr>`;
+  html += `</tbody></table>`;
+  // real movement of every box today (all sources: payments, sales, vouchers, expenses, refunds,
+  // purchases, suppliers, salaries, transfers) — the old "net = cash − expenses" ignored most of these
+  const f = r.flows;
   html += `<div class="report-grid" style="grid-template-columns:repeat(3,1fr);margin-top:14px;">
-    <div class="report-card"><div class="st">إجمالي الكاش المقبوض</div><div class="amt">${r.cash.toFixed(0)} ﷼</div></div>
-    <div class="report-card"><div class="st">إجمالي الشبكة</div><div class="amt">${r.network.toFixed(0)} ﷼</div></div>
-    <div class="report-card"><div class="st">صافي الصندوق (كاش − مصروفات)</div><div class="amt">${netCash.toFixed(0)} ﷼</div></div>
-  </div>`;
+    <div class="report-card"><div class="st">الكاش — داخل / خارج</div><div class="amt" style="font-size:14px;">${f.cashIn.toFixed(0)} / ${f.cashOut.toFixed(0)} ﷼</div></div>
+    <div class="report-card"><div class="st">الشبكة — داخل / خارج (بعد رسوم البنك)</div><div class="amt" style="font-size:14px;">${f.netIn.toFixed(0)} / ${f.netOut.toFixed(0)} ﷼</div></div>
+    <div class="report-card"><div class="st">صافي حركة الصناديق اليوم</div><div class="amt">${(f.cashIn-f.cashOut+f.netIn-f.netOut).toFixed(0)} ﷼</div></div>
+  </div>
+  <p class="sub" style="margin-top:6px;">صافي الكاش اليوم: ${(f.cashIn-f.cashOut).toFixed(0)} ﷼ — يشمل كل الحركات المسجّلة (دفعات، مبيعات، سندات، مصروفات، مرتجعات، مشتريات، موردين، رواتب، تحويلات).</p>`;
   return html;
 }
 function printDaily(){
@@ -364,6 +386,9 @@ function buildFullActivityLog(from, to){
       const total = inv.items.reduce((a,it)=>a+it.qty*it.price,0);
       rows.push({date:inv.date, section:"فواتير مبيعات", desc:`فاتورة مبيعات #${esc(inv.number)} — ${esc(inv.customerName||"—")}`, amount: total});
     }
+  });
+  (state.salesReturns||[]).forEach(r=>{
+    if(inDateRange(r.date, from, to)) rows.push({date:r.date, section:"مرتجعات مبيعات", desc:`مرتجع فاتورة مبيعات #${esc(r.saleInvoiceNumber)} — ${r.lines.map(l=>`${esc(l.name)} ×${l.qty}`).join("، ")}`, amount:-(r.refundAmount||0)});
   });
   state.purchases.forEach(p=>{
     if(inDateRange(p.date, from, to)){
@@ -633,7 +658,7 @@ function renderUsers(){
     return `<div class="user-row"><div class="row-3" style="margin-bottom:0;align-items:end;">
         <div class="field" style="margin-bottom:0;"><label>اسم المستخدم</label><input type="text" class="edit-username" data-idx="${i}" value="${u.username}"></div>
         <div class="field" style="margin-bottom:0;"><label>كلمة مرور جديدة</label><input type="text" class="edit-password" data-idx="${i}" value="" placeholder="اتركه فارغاً لعدم تغيير كلمة المرور"></div>
-        <div class="field" style="margin-bottom:0;"><label>الدور</label><select class="edit-role" data-idx="${i}"><option value="محاسب" ${u.role==="محاسب"?"selected":""}>محاسب</option><option value="كاشير" ${u.role==="كاشير"?"selected":""}>كاشير</option><option value="خياط" ${u.role==="خياط"?"selected":""}>خياط</option><option value="مدير" ${u.role==="مدير"?"selected":""}>مدير</option></select></div>
+        <div class="field" style="margin-bottom:0;"><label>الدور</label><select class="edit-role" data-idx="${i}"><option value="محاسب" ${u.role==="محاسب"?"selected":""}>محاسب</option><option value="كاشير" ${u.role==="كاشير"?"selected":""}>كاشير</option><option value="خياط" ${u.role==="خياط"?"selected":""}>خياط</option><option value="فاحص جودة" ${u.role==="فاحص جودة"?"selected":""}>فاحص جودة</option><option value="مدير" ${u.role==="مدير"?"selected":""}>مدير</option></select></div>
       </div>
       ${u.role==="خياط" ? `<div class="row-2" style="margin-top:8px;">
         <div class="field" style="margin-bottom:0;"><label>القدرة الإنتاجية اليومية (ثوب/يوم)</label><input type="number" class="edit-capacity" data-idx="${i}" min="0" value="${u.dailyCapacity||""}" placeholder="مثلاً: 5"></div>
@@ -650,6 +675,9 @@ function renderUsers(){
         <div class="field" style="margin-bottom:0;"><label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" class="edit-commission" data-idx="${i}" ${u.commissionEnabled?"checked":""}> تفعيل عمولة</label></div>
         <div class="field" style="margin-bottom:0;"><label>قيمة العمولة لكل ثوب (ريال)</label><input type="number" class="edit-commrate" data-idx="${i}" min="0" value="${u.commissionRate||""}" placeholder="0"></div>
       </div>`}
+      <div class="row-2" style="margin-top:8px;">
+        <div class="field" style="margin-bottom:0;"><label>تاريخ بداية العمل (تُمنع السلف قبل إقفال أول شهر عمل)</label><input type="date" class="edit-joined" data-idx="${i}" value="${u.joinedDate||""}"></div>
+      </div>
       <div class="row-3" style="margin-top:8px;">
         <div class="field" style="margin-bottom:0;"><label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" class="edit-discount-enabled" data-idx="${i}" ${u.discountEnabled?"checked":""}> تفعيل صلاحية الخصم</label></div>
         <div class="field" style="margin-bottom:0;"><label>نوع الحد</label><select class="edit-discount-type" data-idx="${i}"><option value="amount" ${u.discountType==="amount"?"selected":""}>مبلغ ثابت</option><option value="percent" ${u.discountType==="percent"?"selected":""}>نسبة %</option></select></div>
@@ -735,7 +763,9 @@ async function saveUserEdit(i){
   const wageChildSmall = wageChildSmallInp ? (parseFloat(wageChildSmallInp.value)||0) : 0;
   if(newPassword && newPassword.length<6){ showToast("كلمة المرور لازم تكون ٦ أحرف على الأقل"); return; }
   const prevUser = state.users[i];
-  const updatedUser = {...prevUser, username,role,baseSalary,commissionEnabled,commissionRate,discountEnabled,discountType,discountValue,dailyCapacity,productionCapacity,wageMen,wageChild,wageChildSmall};
+  const joinedInp = document.querySelector(`.edit-joined[data-idx="${i}"]`);
+  const joinedDate = joinedInp && joinedInp.value ? joinedInp.value : (prevUser.joinedDate||undefined);
+  const updatedUser = {...prevUser, username,role,joinedDate,baseSalary,commissionEnabled,commissionRate,discountEnabled,discountType,discountValue,dailyCapacity,productionCapacity,wageMen,wageChild,wageChildSmall};
   if(newPassword){
     // client-side Firebase Auth can't set another account's password directly — create a fresh
     // login account carrying the new password and retire the old one
@@ -825,7 +855,7 @@ async function addUser(){
     showToast("تعذّر تسجيل المستخدم الجديد — حاول مرة ثانية");
     return;
   }
-  const newUser = {username,role,authUid:uid,authEmail:email,baseSalary:0,commissionEnabled:false,commissionRate:0,commissionThreshold:0,discountEnabled:false,discountType:"amount",discountValue:0,dailyCapacity:0,productionCapacity:0,wageMen:0,wageChild:0,wageChildSmall:0};
+  const newUser = {username,role,authUid:uid,authEmail:email,joinedDate:todayStr(),baseSalary:0,commissionEnabled:false,commissionRate:0,commissionThreshold:0,discountEnabled:false,discountType:"amount",discountValue:0,dailyCapacity:0,productionCapacity:0,wageMen:0,wageChild:0,wageChildSmall:0};
   state.users.push(newUser); ensureUserBoxes(username);
   // fully normalize before saving so the server copy already has every per-user default field —
   // otherwise the new user's OWN client would backfill a missing field locally on first login,
@@ -878,20 +908,7 @@ $("invCount").addEventListener("input", ()=>{
   renderGarmentFields();
   if(!editingId) $("invDeliveryDate").value = formatDateInput(computeExpectedDeliveryDate(parseInt($("invCount").value)||1));
 });
-function renderCustomerAlert(mobile){
-  const wrap = $("customerAlertWrap");
-  if(!wrap) return;
-  if(!/^[0-9]{10}$/.test(mobile)){ wrap.style.display="none"; wrap.innerHTML=""; return; }
-  const alert = getCustomerStandingAlert(mobile);
-  if(!alert){ wrap.style.display="none"; wrap.innerHTML=""; return; }
-  const parts = [];
-  if(alert.totalDebt>0.01) parts.push(`عليه مبلغ متعثر (دين) قدره ${alert.totalDebt.toFixed(0)} ريال`);
-  if(alert.undeliveredCount>0) parts.push(`عليه ${alert.undeliveredCount} ثوب متعثر التسليم`);
-  if(alert.convertedGarments && alert.convertedGarments.length) parts.push(...alert.convertedGarments.map(({inv,g})=>`عليه ثوب سابق (فاتورة #${esc(inv.number)}) تحوّل "متعثر" وانباع لعميل ثاني بتاريخ ${g.saleConversionDate}`));
-  wrap.style.display = "";
-  const jumpBtn = alert.totalDebt>0.01 ? `<button type="button" class="btn btn-ghost btn-sm" onclick="switchTab('customerDebts')" style="margin-right:8px;">الذهاب لتسوية المديونية</button>` : "";
-  wrap.innerHTML = `<div class="item-row" style="background:rgba(224,90,90,0.12);border:1px solid var(--loss);border-radius:8px;padding:8px 12px;"><span style="color:var(--loss);font-weight:700;">تنبيه: ${parts.join(" و")}</span>${jumpBtn}</div>`;
-}
+function renderCustomerAlert(mobile){ renderCustomerStandingAlerts(mobile, "customerAlertWrap"); }
 $("custMobile").addEventListener("input", ()=>{
   renderCustomerPicker("custMobile","custName","custPickerWrap"); renderLoyaltyInfo();
   const mobile = $("custMobile").value.trim();
@@ -929,6 +946,7 @@ $("saleCustMobile").addEventListener("input", ()=>{
   renderCustomerPicker("saleCustMobile","saleCustName","salePickerWrap");
   const mobile = $("saleCustMobile").value.trim();
   $("saleCustNewBadge").style.display = (/^[0-9]{10}$/.test(mobile) && !findCustomerByMobile(mobile)) ? "" : "none";
+  renderCustomerStandingAlerts(mobile, "saleCustomerAlertWrap");
 });
 $("saleCustName").addEventListener("input", ()=>{
   if($("saleCustMobile").value.trim()) return;
@@ -937,6 +955,8 @@ $("saleCustName").addEventListener("input", ()=>{
 });
 $("addSaleLineBtn").addEventListener("click", ()=>{ renderSaleLine(); updateSaleTotal(); });
 $("saveSaleBtn").addEventListener("click", saveSaleInvoice);
+$("saleReturnLoadBtn").addEventListener("click", loadSaleReturnLines);
+$("saleScanInput").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); addSaleLineByBarcode($("saleScanInput").value); } });
 $("saleCash").addEventListener("input", ()=>{ saleCashTouched = true; });
 $("saleNetwork").addEventListener("input", updateSaleTotal);
 $("saveInvoiceBtn").addEventListener("click", saveInvoice);
@@ -988,7 +1008,8 @@ async function handleUnsavedInvoiceGuard(targetTab){
 }
 function switchTab(name){
   if(currentUser && currentUser.role==="خياط" && name!=="scan" && name!=="mail"){ showToast("حساب الخياط يقدر يدخل شاشة المسح والبريد بس"); return; }
-  if(currentUser && currentUser.role!=="خياط" && !(state.permissions[currentUser.role]?.tabs||[]).includes(name)){ showToast("هذا القسم غير متاح لدورك — راجع المدير"); return; }
+  if(currentUser && currentUser.role==="فاحص جودة" && name!=="qc" && name!=="mail"){ showToast("حساب فاحص الجودة يقدر يدخل شاشة الفحص والبريد بس"); return; }
+  if(currentUser && currentUser.role!=="خياط" && currentUser.role!=="فاحص جودة" && !(state.permissions[currentUser.role]?.tabs||[]).includes(name)){ showToast("هذا القسم غير متاح لدورك — راجع المدير"); return; }
   const invoiceTabActive = $("tab-invoice").classList.contains("active");
   if(invoiceTabActive && name!=="invoice" && isInvoiceFormDirty()){
     handleUnsavedInvoiceGuard(name);
@@ -1224,6 +1245,13 @@ $("setMinDepositType").addEventListener("change", ()=>{
   state.settings.minDepositType = $("setMinDepositType").value;
   saveState(); renderAll();
 });
+$("setQcEnabled").addEventListener("change", ()=>{
+  state.settings.qcEnabled = $("setQcEnabled").checked;
+  saveState(); applyRolePermissions(); renderAll();
+  logAudit("qc_setting_changed", {enabled: state.settings.qcEnabled});
+});
+$("qcLoadBtn").addEventListener("click", ()=> loadQcInvoice($("qcInvNumber").value.trim()));
+$("qcInvNumber").addEventListener("keydown", e=>{ if(e.key==="Enter") loadQcInvoice($("qcInvNumber").value.trim()); });
 $("setCommissionBasis").addEventListener("change", ()=>{
   state.settings.commissionBasis = $("setCommissionBasis").value;
   saveState(); renderAll();
@@ -1249,6 +1277,14 @@ $("setMeasureUnit").addEventListener("change", ()=>{
     if(c.qty) BODY_CATEGORIES.forEach(cat=> c.qty[cat] = (c.qty[cat]||0) * factor);
   });
   state.invoices.forEach(inv=> inv.garments.forEach(g=>{ if(g.qtyUsed) g.qtyUsed = g.qtyUsed * factor; }));
+  // purchase history too — otherwise a linked supplier return compares the converted stock against
+  // quantities still in the old unit (and values it at a per-old-unit price)
+  const isFabric = id=> (findItemCard(id)||{}).type==="fabric";
+  state.purchases.forEach(p=>{ if(isFabric(p.itemCardId)){ p.quantity = p.quantity * factor; p.unitPrice = p.unitPrice / factor; } });
+  state.purchaseReturns.forEach(r=>{ if(isFabric(r.itemCardId)) r.quantity = r.quantity * factor; });
+  (state.stockWriteOffs||[]).forEach(w=>{ if(isFabric(w.itemCardId)) w.qty = w.qty * factor; });
+  state.salesInvoices.forEach(s=> s.items.forEach(it=>{ if(isFabric(it.itemCardId)){ it.qty = it.qty * factor; it.price = it.price / factor; it.costAtSale = (it.costAtSale||0) / factor; } }));
+  (state.salesReturns||[]).forEach(r=> r.lines.forEach(l=>{ if(isFabric(l.itemCardId)){ l.qty = l.qty * factor; l.price = l.price / factor; l.costAtSale = (l.costAtSale||0) / factor; } }));
   BODY_CATEGORIES.forEach(cat=> state.settings.defaultFabricQty[cat] = (state.settings.defaultFabricQty[cat]||0) * factor);
   state.settings.fabricQtyBuffer = state.settings.fabricQtyBuffer * factor;
   state.settings.measureUnit = newUnit;
@@ -1423,11 +1459,12 @@ $("setWaPromo").addEventListener("input", ()=>{
     const amount = parseFloat($("vatPaymentAmount").value)||0;
     const note = $("vatPaymentNote").value.trim();
     if(amount<=0){ showToast("أدخل مبلغ صحيح"); return; }
-    state.vatPayments.push({id:Date.now()+"", date, amount, note, recordedBy:currentUser.username});
+    state.vatPayments.push({id:newId(), date, amount, note, recordedBy:currentUser.username});
     saveState(); renderVatLedger();
     $("vatPaymentAmount").value=""; $("vatPaymentNote").value="";
     showToast("تم تسجيل دفعة الضريبة");
   });
   $("loadAuditLogBtn").addEventListener("click", loadAndRenderAuditLog);
+  $("runIntegrityCheckBtn").addEventListener("click", renderIntegrityCheck);
   $("submitReturnBtn").addEventListener("click", submitInvoiceReturn);
 })();

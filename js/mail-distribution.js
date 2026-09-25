@@ -66,9 +66,11 @@ function submitMailReturnRequest(){
   if(!inv){ showToast("ما فيه فاتورة بهذا الرقم"); return; }
   const responsibleUsername = $("mailReturnResponsible").value;
   const reason = $("mailReturnReason").value.trim();
+  if(!responsibleUsername){ showToast("اختر الموظف المتسبّب من الاقتراحات"); return; }
   if(!reason){ showToast("أدخل سبب الخلل"); return; }
+  if(state.mailRequests.some(m=>m.type==="invoice_return_defect" && m.invoiceId===inv.id && m.status==="pending")){ showToast(`فيه طلب مفتوح مسبقاً لفاتورة ${invoiceNumber} بانتظار قرار المدير`); return; }
   const amount = invoiceSaleTotal(inv);
-  state.mailRequests.push({id:Date.now()+"", seq:nextMailRequestNo(), type:"invoice_return_defect", invoiceId:inv.id, invoiceNumber:inv.number, amount, responsibleUsername, reason, status:"pending", createdBy:currentUser.username, date:todayStr()});
+  state.mailRequests.push({id:newId(), seq:nextMailRequestNo(), type:"invoice_return_defect", invoiceId:inv.id, invoiceNumber:inv.number, amount, responsibleUsername, reason, status:"pending", createdBy:currentUser.username, date:todayStr()});
   saveState(); renderAll();
   $("mailReturnInvNumber").value=""; $("mailReturnReason").value=""; switchMailComposeForm(null);
   showToast("تم إرسال الطلب للمدير");
@@ -78,7 +80,10 @@ function submitMailAdvanceRequest(){
   const amount = parseFloat($("mailAdvanceAmount").value)||0;
   const reason = $("mailAdvanceReason").value.trim();
   if(amount<=0){ showToast("أدخل مبلغ صحيح"); return; }
-  state.mailRequests.push({id:Date.now()+"", seq:nextMailRequestNo(), type:"advance", employeeUsername, amount, reason, status:"pending", createdBy:currentUser.username, date:todayStr()});
+  const eligibility = advanceEligibility(employeeUsername);
+  if(!eligibility.ok){ showToast(eligibility.msg); return; }
+  if(amount - eligibility.balance > 0.01){ showToast(`المبلغ أكبر من الرصيد المستحق (${eligibility.balance.toFixed(0)} ريال)`); return; }
+  state.mailRequests.push({id:newId(), seq:nextMailRequestNo(), type:"advance", employeeUsername, amount, reason, status:"pending", createdBy:currentUser.username, date:todayStr()});
   saveState(); renderAll();
   $("mailAdvanceAmount").value=""; $("mailAdvanceReason").value=""; switchMailComposeForm(null);
   showToast("تم إرسال طلب السلفة للمدير");
@@ -89,7 +94,7 @@ function submitMailLeaveRequest(){
   const reason = $("mailLeaveReason").value.trim();
   if(!fromDate || !toDate){ showToast("حدد تاريخ البداية والنهاية"); return; }
   if(toDate < fromDate){ showToast("تاريخ النهاية قبل البداية؟"); return; }
-  state.mailRequests.push({id:Date.now()+"", seq:nextMailRequestNo(), type:"leave", employeeUsername:currentUser.username, fromDate, toDate, reason, status:"pending", createdBy:currentUser.username, date:todayStr()});
+  state.mailRequests.push({id:newId(), seq:nextMailRequestNo(), type:"leave", employeeUsername:currentUser.username, fromDate, toDate, reason, status:"pending", createdBy:currentUser.username, date:todayStr()});
   saveState(); renderAll();
   $("mailLeaveFrom").value=""; $("mailLeaveTo").value=""; $("mailLeaveReason").value=""; switchMailComposeForm(null);
   showToast("تم إرسال طلب الإجازة للمدير");
@@ -97,6 +102,7 @@ function submitMailLeaveRequest(){
 async function decideSimpleMailRequest(reqId, approved){
   const r = state.mailRequests.find(x=>x.id===reqId);
   if(!r) return;
+  if(r.status!=="pending"){ showToast("هذا الطلب تم البت فيه مسبقاً"); return; }
   const snapshot = JSON.parse(JSON.stringify(state));
   if(r.type==="advance" && approved){
     const boxId = userBoxes(currentUser.username)[0]?.id;
@@ -115,7 +121,9 @@ function openMailDecisionModal(reqId){
   const r = state.mailRequests.find(x=>x.id===reqId);
   if(!r) return;
   mailDecisionTargetId = reqId;
-  $("mailDecisionSummary").textContent = `فاتورة ${r.invoiceNumber} — مبلغ ${r.amount.toFixed(0)} ريال — المتسبّب: ${r.responsibleUsername}`;
+  const alreadyReturned = state.invoiceReturns.some(x=>x.invoiceId===r.invoiceId);
+  $("mailDecisionSummary").textContent = `فاتورة ${r.invoiceNumber} — مبلغ ${r.amount.toFixed(0)} ريال — المتسبّب: ${r.responsibleUsername}` + (alreadyReturned ? " — المرتجع واسترداد العميل مسجّلين مسبقاً، القرار يحدد التحميل فقط" : "");
+  $("mailDecisionBoxWrap").style.display = alreadyReturned ? "none" : "";
   $("mailDecisionBox").innerHTML = userBoxes(currentUser.username).map(b=>`<option value="${b.id}">${esc(b.name)} (${typeLabel(b.type)})</option>`).join("");
   $("mailDecisionChoice").value = "full";
   $("mailDecisionPartialWrap").style.display = "none";
@@ -127,12 +135,13 @@ function nextDecisionNo(){ const n=state.settings.nextDecisionNumber||1; state.s
 async function confirmMailDecision(){
   const r = state.mailRequests.find(x=>x.id===mailDecisionTargetId);
   if(!r) return;
+  if(r.status!=="pending"){ showToast("هذا الطلب تم البت فيه مسبقاً"); closeMailDecisionModal(); return; }
   const choice = $("mailDecisionChoice").value;
   if(choice==="reject"){
     const rejectSnapshot = JSON.parse(JSON.stringify(state));
     const seq = nextDecisionNo();
     const message = `تم رفض طلب الترجيع الخاص بفاتورة #${r.invoiceNumber} — لن يتم استرداد أي مبلغ ولا خصم عليك.`;
-    state.decisions.push({id:Date.now()+"", seq, type:"return_defect", recipientUsername:r.responsibleUsername, amount:0, reason:r.reason, message, decidedBy:currentUser.username, date:todayStr()});
+    state.decisions.push({id:newId(), seq, type:"return_defect", recipientUsername:r.responsibleUsername, amount:0, reason:r.reason, message, decidedBy:currentUser.username, date:todayStr()});
     r.status="decided"; r.decidedBy=currentUser.username; r.decidedAt=todayStr(); r.decisionLabel=`قرار رقم ${seq} — رفض الترجيع، بدون أي خصم من أي صندوق`;
     if(!await saveStateWithRollback(rejectSnapshot)) return;
     logAudit("mail_decision_resolved", {seq, choice:"reject", invoiceNumber:r.invoiceNumber, responsibleUsername:r.responsibleUsername});
@@ -140,10 +149,21 @@ async function confirmMailDecision(){
     showToast(`تم رفض الترجيع رقم ${seq} — ما انخصم أي مبلغ`);
     return;
   }
-  const boxId = $("mailDecisionBox").value;
-  const box = findCashBox(boxId);
-  if(!box){ showToast("اختر الصندوق"); return; }
-  if(boxTotal(box) < r.amount){ showToast(`رصيد الصندوق (${boxTotal(box).toFixed(0)} ريال) أقل من مبلغ الاسترداد`); return; }
+  const inv = state.invoices.find(i=>i.id===r.invoiceId);
+  // when the return was already recorded (from the returns screen) the customer was refunded and
+  // the garments cancelled there, so this decision only settles who bears it: no second refund and
+  // no second return record
+  const alreadyReturned = state.invoiceReturns.some(x=>x.invoiceId===r.invoiceId);
+  // cancelled garments drop out of revenue on their own, so the shop's share is booked as an
+  // "operational loss" only when the return leaves the garments standing (already delivered) —
+  // booking it on top of a cancellation counted the same money twice
+  const revenueReversedByCancel = !!inv && inv.garments.some(g=> g.status==="ملغي" || (!alreadyReturned && g.status!=="تسليم"));
+  // otherwise the customer gets back what they actually paid, never more
+  const refundDue = alreadyReturned || !inv ? 0 : Math.max(0, Math.min(r.amount, invoicePaid(inv) - invoiceRefunded(inv)));
+  const boxId = alreadyReturned ? "" : $("mailDecisionBox").value;
+  const box = alreadyReturned ? null : findCashBox(boxId);
+  if(!alreadyReturned && !box){ showToast("اختر الصندوق"); return; }
+  if(box && boxTotal(box) < refundDue){ showToast(`رصيد الصندوق (${boxTotal(box).toFixed(0)} ريال) أقل من مبلغ الاسترداد`); return; }
   // validate the partial-amount input BEFORE any mutation below — this used to run after the
   // refund was already deducted from the box, so an invalid amount here left that deduction
   // applied with no ledger entry to explain it (and applied a second time on a valid retry)
@@ -154,9 +174,7 @@ async function confirmMailDecision(){
   }
   const decisionSnapshot = JSON.parse(JSON.stringify(state));
   // 1) refund the customer
-  box.balance -= r.amount;
-  // 2) mark the invoice's garments as cancelled + log as a return (customer already had it — no stock impact)
-  const inv = state.invoices.find(i=>i.id===r.invoiceId);
+  if(box) box.balance -= refundDue;
   let decisionLabel = "", deductedAmount = 0;
   const seq = nextDecisionNo();
   if(choice==="full"){
@@ -172,23 +190,27 @@ async function confirmMailDecision(){
     if(partialAmount>0) addPayrollEntry(r.responsibleUsername, "deduction", partialAmount, null, `خصم جزئي فاتورة مرتجعة #${inv?inv.number:r.invoiceNumber} بسبب خلل — طلب بريد #${r.seq}`);
     deductedAmount = partialAmount;
     const shopShare = r.amount - partialAmount;
-    if(shopShare>0.01){
-      state.operationalLosses.push({id:Date.now()+"", date:todayStr(), amount:shopShare, invoiceNumber:r.invoiceNumber, reason:`فرق قرار جزئي #${seq} — ${r.reason}`});
+    if(shopShare>0.01 && !revenueReversedByCancel){
+      state.operationalLosses.push({id:newId(), date:todayStr(), amount:shopShare, invoiceNumber:r.invoiceNumber, reason:`فرق قرار جزئي #${seq} — ${r.reason}`});
     }
-    decisionLabel = `خصم جزئي (${partialAmount.toFixed(0)} ﷼) من ${r.responsibleUsername} — والمحل يتحمّل الباقي (${shopShare.toFixed(0)} ﷼) كخسارة تشغيلية`;
+    decisionLabel = `خصم جزئي (${partialAmount.toFixed(0)} ﷼) من ${r.responsibleUsername} — والمحل يتحمّل الباقي (${shopShare.toFixed(0)} ﷼)`;
   } else {
-    state.operationalLosses.push({id:Date.now()+"", date:todayStr(), amount:r.amount, invoiceNumber:r.invoiceNumber, reason:`تجاوز كامل — ${r.reason}`});
+    if(!revenueReversedByCancel) state.operationalLosses.push({id:newId(), date:todayStr(), amount:r.amount, invoiceNumber:r.invoiceNumber, reason:`تجاوز كامل — ${r.reason}`});
     decisionLabel = `تحمّلها المحل بالكامل (تجاوز) — بدون خصم على ${r.responsibleUsername}`;
   }
-  state.invoiceReturns.push({id:Date.now()+"", invoiceId:r.invoiceId, invoiceNumber:r.invoiceNumber, reason:`خلل موظف: ${r.reason}`, refundAmount:r.amount, boxId, lostCost:0, date:todayStr(), recordedBy:currentUser.username});
-  if(inv) reverseInvoiceLoyaltyIfNeeded(inv, "مرتجع بسبب خلل موظف");
+  // 2) an employee-filed request: record the return itself now, exactly as the returns screen does
+  // (cancel the garments, reverse stock/loyalty) — the invoice used to stay open, still showing the
+  // customer as owing its full price after they'd been refunded
+  if(!alreadyReturned && inv){
+    applyInvoiceReturn(inv, {reason:`خلل موظف: ${r.reason}`, refundAmount:refundDue, boxId, responsibleUsername:r.responsibleUsername, loyaltyNote:"مرتجع بسبب خلل موظف"});
+  }
   const message = deductedAmount>0
     ? `تم إصدار قرار رقم ${seq} بخصم مبلغ ${deductedAmount.toFixed(0)} ريال بحقك بسبب: ${r.reason}`
     : `تم إصدار قرار رقم ${seq} بخصوص فاتورة مرتجعة بسببك (${r.reason}) — قرر المدير تحمّل المحل للمبلغ، بدون خصم عليك.`;
-  state.decisions.push({id:Date.now()+"", seq, type:"return_defect", recipientUsername:r.responsibleUsername, amount:deductedAmount, reason:r.reason, message, decidedBy:currentUser.username, date:todayStr()});
+  state.decisions.push({id:newId(), seq, type:"return_defect", recipientUsername:r.responsibleUsername, amount:deductedAmount, reason:r.reason, message, decidedBy:currentUser.username, date:todayStr()});
   r.status="decided"; r.decidedBy=currentUser.username; r.decidedAt=todayStr(); r.decisionLabel=`قرار رقم ${seq} — ${decisionLabel}`;
   if(!await saveStateWithRollback(decisionSnapshot)) return;
-  logAudit("mail_decision_resolved", {seq, choice, invoiceNumber:r.invoiceNumber, responsibleUsername:r.responsibleUsername, refundAmount:r.amount, deductedAmount});
+  logAudit("mail_decision_resolved", {seq, choice, invoiceNumber:r.invoiceNumber, responsibleUsername:r.responsibleUsername, refundAmount:refundDue, deductedAmount});
   closeMailDecisionModal();
   showToast(`تم تنفيذ القرار رقم ${seq} مالياً`);
 }
@@ -206,7 +228,7 @@ async function submitBonusOrDeduction(){
   const message = type==="bonus"
     ? `تم إصدار قرار رقم ${seq} — تمت مكافأتك بمبلغ ${amount.toFixed(0)} ريال نظير: ${reason}`
     : `تم إصدار قرار رقم ${seq} بخصم مبلغ ${amount.toFixed(0)} ريال بحقك بسبب: ${reason}`;
-  state.decisions.push({id:Date.now()+"", seq, type, recipientUsername:username, amount, reason, message, decidedBy:currentUser.username, date:todayStr()});
+  state.decisions.push({id:newId(), seq, type, recipientUsername:username, amount, reason, message, decidedBy:currentUser.username, date:todayStr()});
   if(!await saveStateWithRollback(snapshot)) return;
   logAudit("bonus_or_deduction", {seq, type, username, amount, reason});
   $("bonusAmount").value=""; $("bonusReason").value="";
@@ -230,6 +252,9 @@ function renderReturnsLog(){
 }
 async function saveInvoice(){
   const isNewInvoice = !editingId;
+  // the number box is read-only and auto-filled; take the live counter for a new invoice so a number
+  // another device used after this form was opened isn't reused (it'd be rejected as a duplicate)
+  if(isNewInvoice) $("invNumber").value = state.settings.nextInvoiceNumber;
   const number = $("invNumber").value.trim();
   if(!number){ showToast("أدخل رقم الفاتورة"); return; }
   const duplicateInv = state.invoices.find(i=>i.number===number && i.id!==editingId);
@@ -271,8 +296,10 @@ async function saveInvoice(){
     const itemCardIdRaw = card.querySelector(".g-itemCard").value;
     const itemCard = itemCardIdRaw!=="__none__" ? findItemCard(itemCardIdRaw) : null;
     const garmentCategory = card.querySelector(".g-category").value;
-    const effectiveMinPrice = itemCard ? ((itemCard.minPrices && itemCard.minPrices[garmentCategory]) || 0) : 0;
-    if(itemCard && effectiveMinPrice>0){
+    const tailoringOnly = itemCardIdRaw==="__none__";
+    const effectiveMinPrice = itemCard ? ((itemCard.minPrices && itemCard.minPrices[garmentCategory]) || 0)
+      : tailoringOnly ? (((state.settings.tailoringOnly||{}).minPrices||{})[garmentCategory] || 0) : 0;
+    if((itemCard || tailoringOnly) && effectiveMinPrice>0){
       const enteredPrice = parseFloat(priceVal)||0;
       if(enteredPrice < effectiveMinPrice){
         const shortfall = effectiveMinPrice - enteredPrice;
@@ -285,6 +312,15 @@ async function saveInvoice(){
         }
       }
     }
+  }
+  // the same order entered twice (double submit, or two employees entering it) — same customer, same
+  // day, same garments and prices as an invoice that already exists. Not blocked (a customer can
+  // legitimately order the same again) but it must be a conscious choice.
+  if(isNewInvoice){
+    const newPrices = cards.map(c=>parseFloat(c.querySelector(".g-price").value)||0).sort((a,b)=>a-b).join(",");
+    const twin = state.invoices.find(i=> i.customerMobile===custMobile && i.date===date &&
+      i.garments.map(g=>g.price||0).sort((a,b)=>a-b).join(",")===newPrices);
+    if(twin && !await showConfirm(`تنبيه ازدواجية: فيه فاتورة لنفس العميل اليوم بنفس الثياب والأسعار (فاتورة رقم ${twin.number}).\nمتأكد إنها طلب جديد مختلف وتبي تحفظها؟`)) return;
   }
   const originMonth = editingId ? state.invoices.find(i=>i.id===editingId).originMonth : date.slice(0,7);
   if(isMonthClosed(originMonth) && editingId){ showToast("هذا الشهر مقفول"); return; }
@@ -304,6 +340,11 @@ async function saveInvoice(){
   garments.forEach(g=>{ g.costSnapshot = computeCostSnapshot(g, fixedShare); });
   // advisory balances: reverse old garment credits (if editing), then re-apply fresh for current garments
   if(oldInv) oldInv.garments.forEach(g=>{ reverseGarmentAdvisory(g); returnFabricForGarment(g); reverseAddonsStock(g); });
+  // the re-read garments carry over the OLD stock flags, but the lines above just reversed that
+  // stock — clear the flags so it's re-applied below. Otherwise every edit released the fabric
+  // reservation and handed the garments' physical addons (buttons...) back to stock for good.
+  // Fabric already cut ("consumed") stays consumed: it was never given back above.
+  if(oldInv) garments.forEach(g=>{ if(g.stockApplied==="reserved") g.stockApplied = null; g.addonsStockApplied = false; });
   garments.forEach(g=>{
     if(g.status!=="ملغي"){
       applyGarmentAdvisory(g);
@@ -349,7 +390,7 @@ async function saveInvoice(){
     }
   }
   const invData = {
-    id: editingId || (Date.now()+""),
+    id: editingId || (newId()),
     number, date, originMonth,
     customerName: custName, customerMobile: custMobile,
     payments: JSON.parse(JSON.stringify(paymentsListTemp)),
@@ -441,6 +482,14 @@ async function saveInvoice(){
     // reservation, loyalty points, cash box balances, the invoice itself...) instead of
     // leaving them applied only in this tab's memory, and keep the form filled in as-is
     // so the cashier can just retry instead of re-entering everything from scratch
+    if(stateSaveConflict){
+      // `state` is already the freshly reloaded server copy; only the form stays as the cashier left it
+      if(!editingId) $("invNumber").value = state.settings.nextInvoiceNumber;
+      $("printReceiptBanner").innerHTML = `<p class="sub" style="text-align:center;color:var(--loss);">ما انحفظت الفاتورة — مستخدم ثاني حفظ بنفس اللحظة. البيانات لسا موجودة بالفورم، اضغط "حفظ" مرة ثانية.</p>`;
+      $("printReceiptBanner").style.display = "";
+      renderAll();
+      return null;
+    }
     state = stateSnapshotBeforeSave;
     $("printReceiptBanner").innerHTML = `<p class="sub" style="text-align:center;color:var(--loss);">تعذّر حفظ الفاتورة بالسحابة — ما انحفظ شي، البيانات لسا موجودة بالفورم. تأكد من الاتصال بالإنترنت وجرّب "حفظ" مرة ثانية.</p>`;
     $("printReceiptBanner").style.display = "";
@@ -521,7 +570,10 @@ function renderDashboardKPIs(){
   const todaysInvoices = state.invoices.filter(i=>i.date===today);
   const todaysSalesInvoices = state.salesInvoices.filter(i=>i.date===today);
   const salesToday = state.invoices.reduce((a,inv)=> a + (inv.payments||[]).filter(p=>p.date===today).reduce((s,p)=>s+(p.cash||0)+(p.network||0),0), 0)
-    + todaysSalesInvoices.reduce((a,inv)=> a + (inv.payment?(inv.payment.cash||0)+(inv.payment.network||0):0), 0);
+    + todaysSalesInvoices.reduce((a,inv)=> a + (inv.payment?(inv.payment.cash||0)+(inv.payment.network||0):0), 0)
+    - (state.salesReturns||[]).filter(r=>r.date===today).reduce((a,r)=>a+(r.refundAmount||0),0)
+    - state.invoiceReturns.filter(r=>r.date===today).reduce((a,r)=>a+(r.refundAmount||0),0)
+    + (state.legacyPayments||[]).filter(l=>l.date===today).reduce((a,l)=>a+l.amount,0);
   const {cuttingOverdue, deliveryOverdue, dueToday} = computeOverdueLists();
   const overdueCount = cuttingOverdue.length + deliveryOverdue.length;
   const pending = allPendingGarments();
@@ -657,7 +709,7 @@ function renderDistributionArea(inv){
         return true;
       });
       const canCreditDeliver = isAdmin && g.status!=="تسليم" && g.status!=="ملغي" && g.status!=="جديد" && g.status!=="قص";
-      const creditBadge = g.creditDelivered ? `<p class="locked-note" style="color:var(--loss);">مسلَّم بدين — متبقٍ عليه ${(g.creditAmount-g.creditPaid).toFixed(0)} ﷼ (تابعه من "مديونية الثياب")</p>` : "";
+      const creditBadge = g.creditDelivered ? `<p class="locked-note" style="color:var(--loss);">مسلَّم بدين — متبقٍ عليه ${creditGarmentOwed(g, inv).toFixed(0)} ﷼ (تابعه من "مديونية الثياب")</p>` : "";
       return `<div class="garment-card"><span class="tag">ثوب ${i+1} — ${esc(g.fabricType)}</span>
         ${buildStepperHtml(g.status)}
         <div class="row-2">
@@ -714,7 +766,7 @@ async function addDistPayment(inv){
   });
   inv.payments = inv.payments || [];
   const cashReceiptNo = cash>0 ? nextVoucherNo() : null;
-  const newPayment = {id:Date.now()+"", date:todayStr(), cash, network, cashReceiptNo, networkReceiptNo, discount};
+  const newPayment = {id:newId(), date:todayStr(), cash, network, cashReceiptNo, networkReceiptNo, discount};
   inv.payments.push(newPayment);
   applyPaymentToBalances(newPayment);
   let autoDelivered=0;
@@ -722,6 +774,7 @@ async function addDistPayment(inv){
     inv.garments.forEach(g=>{
       if(g.status==="ملغي" || g.status==="تسليم" || g.status==="معلقة") return;
       if(g.status==="جديد" || g.status==="قص") return; // ما تفصّل بعد — ما يصير يتسلم تلقائياً حتى لو الفاتورة اتسددت بالكامل
+      if(g.status==="تفصيل" && state.settings.qcEnabled) return; // ينتظر فحص الجودة
       g.status="تسليم"; if(!g.readyDate) g.readyDate=todayStr(); if(!g.deliveredDate) g.deliveredDate=todayStr(); autoDelivered++;
     });
   }
@@ -737,6 +790,7 @@ async function creditDeliverGarment(invId, idx){
   const g = inv.garments[idx]; if(!g) return;
   if(g.status==="تسليم" || g.status==="ملغي"){ showToast("لا يمكن تطبيق هذا على ثوب مُسلَّم أو ملغي"); return; }
   if(g.status==="جديد" || g.status==="قص"){ showToast("ما يصير تسليم الثوب بدين قبل ما يخلص التفصيل — عشان ما يضيع حق القصاص وما تفقد بيانات التكاليف مصداقيتها"); return; }
+  if(g.status==="تفصيل" && state.settings.qcEnabled){ showToast("هذا الثوب ينتظر فحص الجودة — ما يتسلّم قبل ما يجتازه"); return; }
   const amount = garmentSalePrice(g);
   if(!await showConfirm(`تأكيد: بيتم تسليم هذا الثوب الآن رغم وجود دين عليه بقيمة ${amount.toFixed(0)} ريال. الثوب بينتقل لقائمة "مديونية الثياب" حتى يُسدد المبلغ. متابعة؟`)) return;
   const snapshot = JSON.parse(JSON.stringify(state));
@@ -757,6 +811,7 @@ function renderScanTab(){
   $("scanPanelGeneral").style.display = isTailor ? "none" : "";
   if(isTailor){
     renderTailorScanHistory();
+    renderTailorQcReturns();
     $("myTailorMonthlyReport").innerHTML = buildTailorMonthlyReport(currentUser.username, todayStr().slice(0,7));
   }
 }
@@ -775,6 +830,7 @@ function handleTailorScan(){
   const eligible = [];
   inv.garments.forEach((g,idx)=>{
     if(g.status==="تسليم" || g.status==="ملغي") return;
+    if(g.qcReturnedTo && g.qcReturnedTo!==currentUser.username){ conflicts.push(g.qcReturnedTo); return; } // sent back to its own tailor for repair
     if(g.status==="تفصيل" || g.status==="جاهز"){
       if(g.tailor && g.tailor!==currentUser.username) conflicts.push(g.tailor);
       return; // already claimed (by this tailor or another) or progressed further
@@ -813,9 +869,13 @@ function resolvePendingAlterationsForTailor(inv){
 function claimSingleTailorGarment(inv, idx, number, conflicts){
   const g = inv.garments[idx];
   if(!g || g.status==="تسليم" || g.status==="ملغي" || g.status==="تفصيل" || g.status==="جاهز"){ showToast("هذا الثوب ما عاد متاح للتسجيل — يمكن سجّله خياط ثاني قبلك"); $("tailorScanPicker").innerHTML=""; return; }
+  if(g.qcReturnedTo && g.qcReturnedTo!==currentUser.username){ showToast(`هذا الثوب راجع للخياط ${g.qcReturnedTo} لإصلاحه`); $("tailorScanPicker").innerHTML=""; return; }
+  const wasRepair = !!g.qcReturnedTo;
   g.tailor = currentUser.username; g.status = "تفصيل"; g.tailorCompletedDate = todayStr();
+  delete g.qcReturnedTo;
+  if(wasRepair) g.qcRepairedDate = todayStr();
   const alterationsCompleted = resolvePendingAlterationsForTailor(inv);
-  state.tailorScans.push({id:Date.now()+"", tailorUsername:currentUser.username, invoiceNumber:number, date:todayStr(), claimedCount:1});
+  state.tailorScans.push({id:newId(), tailorUsername:currentUser.username, invoiceNumber:number, date:todayStr(), claimedCount:1});
   saveState(); renderAll();
   $("tailorScanInput").value=""; $("tailorScanPicker").innerHTML="";
   const parts = [`تم تسجيل ثوب لصالحك`];
@@ -828,7 +888,9 @@ function nextStatusOf(status){ const i=STATUS_ORDER.indexOf(status); return i>=0
 function garmentProportionalPaid(g, inv){
   const totalPrice = inv.garments.reduce((a,gg)=>a+(gg.status==="ملغي"?0:garmentSalePrice(gg)),0);
   if(totalPrice<=0) return 0;
-  const paidTotal = invoicePaid(inv) - (inv.discountTotal||0);
+  // a discount settles part of the price just like a payment (inv.discountTotal never existed — discounts
+  // live on each payment — so every discounted invoice showed its discount as a debt the customer owed)
+  const paidTotal = invoicePaid(inv) + invoiceDiscountTotal(inv);
   return paidTotal * (garmentSalePrice(g)/totalPrice);
 }
 function garmentRemaining(g, inv){ return garmentSalePrice(g) - garmentProportionalPaid(g, inv); }

@@ -381,6 +381,9 @@ function cardAvailableQty(c){ return (c.openingBalance||0) + (c.stockQty||0) - (
 function unitLabel(){ return state.settings.measureUnit==="yard" ? "يارده" : "متر"; }
 function garmentFabricCost(g){
   if(!g.itemCardId) return 0; // "أجرة تفصيل" or no fabric selected
+  // fabric already cut is costed at the price it had when it was cut, so a later purchase at a
+  // different price doesn't rewrite the cost (and profit) of garments already made
+  if(g.fabricUnitCostAtCut!==undefined) return g.fabricUnitCostAtCut * (g.qtyUsed||0);
   const c = findItemCard(g.itemCardId);
   if(!c) return 0;
   return (c.currentCost||0) * (g.qtyUsed||0);
@@ -397,6 +400,7 @@ function consumeFabricForGarment(g, actualQty){
   if(!c) return;
   if(g.stockApplied==="reserved") c.reservedQty = Math.max(0, (c.reservedQty||0) - (g.qtyUsed||0));
   g.qtyUsed = actualQty;
+  g.fabricUnitCostAtCut = c.currentCost||0;
   c.stockQty = (c.stockQty||0) - actualQty;
   g.stockApplied = "consumed";
 }
@@ -412,22 +416,77 @@ function returnFabricForGarment(g){
 
 // ---------------- customer cards (shared phone number, multiple individuals) ----------------
 function findCustomerByMobile(mobile){ return state.customers.find(c=>c.mobile===mobile); }
+// A customer's standing, as two strictly separate things that must never be merged or confused:
+//  - debt: MONEY owed for garments already HANDED OVER and not fully paid for (the garment left
+//    the shop, the money didn't come in). A garment still in the shop is never debt, however
+//    much of it is unpaid — the customer simply pays the rest on pickup.
+//  - stuck garments: FINISHED garments (ready) still sitting in the shop, never picked up. This
+//    is about goods, not money — no amount is attached to it.
+// (Before, "debt" summed the unpaid part of every garment including ones still being cut or
+// sewn, and "stuck" counted every undelivered garment including brand-new orders.)
+function isStuckReadyGarment(g){
+  return g.status==="جاهز" || (g.status==="معلقة" && !!g.readyDate); // معلقة = carried over at month close
+}
+// what's still owed on a garment handed over on credit: its own tracked balance, capped by what is
+// still unpaid on the invoice as a whole — a payment taken from "مديونيات العملاء" or the
+// distribution screen goes on the invoice without touching creditPaid, so the "مديونية الثياب"
+// list kept showing the full amount owed and invited collecting it a second time
+function creditGarmentOwed(g, inv){
+  return Math.max(0, Math.min((g.creditAmount||0) - (g.creditPaid||0), invoiceRemaining(inv)));
+}
+function deliveredGarmentOwed(g, inv){
+  if(g.status!=="تسليم") return 0;
+  // a garment handed over on credit tracks its own balance; any other delivered garment owes
+  // its share of whatever is still unpaid on the invoice
+  if(g.creditDelivered) return creditGarmentOwed(g, inv);
+  return Math.max(0, garmentRemaining(g, inv));
+}
 function getCustomerStandingAlert(mobile){
   const invs = state.invoices.filter(inv=>inv.customerMobile===mobile);
   if(!invs.length) return null;
-  let totalDebt = 0, undeliveredCount = 0;
+  let debtAmount = 0;
+  const debtInvoices = new Set();
+  const stuckGarments = [];
   const convertedGarments = [];
   invs.forEach(inv=>{
     inv.garments.forEach(g=>{
       if(g.convertedToSale){ convertedGarments.push({inv, g}); return; }
       if(g.status==="ملغي") return;
-      const rem = garmentRemaining(g, inv);
-      if(rem > 0.01) totalDebt += rem;
-      if(g.status!=="تسليم") undeliveredCount++;
+      const owed = deliveredGarmentOwed(g, inv);
+      if(owed > 0.01){ debtAmount += owed; debtInvoices.add(inv.number); }
+      if(isStuckReadyGarment(g)) stuckGarments.push({inv, g});
     });
   });
-  if(totalDebt<=0.01 && undeliveredCount===0 && !convertedGarments.length) return null;
-  return {totalDebt, undeliveredCount, convertedGarments};
+  if(debtAmount<=0.01 && !stuckGarments.length && !convertedGarments.length) return null;
+  return {debtAmount: debtAmount>0.01 ? debtAmount : 0, debtInvoices:[...debtInvoices], stuckGarments, convertedGarments};
+}
+// renders the standing as separate, independent alert boxes — one per kind — into wrapId
+function renderCustomerStandingAlerts(mobile, wrapId){
+  const wrap = $(wrapId);
+  if(!wrap) return;
+  const alert = /^[0-9]{10}$/.test(mobile) ? getCustomerStandingAlert(mobile) : null;
+  if(!alert){ wrap.style.display="none"; wrap.innerHTML=""; return; }
+  const box = (color, bg, title, body, action)=> `<div style="background:${bg};border:1px solid ${color};border-radius:8px;padding:10px 12px;margin-bottom:8px;">
+    <div style="color:${color};font-weight:800;margin-bottom:4px;">${title}</div>
+    <div style="font-size:13px;">${body}</div>${action||""}</div>`;
+  let html = "";
+  if(alert.debtAmount>0){
+    html += box("var(--loss)", "rgba(224,90,90,0.12)", `💰 تنبيه دين: على العميل ${alert.debtAmount.toFixed(0)} ريال`,
+      `مبلغ مالي مستحق عن ثياب <b>تم تسليمها له</b> ولم يُسدد كامل قيمتها — فاتورة ${alert.debtInvoices.map(n=>"#"+esc(n)).join("، ")}.`,
+      `<button type="button" class="btn btn-ghost btn-sm" onclick="switchTab('customerDebts')" style="margin-top:6px;">الذهاب لتسوية المديونية</button>`);
+  }
+  if(alert.stuckGarments.length){
+    const byInv = {};
+    alert.stuckGarments.forEach(({inv})=>{ byInv[inv.number] = (byInv[inv.number]||0)+1; });
+    html += box("var(--gold)", "rgba(200,160,80,0.12)", `👔 تنبيه ثياب متعثرة: ${alert.stuckGarments.length} ثوب جاهز بالمحل لم يُستلم`,
+      `ثياب <b>منجزة وجاهزة</b> ما زالت في المحل ولم تُسلَّم للعميل بعد — ${Object.entries(byInv).map(([n,c])=>`فاتورة #${esc(n)} (${c} ثوب)`).join("، ")}. هذا ليس ديناً مالياً.`);
+  }
+  if(alert.convertedGarments.length){
+    html += box("var(--muted)", "rgba(128,128,128,0.10)", `ℹ ثياب سابقة تحوّلت وانباعت`,
+      alert.convertedGarments.map(({inv,g})=>`ثوب سابق (فاتورة #${esc(inv.number)}) تحوّل "متعثر" وانباع لعميل ثاني بتاريخ ${g.saleConversionDate}`).join("<br>"));
+  }
+  wrap.style.display = "";
+  wrap.innerHTML = html;
 }
 function findCustomerByIndividualName(name){
   if(!name) return null;
@@ -444,7 +503,7 @@ function renderCustomerNameDatalist(datalistId){
 function ensureCustomerIndividual(mobile, name){
   if(!mobile || !name) return;
   let cust = findCustomerByMobile(mobile);
-  if(!cust){ cust = {id:Date.now()+"", code:nextCustomerCode(), mobile, individuals:[], loyaltyPoints:0, vip:false}; state.customers.push(cust); }
+  if(!cust){ cust = {id:newId(), code:nextCustomerCode(), mobile, individuals:[], loyaltyPoints:0, vip:false}; state.customers.push(cust); }
   if(!cust.individuals.some(i=>i.name===name)) cust.individuals.push({id:Date.now()+"-"+Math.random().toString(36).slice(2,6), name, subCode:`${cust.code}-${cust.individuals.length+1}`});
 }
 function findLastGarmentDataForCustomer(mobile, name){
@@ -515,7 +574,7 @@ function renderCustomerPicker(mobileInputId, nameInputId, pickerWrapId){
 function customerTotalSpend(mobile){
   let total = 0;
   state.invoices.forEach(inv=>{ if(inv.customerMobile===mobile) total += invoiceSaleTotal(inv); });
-  state.salesInvoices.forEach(inv=>{ if(inv.customerMobile===mobile) total += inv.items.reduce((a,it)=>a+it.qty*it.price,0); });
+  state.salesInvoices.forEach(inv=>{ if(inv.customerMobile===mobile) total += inv.items.reduce((a,it)=>a+it.qty*it.price,0) - saleReturnsOf(inv).reduce((a,r)=>a+saleReturnValue(r),0); });
   return total;
 }
 function customerTier(mobile){
@@ -755,10 +814,12 @@ function renderPromoCodesAdmin(){
       <td><button class="btn btn-ghost btn-sm" style="color:var(--loss);border-color:var(--loss);" onclick="deletePromoCode('${p.id}')"><i data-lucide="trash-2"></i></button></td></tr>`).join("")}
   </tbody></table></div>`;
 }
+// every garment cut this month shares the month's fixed costs — including one cut and later
+// cancelled, which is charged its share too. (Leaving it out of the count while still charging it a
+// share billed the fixed costs more than once: 3 cut, 1 cancelled → 150% of them.)
 function garmentsCutInMonth(monthLabel){
   let n = 0;
   state.invoices.forEach(inv=> inv.garments.forEach(g=>{
-    if(g.status==="ملغي") return;
     if(g.cutDate && g.cutDate.slice(0,7)===monthLabel) n++;
   }));
   return n;
@@ -766,11 +827,23 @@ function garmentsCutInMonth(monthLabel){
 function salesInvoiceProfit(inv){
   return inv.items.reduce((a,it)=>a+((it.price-(it.costAtSale||0))*it.qty),0);
 }
+// ---------------- sales returns ----------------
+// a return is booked on the day it happens (its own month / VAT period), never back-dated into the
+// original sale — the same way a garment return reverses revenue in the month it's cancelled
+function saleReturnsOf(inv){ return (state.salesReturns||[]).filter(r=>r.saleInvoiceId===inv.id); }
+function saleLineReturnedQty(inv, lineIdx){
+  return saleReturnsOf(inv).reduce((a,r)=>a+r.lines.filter(l=>l.lineIdx===lineIdx).reduce((s,l)=>s+l.qty,0),0);
+}
+function saleReturnValue(r){ return r.lines.reduce((a,l)=>a+l.qty*l.price,0); }
+function saleReturnProfit(r){ return r.lines.reduce((a,l)=>a+l.qty*(l.price-(l.costAtSale||0)),0); }
+function salesReturnsInRange(from, to){ return (state.salesReturns||[]).filter(r=>inDateRange(r.date, from, to)); }
 function legacySoldProfitForMonth(monthLabel){
   return state.legacyPayments.filter(p=>(p.date||"").slice(0,7)===monthLabel).reduce((a,p)=>a+p.amount,0);
 }
 function totalSalesProfitForMonth(monthLabel){
-  return state.salesInvoices.filter(inv=>(inv.date||"").slice(0,7)===monthLabel).reduce((a,inv)=>a+salesInvoiceProfit(inv),0) + legacySoldProfitForMonth(monthLabel);
+  return state.salesInvoices.filter(inv=>(inv.date||"").slice(0,7)===monthLabel).reduce((a,inv)=>a+salesInvoiceProfit(inv),0)
+    - (state.salesReturns||[]).filter(r=>(r.date||"").slice(0,7)===monthLabel).reduce((a,r)=>a+saleReturnProfit(r),0)
+    + legacySoldProfitForMonth(monthLabel);
 }
 function currentFixedShare(extra=0, monthLabel=state.settings.currentMonth){
   const n = garmentsCutInMonth(monthLabel)+extra;
@@ -789,7 +862,11 @@ function garmentAddonsTotal(g){
   if(g.addonsSaleSnapshot!==undefined) return g.addonsSaleSnapshot;
   return garmentAddonsInfo(g).reduce((sum,a)=> sum+addonUnitPrice(a), 0);
 }
-function garmentAddonsCost(g){ return garmentAddonsInfo(g).filter(a=>a.kind==="physical").reduce((sum,a)=> sum+addonUnitPrice(a), 0); }
+// what physical addons actually COST the shop: purchase cost × quantity — NOT the sale price.
+// (This used addonUnitPrice(), which includes the markup, so cost always equalled the selling price
+// and every addon showed zero profit while inflating the garment's cost.)
+function addonUnitCost(a){ return a.kind==="physical" ? (findItemCard(a.itemCardId)?.currentCost||0)*(a.qtyPerGarment||1) : 0; }
+function garmentAddonsCost(g){ return garmentAddonsInfo(g).filter(a=>a.kind==="physical").reduce((sum,a)=> sum+addonUnitCost(a), 0); }
 function applyAddonsStock(g){
   if(g.addonsStockApplied) return;
   garmentAddonsInfo(g).filter(a=>a.kind==="physical").forEach(a=>{
@@ -825,7 +902,14 @@ function invoicePaid(inv){ return (inv.payments||[]).reduce((a,p)=>a+(p.cash||0)
 function invoiceDiscountTotal(inv){ return (inv.payments||[]).reduce((a,p)=>a+(p.discount||0),0); }
 function invoiceSaleTotal(inv){ return inv.garments.reduce((a,g)=> a+(g.status==="ملغي"?0:garmentSalePrice(g)),0); }
 function invoiceCostTotal(inv){ return inv.garments.reduce((a,g)=> a+(g.status==="ملغي"?0:garmentCostFor(g,inv)),0); }
-function invoiceRemaining(inv){ return invoiceSaleTotal(inv) - invoicePaid(inv) - invoiceDiscountTotal(inv); }
+// money already handed back to the customer through a recorded return
+function invoiceRefunded(inv){ return (state.invoiceReturns||[]).filter(r=>r.invoiceId===inv.id).reduce((a,r)=>a+(r.refundAmount||0),0); }
+function invoiceRemaining(inv){
+  const remaining = invoiceSaleTotal(inv) - invoicePaid(inv) - invoiceDiscountTotal(inv);
+  // once a return is recorded the refund (or a kept deposit) settles the difference — without this a
+  // returned invoice showed the shop owing the customer everything they'd paid, refunded or not
+  return (state.invoiceReturns||[]).some(r=>r.invoiceId===inv.id) ? Math.max(0, remaining) : remaining;
+}
 function userDiscountEnabled(user){ return !!(user && user.discountEnabled); }
 function userMaxDiscountAmount(user, baseAmount){
   if(!user || !user.discountEnabled) return 0;

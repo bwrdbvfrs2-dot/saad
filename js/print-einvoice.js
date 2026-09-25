@@ -115,8 +115,11 @@ function buildReceiptHtml(inv){
   const total = invoiceSaleTotal(inv);
   const vatAmount = s.vatEnabled ? vatAmountFromTotal(total) : 0;
   const taxableTotal = total - vatAmount;
-  const paid = (inv.payments||[]).reduce((a,p)=>a+p.cash+p.network+(p.discount||0),0);
-  const remaining = total - paid;
+  // "paid" is money actually received; discounts and refunds get their own lines
+  const paid = invoicePaid(inv);
+  const discount = invoiceDiscountTotal(inv);
+  const refunded = invoiceRefunded(inv);
+  const remaining = invoiceRemaining(inv);
   const itemsRows = inv.garments.filter(g=>g.status!=="ملغي").map(g=>{
     const price = garmentSalePrice(g);
     return `<tr>
@@ -159,7 +162,9 @@ function buildReceiptHtml(inv){
     ${s.vatEnabled ? `<p style="margin:2px 0;">الاجمالي الخاضع للضريبة (غير شامل الضريبة): ${taxableTotal.toFixed(2)}</p>
     <p style="margin:2px 0;">ضريبة القيمة المضافة: ${vatAmount.toFixed(2)}</p>` : ""}
     <p style="margin:2px 0;font-weight:700;">إجمالي المبلغ المستحق: ${total.toFixed(2)}</p>
+    ${discount>0.001 ? `<p style="margin:2px 0;">الخصم: ${discount.toFixed(2)}</p>` : ""}
     <p style="margin:2px 0;">المبلغ المدفوع: ${paid.toFixed(2)}</p>
+    ${refunded>0.001 ? `<p style="margin:2px 0;">المبلغ المسترد (مرتجع): ${refunded.toFixed(2)}</p>` : ""}
     <p style="margin:2px 0;font-weight:700;">المبلغ المتبقي: ${remaining.toFixed(2)}</p>
     <hr>
     <p style="font-size:14px;white-space:pre-line;">${esc(s.receiptTerms||"")}</p>

@@ -227,6 +227,7 @@
   <button class="tab-btn" data-tab="distribution">✂<span>التوزيع</span></button>
   <button class="tab-btn" data-tab="scan">📷<span>مسح الباركود</span></button>
   <button class="tab-btn" data-tab="alteration">🔄<span>ثوب معاد للتعديل</span></button>
+  <button class="tab-btn" data-tab="qc">✅<span>فحص الجودة</span></button>
   <button class="tab-btn" data-tab="debts">📋<span>مديونية الثياب</span></button>
   <button class="tab-btn" data-tab="customerDebts">💰<span>مديونيات العملاء</span></button>
   <button class="tab-btn" data-tab="report-broadcastCampaign">📢<span>البث والعروض</span></button>
@@ -336,6 +337,8 @@
     <div class="row-2">
       <div class="field"><label>احتساب العمولة — متى تدخل عمولة أي موظف (خياط، كاشير، محاسب، مدير) بالحساب؟</label><select id="setCommissionBasis"><option value="تفصيل">بعد "تم التفصيل"</option><option value="تسليم">بعد "تم التسليم" (افتراضي)</option></select></div>
     </div>
+    <div class="embro-toggle"><input type="checkbox" id="setQcEnabled"><label style="margin:0;">تفعيل فحص الجودة — الثوب بعد "تم التفصيل" ما يصير "جاهز" إلا بعد ما يجتاز الفحص</label></div>
+    <p class="sub" style="margin:6px 0 12px;">لو انرفض الثوب يرجع للخياط نفسه لإصلاحه ويسجّل "تم التفصيل" مرة ثانية، ويُسجَّل سبب الرفض والمتسبّب. لو كانت العمولة "بعد تم التفصيل" فأجر الخياط يُحتسب عند اجتياز الفحص (مرة وحدة، وإعادة الخياطة بدون أجر إضافي).</p>
     <div class="row-2">
       <div class="field"><label>رقم الفاتورة القادم (مبيعات)</label><input type="number" id="setNextSaleInv" min="1" step="1"></div>
     </div>
@@ -415,7 +418,7 @@
       <div class="row-3" style="margin-top:12px;">
         <div class="field"><label>اسم المستخدم الجديد</label><input type="text" id="newUserName"></div>
         <div class="field"><label>كلمة المرور</label><input type="text" id="newUserPass"></div>
-        <div class="field"><label>الدور</label><select id="newUserRole"><option value="محاسب">محاسب</option><option value="كاشير">كاشير</option><option value="خياط">خياط</option><option value="مدير">مدير</option></select></div>
+        <div class="field"><label>الدور</label><select id="newUserRole"><option value="محاسب">محاسب</option><option value="كاشير">كاشير</option><option value="خياط">خياط</option><option value="فاحص جودة">فاحص جودة</option><option value="مدير">مدير</option></select></div>
       </div>
       <button class="btn btn-ghost btn-sm" id="addUserBtn">إضافة مستخدم</button>
       <div class="stitch"></div>
@@ -682,10 +685,14 @@
     <div class="field"><label>رقم جوال العميل</label><input type="tel" id="saleCustMobile" placeholder="05xxxxxxxx" maxlength="10" inputmode="numeric" autocomplete="off"></div>
   </div>
   <p class="sub" id="saleCustNewBadge" style="display:none;color:var(--gold-soft);margin:-6px 0 10px;">عميل جديد — هذا الرقم مو مسجّل بالنظام</p>
+  <div id="saleCustomerAlertWrap" style="display:none;margin-bottom:12px;"></div>
   <div id="salePickerWrap" style="display:none;margin-bottom:12px;"></div>
   <div class="stitch"></div>
   <h3 style="margin:0 0 10px;font-size:14px;">الأصناف</h3>
   <div id="saleItemsHolder"></div>
+  <div class="row-2" style="align-items:flex-end;margin-bottom:8px;">
+    <div class="field" style="margin-bottom:0;"><label>امسح باركود الصنف (أو اكتب كوده)</label><input type="text" id="saleScanInput" placeholder="P12" autocomplete="off"></div>
+  </div>
   <button class="btn btn-ghost btn-sm" id="addSaleLineBtn">إضافة صنف</button>
   <div class="stitch"></div>
   <div class="row-3">
@@ -700,6 +707,18 @@
   <div class="stitch"></div>
   <h3 style="margin:0 0 10px;font-size:14px;">سجل فواتير المبيعات</h3>
   <div class="table-wrap"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>العميل</th><th>الإجمالي</th></tr></thead><tbody id="salesInvoicesBody"></tbody></table></div>
+  <div id="saleReturnPanel">
+    <div class="stitch"></div>
+    <h3 style="margin:0 0 6px;font-size:14px;">ترجيع فاتورة مبيعات</h3>
+    <p class="sub">العميل يرجّع صنف (أو جزء منه) — الكمية ترجع للمخزون، والمبلغ يُرد من الصندوق اللي تختاره. متاح للمدير فقط.</p>
+    <div class="row-2" style="align-items:flex-end;">
+      <div class="field" style="margin-bottom:0;"><label>رقم فاتورة المبيعات</label><input type="text" id="saleReturnNumber" placeholder="مثلاً: 12"></div>
+      <button type="button" class="btn btn-ghost btn-sm" id="saleReturnLoadBtn" style="margin-bottom:2px;">عرض الأصناف</button>
+    </div>
+    <div id="saleReturnLines" style="margin-top:10px;"></div>
+    <h4 style="margin:14px 0 8px;font-size:13px;">سجل مرتجعات المبيعات</h4>
+    <div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>فاتورة</th><th>الأصناف</th><th>المبلغ المسترد</th><th>السبب</th><th>بواسطة</th></tr></thead><tbody id="saleReturnsBody"></tbody></table></div>
+  </div>
 </div>
 </div>
 
@@ -757,6 +776,7 @@
     <button class="btn btn-ghost btn-sm" id="tailorCameraCloseBtn" style="margin-top:8px;">إغلاق الكاميرا</button>
   </div>
   <div id="tailorScanPicker" style="margin-top:10px;"></div>
+  <div id="tailorQcReturns"></div>
   <div class="stitch"></div>
   <h3 style="margin:0 0 10px;font-size:14px;">آخر الفواتير اللي مسحتها</h3>
   <div id="tailorScanHistory"><p class="sub">ما مسحت أي فاتورة بعد.</p></div>
@@ -779,6 +799,30 @@
   </div>
   <div id="quickScanPicker" style="margin-top:14px;"></div>
   <div id="quickScanWaReadyBanner" style="display:none;margin-top:14px;"></div>
+</div>
+</div>
+
+<div class="tab-panel" id="tab-qc">
+<div class="panel">
+  <h2>فحص الجودة</h2>
+  <p class="sub" id="qcIntro">امسح باركود الفاتورة أو اكتب رقمها — تظهر الثياب اللي خلص تفصيلها وتنتظر الفحص. اجتياز الفحص يحوّل الثوب لـ"جاهز"، والرفض يرجعه للخياط لإصلاحه.</p>
+  <div id="qcDisabledNote" class="remaining-box" style="display:none;"><span>فحص الجودة غير مفعّل حالياً — يفعّله المدير من الإعدادات</span></div>
+  <div id="qcWorkArea">
+    <div class="row-2" style="align-items:flex-end;">
+      <div class="field" style="margin-bottom:0;"><label>رقم الفاتورة</label><input type="text" id="qcInvNumber" placeholder="امسح الباركود أو اكتب الرقم..."></div>
+      <button type="button" class="btn btn-gold btn-sm" id="qcLoadBtn" style="margin-bottom:2px;">عرض</button>
+    </div>
+    <div id="qcGarments" style="margin-top:10px;"></div>
+    <div id="qcWaReadyBanner" style="display:none;margin-top:10px;"></div>
+    <div class="stitch"></div>
+    <h3 style="margin:0 0 10px;font-size:14px;">بانتظار الفحص</h3>
+    <div id="qcQueue"></div>
+    <div class="stitch"></div>
+    <h3 style="margin:0 0 10px;font-size:14px;">جودة الخياطين — الشهر الحالي</h3>
+    <div id="qcTailorStats"></div>
+    <h3 style="margin:14px 0 10px;font-size:14px;">آخر عمليات الفحص</h3>
+    <div id="qcLogView"></div>
+  </div>
 </div>
 </div>
 
@@ -1062,6 +1106,11 @@
 
 <div class="tab-panel" id="tab-report-auditLog">
 <div class="panel">
+  <h3 style="margin:0 0 10px;font-size:14px;">فحص سلامة الحسابات والمخزون</h3>
+  <p class="sub">يعيد بناء رصيد كل صندوق وكل صنف ومستحق كل مورد من الحركات المسجّلة فقط (دفعات، مبيعات، سندات، مصروفات، مرتجعات، مشتريات، رواتب، تحويلات...) ويقارنه بالرصيد الفعلي المخزّن، ويكشف أي فرق أو تكرار أو حركة معلّقة. للقراءة فقط — ما يعدّل أي شي.</p>
+  <button class="btn btn-gold btn-sm" id="runIntegrityCheckBtn">تشغيل الفحص</button>
+  <div id="integrityCheckView" style="margin-top:14px;"></div>
+  <div class="stitch"></div>
 
   <h3 style="margin:0 0 10px;font-size:14px;">سجل التدقيق</h3>
   <p class="sub">سجل بكل العمليات الحساسة (مصاريف، إقفال شهر، تعديل سعر، تحويل أموال، مرتجعات، تغييرات المستخدمين والصلاحيات) — للقراءة فقط، مخزّن بمجموعة Firestore منفصلة تماماً عن بيانات المحل، لا يتأثر بأي تعديل على الحالة العامة.</p>
@@ -1157,6 +1206,10 @@
   <div class="stitch"></div>
   <h3 style="margin:18px 0 10px;font-size:14px;">النمو الربعي — صافي المحل</h3>
   <div id="quarterlyProfitGrowthList"><p class="sub">ما فيه أرباع مكتملة بعد.</p></div>
+  <div class="stitch"></div>
+  <h3 style="margin:18px 0 10px;font-size:14px;">التقرير النصف سنوي والسنوي</h3>
+  <p class="sub">مجموع تقارير الأشهر المقفلة (المجمّدة) — كل شهر يُحسب مرة وحدة بالضبط؛ الفترة الناقصة يظهر عدد أشهرها المقفلة.</p>
+  <div id="periodRollupsView"><p class="sub">ما فيه أشهر مقفلة بعد.</p></div>
 </div>
 </div>
 
@@ -1242,6 +1295,7 @@
   <p class="sub">كل نوع قماش أو منتج جاهز له كرت مستقل بتكلفته الفعلية ومخزونه. أي نوع جديد يُنشأ تلقائياً أول ما تسجّل له فاتورة شراء، أو أضفه يدوياً بدون فاتورة (مثلاً لبضاعة عندك أصلاً قبل استخدام النظام).</p>
   <div id="inventoryValuationView" style="margin-bottom:14px;"></div>
   <div id="adminOnly_openingBalanceRequests"></div>
+  <div id="tailoringOnlyCard" style="margin-bottom:14px;"></div>
   <div class="field"><label>بحث بالاسم</label><input type="text" id="itemCardSearchInput" placeholder="اكتب اسم الصنف..."></div>
   <div id="itemCardsList"></div>
   <div class="stitch"></div>

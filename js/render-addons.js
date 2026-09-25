@@ -20,6 +20,7 @@ function renderAll(){
   renderExpenseCategories();
   $("setMeasureUnit").value = state.settings.measureUnit;
   $("setCommissionBasis").value = state.settings.commissionBasis||"تسليم";
+  if($("setQcEnabled")) $("setQcEnabled").checked = !!state.settings.qcEnabled;
   if($("setCuttingCardTemplate")) $("setCuttingCardTemplate").value = state.settings.cuttingCardTemplate||"default";
   $("setLoyEarnRate").value = state.settings.loyaltyEarnRate;
   $("setLoyRedeemRate").value = state.settings.loyaltyRedeemRate;
@@ -78,7 +79,7 @@ function renderAll(){
     const tr2=document.createElement("tr"); tr2.innerHTML=`<td colspan="8" style="padding-top:0;padding-bottom:14px;">${badges}</td>`; body.appendChild(tr2);
   });
 
-  renderClosedReports(); renderGrowthReport(); renderSearch(); renderReturnResponsibleSelect(); renderTailorReportSelector(); renderBroadcastList(); renderSensitiveGate(); renderCustomers(); renderPendingList(); updateFixedShareNote(); renderLegacyItems(); renderBalancesTab(); renderDebtsTab(); renderCustomerDebts(); renderInventoryTab(); renderInventoryValuation(); renderSalesInvoicesList(); refreshSaleLineOptions(); renderAddonsList(); refreshAddonForm(); renderScanTab(); renderPayrollTab(); renderEntitlementPreview(); renderAlterationSettings(); renderAlterationsLog(); updateManualCardLabels(); renderCustomShopFields(); renderFabricOrigins(); if($("setPrintOriginOnLabel")) $("setPrintOriginOnLabel").checked = state.settings.printOriginOnLabel; renderOffers(); renderOptionLists(); renderCustomMeasurementFields(); renderOverdueDashboard(); renderOverdueDashboard("dashboardOverdue", true); renderDashboardKPIs(); renderDashboardWorkDistribution(); renderShiftClosingsLog(); renderQuickMenuBar(); renderQuickMenuEditor(); renderReturnsLog(); renderPromoCodesAdmin(); renderAppliedPromoBanner(); renderVouchersTab(); renderTopExpensesReport(); renderVatLedger(); renderProductionTracking(); renderSeasonsList(); renderCustomerNameDatalist("custNameDatalist"); renderCuttingImageEditor(); applyShopBranding(); renderMailTab(); if(currentUser && currentUser.role==="مدير"){ renderUsers(); renderPermissionsEditor(); }
+  renderClosedReports(); renderGrowthReport(); renderSearch(); renderReturnResponsibleSelect(); renderTailorReportSelector(); renderBroadcastList(); renderSensitiveGate(); renderCustomers(); renderPendingList(); updateFixedShareNote(); renderLegacyItems(); renderBalancesTab(); renderDebtsTab(); renderCustomerDebts(); renderInventoryTab(); renderInventoryValuation(); renderSalesInvoicesList(); refreshSaleLineOptions(); renderAddonsList(); refreshAddonForm(); renderScanTab(); renderPayrollTab(); renderEntitlementPreview(); renderAlterationSettings(); renderAlterationsLog(); renderQcTab(); updateManualCardLabels(); renderCustomShopFields(); renderFabricOrigins(); if($("setPrintOriginOnLabel")) $("setPrintOriginOnLabel").checked = state.settings.printOriginOnLabel; renderOffers(); renderOptionLists(); renderCustomMeasurementFields(); renderOverdueDashboard(); renderOverdueDashboard("dashboardOverdue", true); renderDashboardKPIs(); renderDashboardWorkDistribution(); renderShiftClosingsLog(); renderQuickMenuBar(); renderQuickMenuEditor(); renderReturnsLog(); renderPromoCodesAdmin(); renderAppliedPromoBanner(); renderVouchersTab(); renderTopExpensesReport(); renderVatLedger(); renderProductionTracking(); renderSeasonsList(); renderCustomerNameDatalist("custNameDatalist"); renderCuttingImageEditor(); applyShopBranding(); renderMailTab(); if(currentUser && currentUser.role==="مدير"){ renderUsers(); renderPermissionsEditor(); }
   applyRolePermissions();
   refreshLucideIcons();
 }
@@ -103,7 +104,7 @@ function saveFixedItemEdit(i){
 function addFixedItem(){
   const label=$("newItemLabel").value.trim(), amount=parseFloat($("newItemAmount").value)||0;
   if(!label){ showToast("أدخل اسم البند"); return; }
-  state.settings.fixedItems.push({id:Date.now()+"", label, amount});
+  state.settings.fixedItems.push({id:newId(), label, amount});
   $("newItemLabel").value=""; $("newItemAmount").value="";
   saveState(); renderAll();
 }
@@ -125,7 +126,7 @@ function addCustomShopField(){
   const label = $("newCustomFieldLabel").value.trim();
   const value = $("newCustomFieldValue").value.trim();
   if(!label || !value){ showToast("أدخل اسم البند والقيمة"); return; }
-  state.settings.customShopFields.push({id:Date.now()+"", label, value, showOnInvoice:false});
+  state.settings.customShopFields.push({id:newId(), label, value, showOnInvoice:false});
   $("newCustomFieldLabel").value=""; $("newCustomFieldValue").value="";
   saveState(); renderAll();
   showToast("تمت إضافة البند");
@@ -156,7 +157,7 @@ function renderExpenseCategories(){
 function addExpenseCategory(){
   const label=$("newCatLabel").value.trim(), advisoryKey=$("newCatAdvisory").value||null;
   if(!label){ showToast("أدخل اسم التصنيف"); return; }
-  state.expenseCategories.push({id:Date.now()+"", label, advisoryKey, subItems:[]});
+  state.expenseCategories.push({id:newId(), label, advisoryKey, subItems:[]});
   $("newCatLabel").value=""; $("newCatAdvisory").value="";
   saveState(); renderAll();
 }
@@ -168,7 +169,7 @@ function addExpenseSubItem(catId){
   const label = inp.value.trim();
   if(!label){ showToast("أدخل اسم البند"); return; }
   if(!cat.subItems) cat.subItems=[];
-  cat.subItems.push({id:Date.now()+"", label});
+  cat.subItems.push({id:newId(), label});
   saveState(); renderAll();
   showToast("تمت إضافة البند");
 }
@@ -199,13 +200,13 @@ function addAddonDef(){
   if(!name){ showToast("أدخل اسم الملحق أو الخدمة"); return; }
   if(kind==="service"){
     const servicePrice = parseFloat($("newAddonServicePrice").value)||0;
-    state.addonDefs.push({id:Date.now()+"", name, kind:"service", servicePrice, active:true});
+    state.addonDefs.push({id:newId(), name, kind:"service", servicePrice, active:true});
   } else {
     const itemCardId = $("newAddonCard").value;
     if(!itemCardId){ showToast("اختر صنف من المخزون (أضف ملحق فعلي من المشتريات أول)"); return; }
     const qtyPerGarment = parseFloat($("newAddonQty").value)||1;
     const markupPercent = parseFloat($("newAddonMarkup").value)||0;
-    state.addonDefs.push({id:Date.now()+"", name, kind:"physical", itemCardId, qtyPerGarment, markupPercent, active:true});
+    state.addonDefs.push({id:newId(), name, kind:"physical", itemCardId, qtyPerGarment, markupPercent, active:true});
   }
   $("newAddonName").value=""; $("newAddonServicePrice").value=""; $("newAddonMarkup").value="0";
   saveState(); renderAll();
@@ -385,13 +386,13 @@ function addOffer(){
     if(!matchValue){ showToast("اختر القيمة (الصناعة أو الصنف)"); return; }
     if(requiredQty<2){ showToast("العدد المطلوب لازم يكون 2 أو أكثر"); return; }
     if(discountPercent<=0 || discountPercent>100){ showToast("أدخل نسبة خصم صحيحة"); return; }
-    state.offers.push({id:Date.now()+"", name, type, matchBy, matchValue, requiredQty, discountPercent, active:true});
+    state.offers.push({id:newId(), name, type, matchBy, matchValue, requiredQty, discountPercent, active:true});
   } else {
     const minGarments = parseInt($("offerMinGarments").value)||1;
     const giftItemCard = $("offerGiftItem").value;
     const giftQty = parseInt($("offerGiftQty").value)||1;
     if(!giftItemCard){ showToast("اختر الصنف الهدية"); return; }
-    state.offers.push({id:Date.now()+"", name, type, minGarments, giftItemCard, giftQty, active:true});
+    state.offers.push({id:newId(), name, type, minGarments, giftItemCard, giftQty, active:true});
   }
   $("newOfferName").value="";
   saveState(); renderAll();
@@ -426,21 +427,27 @@ function searchInvoiceForAlteration(){
       return `<div class="garment-card">
         <span class="tag">ثوب ${i+1} — ${esc(g.fabricType)}</span>
         <p class="sub" style="margin:6px 0;">الخياط: ${esc(g.tailor||"—")} — الحالة: ${STATUSES.find(s=>s.v===g.status)?.label||g.status}</p>
-        ${notDelivered ? `<p class="locked-note">هذا الثوب لسا ما انسلّم للعميل — التعديل يخص الثياب المُسلَّمة بس.</p>` : pending ? `<p style="color:var(--gold-soft);font-weight:700;">معاد للتعديل حالياً — بانتظار الخياط (${esc(pending.reason)}) — رقم التعديل: ${pending.alterationNumber}</p><button class="btn btn-ghost btn-sm" onclick="printCuttingCard('${inv.id}', ${i})">عرض كرت المقاسات</button>` : `
+        ${notDelivered ? `<p class="locked-note">هذا الثوب لسا ما انسلّم للعميل — التعديل يخص الثياب المُسلَّمة بس.</p>` : pending ? `<p style="color:var(--gold-soft);font-weight:700;">معاد للتعديل حالياً — بانتظار الخياط (${esc(pending.reason)}) — رقم التعديل: ${pending.alterationNumber}</p>
+          <div class="actions-row" style="margin-top:0;"><button class="btn btn-gold btn-sm" onclick="printAlterationInvoice('${pending.id}')">طباعة فاتورة التعديل #${pending.alterationNumber}</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('altMeas_p${i}').style.display=''">تعديل المقاسات</button>
+          <button class="btn btn-ghost btn-sm" onclick="printCuttingCard('${inv.id}', ${i})">عرض كرت المقاسات</button></div>
+          <div id="altMeas_p${i}" style="display:none;">${altMeasEditorHtml(g, "p"+i)}<button class="btn btn-gold btn-sm" onclick="saveAlterationMeasurements('${pending.id}', 'p${i}')">حفظ تعديل المقاسات</button></div>` : `
         <button class="btn btn-ghost btn-sm" onclick="printCuttingCard('${inv.id}', ${i})" style="margin-bottom:8px;">عرض كرت المقاسات الأصلي</button>
         <div class="row-2">
           <div class="field"><label>سبب التعديل</label><select class="alter-reason" data-idx="${i}">${state.alterationReasons.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join("")||`<option value="">-- أضف أسباب من الإعدادات --</option>`}</select></div>
           <div class="field"><label>المتسبب</label><select class="alter-responsible" data-idx="${i}">${state.alterationResponsibles.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join("")}</select></div>
         </div>
         <div class="field"><label>ملاحظات التعديل / المقاسات المطلوب تغييرها</label><input type="text" class="alter-notes" data-idx="${i}" placeholder="مثلاً: تقصير الطول 2 سم"></div>
-        <button class="btn btn-gold btn-sm" onclick="submitAlteration('${inv.id}', ${i})">تسجيل الاستلام للتعديل</button>`}
+        <div id="altMeas_n${i}">${altMeasEditorHtml(g, "n"+i)}</div>
+        <button class="btn btn-gold btn-sm" onclick="submitAlteration('${inv.id}', ${i})">تسجيل الاستلام للتعديل وطباعة فاتورته</button>`}
       </div>`;
     }).join("");
 }
-function submitAlteration(invId, idx){
+async function submitAlteration(invId, idx){
   const inv = state.invoices.find(i=>i.id===invId); if(!inv) return;
   const g = inv.garments[idx];
   if(!g || g.status!=="تسليم"){ showToast("هذا الثوب لسا ما انسلّم — التعديل يخص الثياب المُسلَّمة بس"); return; }
+  if(state.alterations.some(a=>a.invoiceId===invId && a.garmentIndex===idx && a.status==="pending")){ showToast("هذا الثوب معاد للتعديل حالياً — ما يمكن تسجيله مرة ثانية قبل ما يخلص"); return; }
   const reasonSel = document.querySelector(`.alter-reason[data-idx="${idx}"]`);
   const respSel = document.querySelector(`.alter-responsible[data-idx="${idx}"]`);
   const notesInp = document.querySelector(`.alter-notes[data-idx="${idx}"]`);
@@ -448,15 +455,104 @@ function submitAlteration(invId, idx){
   const responsible = respSel ? respSel.value : "";
   if(!reason){ showToast("اختر سبب التعديل (أضف أسباب من الإعدادات لو القائمة فاضية)"); return; }
   if(!responsible){ showToast("اختر المتسبب"); return; }
-  state.alterations.push({
-    id: Date.now()+"", alterationNumber: state.settings.nextAlterationNumber, invoiceId: invId, invoiceNumber: inv.number, garmentIndex: idx,
-    reason, responsible, notes: notesInp?notesInp.value.trim():"",
+  const snapshot = JSON.parse(JSON.stringify(state));
+  const changes = applyAltMeasEditor(g, "n"+idx);
+  const alt = {
+    id: newId(), alterationNumber: state.settings.nextAlterationNumber, invoiceId: invId, invoiceNumber: inv.number, garmentIndex: idx,
+    reason, responsible, notes: notesInp?notesInp.value.trim():"", measurementChanges: changes,
     status:"pending", dateReceived: todayStr(), recordedBy: currentUser.username, dateCompleted: null,
-  });
+  };
+  state.alterations.push(alt);
   state.settings.nextAlterationNumber++;
-  saveState(); renderAll();
-  showToast("تم تسجيل استلام الثوب للتعديل");
+  if(!await saveStateWithRollback(snapshot)) return;
+  logAudit("alteration_received", {alterationNumber:alt.alterationNumber, invoiceNumber:inv.number, garmentIdx:idx, reason, responsible, measurementChanges:changes.length});
+  showToast(`تم تسجيل التعديل رقم ${alt.alterationNumber}${changes.length?` — وتحديث ${changes.length} مقاس بكرت الثوب`:""}`);
   searchInvoiceForAlteration();
+  printAlterationInvoice(alt.id);
+}
+// ---- the garment's measurement card, editable right inside the alteration flow ----
+// Saving writes the new values onto the garment itself (so its cutting card, and the customer's
+// measurements offered on their next order, are the corrected ones) and keeps old → new on the
+// alteration record for its printed invoice.
+function altMeasEditorHtml(g, key){
+  const m = g.measurements || {};
+  const val = k=> (m[k]!==undefined && m[k]!==null) ? m[k] : "";
+  return `<div class="alt-meas" data-key="${key}" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px;margin:8px 0;">
+    <b style="font-size:13px;">كرت المقاسات — عدّل المقاس المطلوب مباشرة</b>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;margin-top:8px;">
+      ${MEASUREMENT_FIELDS.map(f=>`<div class="field" style="margin-bottom:0;"><label style="font-size:11px;">${esc(f.label)}</label><input type="number" step="0.01" class="am-field" data-key="${f.key}" value="${val(f.key)}" placeholder="—"></div>`).join("")}
+      ${MEASUREMENT_CHOICE_FIELDS.map(f=>{ const list = state[f.listKey]||[]; const cur = m[f.key]||"";
+        return `<div class="field" style="margin-bottom:0;"><label style="font-size:11px;">${esc(f.label)}</label><select class="am-choice" data-key="${f.key}"><option value="">—</option>${list.map(o=>`<option value="${esc(o.code)}" ${o.code===cur?"selected":""}>${esc(o.code)} - ${esc(o.label)}</option>`).join("")}</select></div>`; }).join("")}
+    </div>
+    <div class="field" style="margin:8px 0 0;"><label style="font-size:11px;">ملاحظات المقاس</label><input type="text" class="am-notes" value="${esc(g.measurementNotes||"")}"></div>
+  </div>`;
+}
+function applyAltMeasEditor(g, key){
+  const box = document.querySelector(`.alt-meas[data-key="${key}"]`);
+  if(!box) return [];
+  const m = Object.assign({}, g.measurements||{});
+  const changes = [];
+  const labelOf = k=> (MEASUREMENT_FIELDS.find(f=>f.key===k)||MEASUREMENT_CHOICE_FIELDS.find(f=>f.key===k)||{label:k}).label;
+  box.querySelectorAll(".am-field").forEach(inp=>{
+    const k = inp.dataset.key, oldV = (m[k]!==undefined && m[k]!==null && m[k]!=="") ? +m[k] : null;
+    const newV = inp.value==="" ? null : (parseFloat(inp.value)||0);
+    if(oldV!==newV){ changes.push({key:k, label:labelOf(k), from:oldV, to:newV}); if(newV===null) delete m[k]; else m[k]=newV; }
+  });
+  box.querySelectorAll(".am-choice").forEach(sel=>{
+    const k = sel.dataset.key, oldV = m[k]||"", newV = sel.value;
+    if(oldV!==newV){ changes.push({key:k, label:labelOf(k), from:oldV||null, to:newV||null}); if(newV) m[k]=newV; else delete m[k]; }
+  });
+  const notesInp = box.querySelector(".am-notes");
+  if(notesInp && notesInp.value.trim()!==(g.measurementNotes||"")){ changes.push({key:"measurementNotes", label:"ملاحظات المقاس", from:g.measurementNotes||null, to:notesInp.value.trim()||null}); g.measurementNotes = notesInp.value.trim(); }
+  g.measurements = m;
+  return changes;
+}
+async function saveAlterationMeasurements(altId, key){
+  const a = state.alterations.find(x=>x.id===altId); if(!a || a.status!=="pending"){ showToast("هذا التعديل ما عاد مفتوح"); return; }
+  const inv = state.invoices.find(i=>i.id===a.invoiceId); const g = inv && inv.garments[a.garmentIndex];
+  if(!g) return;
+  const snapshot = JSON.parse(JSON.stringify(state));
+  const changes = applyAltMeasEditor(g, key);
+  if(!changes.length){ showToast("ما فيه أي تغيير بالمقاسات"); return; }
+  a.measurementChanges = (a.measurementChanges||[]).concat(changes);
+  if(!await saveStateWithRollback(snapshot)) return;
+  logAudit("alteration_measurements_changed", {alterationNumber:a.alterationNumber, invoiceNumber:a.invoiceNumber, changes:changes.length});
+  showToast(`تم تحديث ${changes.length} مقاس — اطبع فاتورة التعديل من جديد لو تبيها بالمقاسات الجديدة`);
+  searchInvoiceForAlteration();
+}
+// ---- alteration invoice: its own sequential number, printed for the tailor with what to change ----
+async function printAlterationInvoice(altId){
+  const a = state.alterations.find(x=>x.id===altId); if(!a) return;
+  const inv = state.invoices.find(i=>i.id===a.invoiceId); const g = inv && inv.garments[a.garmentIndex];
+  const s = state.settings;
+  const fmt = v=> v===null || v===undefined || v==="" ? "—" : esc(String(v));
+  const changes = a.measurementChanges||[];
+  const m = (g && g.measurements) || {};
+  const allMeas = MEASUREMENT_FIELDS.filter(f=>m[f.key]!==undefined && m[f.key]!==null && m[f.key]!=="");
+  const html = `<div style="font-family:inherit;direction:rtl;padding:6px;max-width:190mm;margin:auto;">
+    <div style="text-align:center;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:8px;">
+      <h3 style="margin:0;">${esc(s.shopName||"—")}</h3>
+      <h2 style="margin:4px 0;">فاتورة تعديل رقم ${a.alterationNumber}</h2>
+      <div style="font-size:12px;">مرتبطة بفاتورة التفصيل رقم ${esc(a.invoiceNumber)} — تاريخ الاستلام ${a.dateReceived}</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:8px;">
+      <tr><td style="padding:3px;"><b>العميل:</b> ${fmt(inv&&inv.customerName)}</td><td style="padding:3px;"><b>الجوال:</b> ${fmt(inv&&inv.customerMobile)}</td></tr>
+      <tr><td style="padding:3px;"><b>الثوب:</b> ${a.garmentIndex+1} — ${fmt(g&&g.fabricType)} (${fmt(g&&g.category)})</td><td style="padding:3px;"><b>الخياط الأصلي:</b> ${fmt(g&&g.tailor)}</td></tr>
+      <tr><td style="padding:3px;"><b>سبب التعديل:</b> ${fmt(a.reason)}</td><td style="padding:3px;"><b>المتسبب:</b> ${fmt(a.responsible)}</td></tr>
+      <tr><td colspan="2" style="padding:3px;"><b>ملاحظات:</b> ${fmt(a.notes)}</td></tr>
+    </table>
+    <h4 style="margin:8px 0 4px;">المقاسات المطلوب تعديلها</h4>
+    ${changes.length ? `<table style="width:100%;border-collapse:collapse;font-size:13px;" border="1"><thead><tr><th style="padding:3px;">المقاس</th><th style="padding:3px;">كان</th><th style="padding:3px;">يصير</th></tr></thead><tbody>
+      ${changes.map(c=>`<tr><td style="padding:3px;">${esc(c.label)}</td><td style="padding:3px;text-align:center;">${fmt(c.from)}</td><td style="padding:3px;text-align:center;font-weight:800;">${fmt(c.to)}</td></tr>`).join("")}</tbody></table>`
+      : `<p style="font-size:12px;">ما فيه تغيير بالمقاسات — راجع الملاحظات أعلاه.</p>`}
+    ${allMeas.length ? `<h4 style="margin:10px 0 4px;">كرت المقاسات الحالي</h4><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:2px 10px;font-size:11px;">${allMeas.map(f=>`<div>${esc(f.label)}: <b>${esc(String(m[f.key]))}</b></div>`).join("")}</div>` : ""}
+    <div style="text-align:center;margin-top:12px;"><svg id="alterationBarcodeHolder"></svg><div style="font-size:10px;">امسح رقم الفاتورة بعد إنهاء التعديل</div></div>
+    <div style="display:flex;justify-content:space-between;margin-top:14px;font-size:12px;"><span>استلم: ${fmt(a.recordedBy)}</span><span>توقيع الخياط: ..................</span></div>
+  </div>`;
+  $("dynamicPageSize").textContent = "@media print{ @page{ size:A4; margin:10mm; } }";
+  $("printArea").innerHTML = html;
+  try{ await loadBarcodeLib(); if(window.JsBarcode) window.JsBarcode("#alterationBarcodeHolder", a.invoiceNumber, {format:"CODE128", width:1.6, height:36, fontSize:11, margin:2}); }catch(e){ console.error(e); }
+  setTimeout(()=> safePrint(), 250);
 }
 function renderAlterationsLog(){
   const el = $("alterationsLog");
@@ -479,7 +575,9 @@ function renderAlterationsLog(){
       <p class="sub" style="margin:6px 0;">السبب: ${esc(a.reason)} — المتسبب: ${esc(a.responsible)} — الخياط الأصلي: ${esc(garmentTailor)} — استُلم بتاريخ ${a.dateReceived}</p>
       ${a.notes?`<p class="sub">ملاحظات: ${esc(a.notes)}</p>`:""}
       <p>${statusTxt}</p>
-      ${inv ? `<button class="btn btn-ghost btn-sm" onclick="printCuttingCard('${inv.id}', ${a.garmentIndex})">عرض كرت المقاسات</button>` : ""}
+      ${(a.measurementChanges||[]).length ? `<p class="sub">تعديل المقاسات: ${a.measurementChanges.map(c=>`${esc(c.label)} ${c.from??"—"} ← ${c.to??"—"}`).join("، ")}</p>` : ""}
+      <div class="actions-row" style="margin-top:4px;"><button class="btn btn-ghost btn-sm" onclick="printAlterationInvoice('${a.id}')">طباعة فاتورة التعديل</button>
+      ${inv ? `<button class="btn btn-ghost btn-sm" onclick="printCuttingCard('${inv.id}', ${a.garmentIndex})">عرض كرت المقاسات</button>` : ""}</div>
     </div>`;
   }).join("");
 }
@@ -494,7 +592,7 @@ function addLegacyItem(){
   if(!name){ showToast("أدخل اسم العميل"); return; }
   if(!mobile || !/^[0-9]{10}$/.test(mobile)){ showToast("رقم الجوال لازم يكون 10 أرقام بالضبط"); return; }
   if(!desc){ showToast("أدخل وصف القطعة"); return; }
-  state.legacyItems.push({id:Date.now()+"", name, mobile, desc, count, deliveredCount:0, remaining, notes, status:"جاهز", addedDate:todayStr(), deliveredDate:null});
+  state.legacyItems.push({id:newId(), name, mobile, desc, count, deliveredCount:0, remaining, notes, status:"جاهز", addedDate:todayStr(), deliveredDate:null});
   saveState(); renderAll();
   $("legName").value=""; $("legMobile").value=""; $("legDesc").value=""; $("legCount").value=""; $("legRemaining").value=""; $("legNotes").value="";
   showToast("تمت الإضافة للجرد الافتتاحي");
@@ -533,7 +631,7 @@ async function confirmLegacyDeliver(){
   item.deliveredCount = (item.deliveredCount||0) + qty;
   item.lastDeliveryDate = todayStr();
   if(amountReceived>0.01){
-    state.legacyPayments.push({id:Date.now()+"", itemId:item.id, amount:amountReceived, date:todayStr()});
+    state.legacyPayments.push({id:newId(), itemId:item.id, amount:amountReceived, date:todayStr(), recordedBy:currentUser.username});
     applyPaymentToBalances({cash:amountReceived, network:0}); // this screen has no cash/network split in its UI — treated as cash, same as the amount was previously tracked in reports but never actually credited to any box
   }
   if(item.deliveredCount>=item.count){ item.status="تم التسليم"; item.deliveredDate=todayStr(); }
@@ -555,3 +653,122 @@ function renderLegacyItems(){
   $("legacyEmptyState").style.display = state.legacyItems.length?"none":"block";
 }
 function typeLabel(t){ return t==="cash"?"كاش":"شبكة"; }
+
+// ---------------- quality check (optional, settings → finance) ----------------
+// When enabled, a garment the tailor marked "تم التفصيل" only becomes "جاهز" after passing the check.
+// A failed check sends it back to the SAME tailor (status back to قص) with the reason and who's
+// responsible recorded; the tailor re-scans it as "تم التفصيل" once fixed and it's checked again.
+function qcAwaitingGarments(){
+  const rows = [];
+  state.invoices.forEach(inv=> inv.garments.forEach((g,idx)=>{ if(g.status==="تفصيل") rows.push({inv, g, idx}); }));
+  return rows;
+}
+function loadQcInvoice(num){
+  const wrap = $("qcGarments");
+  if(!num){ showToast("أدخل رقم الفاتورة"); return; }
+  const inv = state.invoices.find(i=>i.number===num);
+  if(!inv){ wrap.innerHTML = ""; showToast("ما فيه فاتورة بهذا الرقم"); return; }
+  const reasons = state.alterationReasons||[];
+  const people = state.users.map(u=>u.username);
+  const rows = inv.garments.map((g,idx)=>{
+    const st = STATUSES.find(s=>s.v===g.status)?.label || g.status;
+    const head = `<span class="tag">ثوب ${idx+1} — ${esc(g.fabricType||"—")} (${esc(g.category||"")}) — الخياط: ${esc(g.tailor||"—")}</span>`;
+    if(g.status!=="تفصيل") return `<div class="garment-card">${head}<p class="sub" style="margin:6px 0 0;">الحالة: ${st}${g.qcReturnedTo?` — راجع للخياط ${esc(g.qcReturnedTo)} للإصلاح`:""}${g.qcPassedDate?` — اجتاز الفحص ${g.qcPassedDate}`:""}</p></div>`;
+    return `<div class="garment-card">${head}
+      <p class="sub" style="margin:6px 0;">ينتظر الفحص${g.qcRejections?` — مرفوض سابقاً ${g.qcRejections} مرة وتم إصلاحه`:""}</p>
+      <div class="actions-row" style="margin-top:0;"><button class="btn btn-gold btn-sm" onclick="qcPass('${inv.id}', ${idx})">✅ اجتاز الفحص — جاهز</button>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('qcRejectForm${idx}').style.display=''">❌ رفض وإرجاع للخياط</button></div>
+      <div id="qcRejectForm${idx}" style="display:none;margin-top:8px;">
+        <div class="row-2">
+          <div class="field"><label>سبب الرفض</label>${reasons.length ? `<select class="qc-reason" data-idx="${idx}"><option value="">-- اختر --</option>${reasons.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join("")}</select>` : `<input type="text" class="qc-reason" data-idx="${idx}" placeholder="مثلاً: خياطة الكم غير مستوية">`}</div>
+          <div class="field"><label>المتسبّب</label><select class="qc-responsible" data-idx="${idx}">${people.map(u=>`<option value="${esc(u)}" ${u===g.tailor?"selected":""}>${esc(u)}</option>`).join("")}</select></div>
+        </div>
+        <div class="field"><label>ملاحظة للخياط (اختياري)</label><input type="text" class="qc-notes" data-idx="${idx}"></div>
+        <button class="btn btn-danger btn-sm" onclick="qcReject('${inv.id}', ${idx})">تأكيد الرفض — يرجع للخياط ${esc(g.tailor||"")}</button>
+      </div></div>`;
+  }).join("");
+  wrap.innerHTML = `<p class="sub" style="margin:0 0 8px;">فاتورة ${esc(inv.number)} — ${esc(inv.customerName||"—")}</p>` + rows;
+}
+async function qcPass(invId, idx){
+  if(!state.settings.qcEnabled){ showToast("فحص الجودة غير مفعّل"); return; }
+  const inv = state.invoices.find(i=>i.id===invId); const g = inv && inv.garments[idx];
+  if(!g || g.status!=="تفصيل"){ showToast("هذا الثوب ما عاد ينتظر الفحص"); loadQcInvoice(inv?inv.number:""); return; }
+  const waPopup = openReadyWaPopup(inv);
+  const snapshot = JSON.parse(JSON.stringify(state));
+  g.status = "جاهز";
+  if(!g.readyDate) g.readyDate = todayStr();
+  if(!g.qcPassedDate) g.qcPassedDate = todayStr(); // first pass only — a garment's wage date never moves again
+  g.qcBy = currentUser.username;
+  state.qcLog.push({id:newId(), date:todayStr(), invoiceId:inv.id, invoiceNumber:inv.number, garmentIndex:idx, tailor:g.tailor||"", result:"pass", by:currentUser.username, afterRepair:!!g.qcRejections});
+  if(!await saveStateWithRollback(snapshot)){ if(waPopup) waPopup.close(); return; }
+  logAudit("qc_passed", {invoiceNumber:inv.number, garmentIdx:idx, tailor:g.tailor||""});
+  showToast(`ثوب ${idx+1} اجتاز الفحص وصار جاهز`);
+  finishReadyWaPopup(waPopup, "qcWaReadyBanner", inv);
+  loadQcInvoice(inv.number);
+}
+async function qcReject(invId, idx){
+  if(!state.settings.qcEnabled){ showToast("فحص الجودة غير مفعّل"); return; }
+  const inv = state.invoices.find(i=>i.id===invId); const g = inv && inv.garments[idx];
+  if(!g || g.status!=="تفصيل"){ showToast("هذا الثوب ما عاد ينتظر الفحص"); loadQcInvoice(inv?inv.number:""); return; }
+  const reason = (document.querySelector(`.qc-reason[data-idx="${idx}"]`)?.value||"").trim();
+  const responsible = document.querySelector(`.qc-responsible[data-idx="${idx}"]`)?.value||"";
+  const notes = (document.querySelector(`.qc-notes[data-idx="${idx}"]`)?.value||"").trim();
+  if(!reason){ showToast("اختر أو اكتب سبب الرفض"); return; }
+  if(!g.tailor){ showToast("هذا الثوب ما عليه خياط مسجّل — ما يمكن إرجاعه"); return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
+  g.status = "قص";                     // back on the tailor's bench
+  g.qcReturnedTo = g.tailor;           // only this tailor can re-scan it as "تم التفصيل"
+  g.qcRejections = (g.qcRejections||0) + 1;
+  if(g.wagePaidOut && !g.wagePaidMonth) g.wagePaidMonth = "سابق"; // already paid before this check existed — never pay again
+  state.qcLog.push({id:newId(), date:todayStr(), invoiceId:inv.id, invoiceNumber:inv.number, garmentIndex:idx, tailor:g.tailor, result:"reject", reason, responsible, notes, by:currentUser.username});
+  if(!await saveStateWithRollback(snapshot)) return;
+  logAudit("qc_rejected", {invoiceNumber:inv.number, garmentIdx:idx, tailor:g.tailor, reason, responsible});
+  showToast(`تم رفض ثوب ${idx+1} وإرجاعه للخياط ${g.tailor}`);
+  loadQcInvoice(inv.number);
+}
+function renderQcTab(){
+  if(!$("qcQueue") || !currentUser) return;
+  const on = !!state.settings.qcEnabled;
+  $("qcDisabledNote").style.display = on ? "none" : "";
+  $("qcWorkArea").style.display = on ? "" : "none";
+  if(!on) return;
+  const waiting = qcAwaitingGarments();
+  $("qcQueue").innerHTML = waiting.length ? `<div class="table-wrap"><table><thead><tr><th>الفاتورة</th><th>الثوب</th><th>الخياط</th><th>تم التفصيل</th><th></th></tr></thead><tbody>${
+    waiting.map(({inv,g,idx})=>`<tr><td>${esc(inv.number)}</td><td>${idx+1} — ${esc(g.fabricType||"")}${g.qcRejections?` <span style="color:var(--gold-soft);">(بعد إصلاح)</span>`:""}</td><td>${esc(g.tailor||"—")}</td><td>${g.tailorCompletedDate||"—"}</td><td><button class="btn btn-ghost btn-sm" onclick="document.getElementById('qcInvNumber').value='${esc(inv.number)}'; loadQcInvoice('${esc(inv.number)}');">فحص</button></td></tr>`).join("")
+  }</tbody></table></div>` : `<p class="sub">ما فيه ثياب تنتظر الفحص.</p>`;
+  // per-tailor quality for the current month: garments checked, passed first time, rejections and top reason
+  const month = todayStr().slice(0,7);
+  const monthLog = state.qcLog.filter(l=>(l.date||"").slice(0,7)===month);
+  const byTailor = {};
+  monthLog.forEach(l=>{
+    const t = byTailor[l.tailor||"—"] || (byTailor[l.tailor||"—"] = {passFirst:0, passAfterRepair:0, rejects:0, reasons:{}});
+    if(l.result==="pass"){ if(l.afterRepair) t.passAfterRepair++; else t.passFirst++; }
+    else { t.rejects++; t.reasons[l.reason] = (t.reasons[l.reason]||0)+1; }
+  });
+  const tailors = Object.entries(byTailor);
+  $("qcTailorStats").innerHTML = tailors.length ? `<div class="table-wrap"><table><thead><tr><th>الخياط</th><th>اجتاز من أول مرة</th><th>اجتاز بعد إصلاح</th><th>مرات الرفض</th><th>نسبة الجودة</th><th>أكثر سبب رفض</th></tr></thead><tbody>${
+    tailors.map(([name,t])=>{
+      const passed = t.passFirst + t.passAfterRepair;
+      const rate = passed ? Math.round(t.passFirst/passed*100) : 0;
+      const top = Object.entries(t.reasons).sort((a,b)=>b[1]-a[1])[0];
+      return `<tr><td>${esc(name)}</td><td>${t.passFirst}</td><td>${t.passAfterRepair}</td><td>${t.rejects}</td><td>${passed?rate+"%":"—"}</td><td>${top?`${esc(top[0])} (${top[1]})`:"—"}</td></tr>`;
+    }).join("")
+  }</tbody></table></div><p class="sub" style="margin:6px 0 0;">نسبة الجودة = الثياب اللي اجتازت من أول مرة ÷ كل الثياب اللي اجتازت هذا الشهر.</p>` : `<p class="sub">ما فيه عمليات فحص هذا الشهر بعد.</p>`;
+  const recent = state.qcLog.slice().reverse().slice(0,20);
+  $("qcLogView").innerHTML = recent.length ? `<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>الفاتورة</th><th>الخياط</th><th>النتيجة</th><th>السبب / المتسبّب</th><th>الفاحص</th></tr></thead><tbody>${
+    recent.map(l=>`<tr><td>${l.date}</td><td>${esc(l.invoiceNumber)} (ثوب ${l.garmentIndex+1})</td><td>${esc(l.tailor||"—")}</td><td>${l.result==="pass"?`<span style="color:var(--profit);font-weight:700;">اجتاز</span>`:`<span style="color:var(--loss);font-weight:700;">مرفوض</span>`}</td><td>${l.result==="reject"?`${esc(l.reason)} — ${esc(l.responsible||"")}${l.notes?` (${esc(l.notes)})`:""}`:"—"}</td><td>${esc(l.by)}</td></tr>`).join("")
+  }</tbody></table></div>` : `<p class="sub">ما فيه عمليات فحص بعد.</p>`;
+}
+// the tailor's own list of garments sent back to them for repair
+function renderTailorQcReturns(){
+  const el = $("tailorQcReturns");
+  if(!el || !currentUser) return;
+  const mine = [];
+  state.invoices.forEach(inv=> inv.garments.forEach((g,idx)=>{ if(g.qcReturnedTo===currentUser.username && g.status!=="ملغي") mine.push({inv,g,idx}); }));
+  if(!mine.length){ el.innerHTML = ""; return; }
+  el.innerHTML = `<div class="remaining-box" style="border-color:var(--loss);flex-direction:column;align-items:stretch;margin-top:10px;">
+    <b style="color:var(--loss);">🔁 ثياب راجعة لك من فحص الجودة للإصلاح (${mine.length})</b>
+    ${mine.map(({inv,g,idx})=>{ const last = state.qcLog.slice().reverse().find(l=>l.invoiceId===inv.id && l.garmentIndex===idx && l.result==="reject");
+      return `<p class="sub" style="margin:6px 0 0;">فاتورة ${esc(inv.number)} — ثوب ${idx+1}${last?`: ${esc(last.reason)}${last.notes?` (${esc(last.notes)})`:""}`:""} — بعد الإصلاح امسحها "تم التفصيل" مرة ثانية</p>`; }).join("")}
+  </div>`;
+}
