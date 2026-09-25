@@ -230,6 +230,9 @@ function renderReturnsLog(){
 }
 async function saveInvoice(){
   const isNewInvoice = !editingId;
+  // the number box is read-only and auto-filled; take the live counter for a new invoice so a number
+  // another device used after this form was opened isn't reused (it'd be rejected as a duplicate)
+  if(isNewInvoice) $("invNumber").value = state.settings.nextInvoiceNumber;
   const number = $("invNumber").value.trim();
   if(!number){ showToast("أدخل رقم الفاتورة"); return; }
   const duplicateInv = state.invoices.find(i=>i.number===number && i.id!==editingId);
@@ -441,6 +444,14 @@ async function saveInvoice(){
     // reservation, loyalty points, cash box balances, the invoice itself...) instead of
     // leaving them applied only in this tab's memory, and keep the form filled in as-is
     // so the cashier can just retry instead of re-entering everything from scratch
+    if(stateSaveConflict){
+      // `state` is already the freshly reloaded server copy; only the form stays as the cashier left it
+      if(!editingId) $("invNumber").value = state.settings.nextInvoiceNumber;
+      $("printReceiptBanner").innerHTML = `<p class="sub" style="text-align:center;color:var(--loss);">ما انحفظت الفاتورة — مستخدم ثاني حفظ بنفس اللحظة. البيانات لسا موجودة بالفورم، اضغط "حفظ" مرة ثانية.</p>`;
+      $("printReceiptBanner").style.display = "";
+      renderAll();
+      return null;
+    }
     state = stateSnapshotBeforeSave;
     $("printReceiptBanner").innerHTML = `<p class="sub" style="text-align:center;color:var(--loss);">تعذّر حفظ الفاتورة بالسحابة — ما انحفظ شي، البيانات لسا موجودة بالفورم. تأكد من الاتصال بالإنترنت وجرّب "حفظ" مرة ثانية.</p>`;
     $("printReceiptBanner").style.display = "";

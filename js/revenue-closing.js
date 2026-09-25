@@ -609,7 +609,7 @@ async function closeMonthNow(m){
   state.settings.currentMonth = nextMonthLabel(m);
   const saved = await saveState();
   if(!saved){
-    state = stateSnapshot; // roll back the in-memory close/payroll so a retry starts clean
+    if(!stateSaveConflict) state = stateSnapshot; // roll back the in-memory close/payroll so a retry starts clean (a conflict already reloaded the latest data)
     renderAll();
     return false;
   }

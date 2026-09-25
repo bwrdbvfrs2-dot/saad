@@ -287,9 +287,52 @@ function normalizeState(){
     if(u.wageChildSmall===undefined) u.wageChildSmall=0;
   });
 }
-async function saveState(){
-  try{ await STATE_DOC.set(JSON.parse(JSON.stringify(state))); return true; }
+// Every save writes the WHOLE shop document, so two devices saving around the same moment used to
+// be last-writer-wins: the second save silently erased whatever the first one had just added
+// (an invoice, a payment, an expense...) even though both screens said "saved". Each save now
+// carries a revision number and commits in a transaction only if the server copy is still the
+// exact revision this device last loaded; otherwise nothing is written, the latest data is pulled
+// in, and the person is told to redo that one step.
+let stateSaveConflict = false; // true when the most recent failed save was rejected for this reason
+const ownCommittedRevs = new Map(); // base revision -> revision this device's own save moved it to
+let saveQueue = Promise.resolve();
+function saveState(){
+  // captured now, so a later in-memory change can't leak into this save; queued so this device's
+  // own back-to-back saves never race (and reject) each other
+  const payload = JSON.parse(JSON.stringify(state));
+  const run = saveQueue.then(()=> commitStatePayload(payload));
+  saveQueue = run.catch(()=>{});
+  return run;
+}
+async function commitStatePayload(payload){
+  stateSaveConflict = false;
+  // a save captured before this device's own previous save landed was built on top of that save's
+  // changes too, so it continues from the revision that save produced
+  let baseRev = payload._rev||0;
+  while(ownCommittedRevs.has(baseRev)) baseRev = ownCommittedRevs.get(baseRev);
+  payload._rev = baseRev + 1;
+  try{
+    await db.runTransaction(async tx=>{
+      const cur = await tx.get(STATE_DOC);
+      const curRev = (cur.exists && cur.data()._rev) || 0;
+      if(curRev !== baseRev){ const err = new Error("shop/state changed since it was loaded"); err.code = "state-conflict"; throw err; }
+      tx.set(STATE_DOC, payload);
+    });
+    ownCommittedRevs.set(baseRev, payload._rev);
+    return true;
+  }
   catch(e){
+    if(e && e.code==="state-conflict"){
+      stateSaveConflict = true;
+      console.warn("save rejected — another device saved first; reloading latest data", e);
+      try{
+        const snap = await STATE_DOC.get({source:"server"});
+        if(snap.exists){ state = snap.data(); normalizeState(); }
+      }catch(fetchErr){ console.error("reloading latest state after a save conflict failed", fetchErr); }
+      if(currentUser) renderAll();
+      alert("ما انحفظ آخر إجراء — مستخدم ثاني حفظ تعديلات بنفس اللحظة.\nتم تحديث البيانات لآخر نسخة، أعد الخطوة الأخيرة مرة ثانية.");
+      return false;
+    }
     console.error("Firestore save failed", e);
     let msg = "تعذّر الحفظ — تحقق من الاتصال بالإنترنت";
     if(e && e.code==="permission-denied"){
@@ -308,7 +351,9 @@ async function saveState(){
 // that only lives in this tab until the next real sync silently erases it.
 async function saveStateWithRollback(snapshot){
   const saved = await saveState();
-  if(!saved){ state = snapshot; }
+  // after a conflict `state` already holds the freshly reloaded server copy — rolling back to the
+  // older snapshot would throw that away and make the retry conflict all over again
+  if(!saved && !stateSaveConflict){ state = snapshot; }
   renderAll();
   return saved;
 }
@@ -392,9 +437,12 @@ async function restoreBackup(dateId){
     // keep the CURRENT login-linked user records — restoring an old backup's users could lock
     // out whoever is doing the restore, or reinstate someone removed since then
     restoredState.users = state.users;
+    // continue from the live revision, not the backup's old one, so the restore goes through the
+    // same conflict-checked save as everything else
+    restoredState._rev = state._rev;
     state = restoredState;
     normalizeState();
-    await STATE_DOC.set(JSON.parse(JSON.stringify(state)));
+    if(!await saveState()) return;
     showToast("تم الاسترجاع بنجاح"); renderAll();
   }catch(e){ console.error("restore failed", e); showToast("تعذّر الاسترجاع — حاول مرة ثانية"); }
 }

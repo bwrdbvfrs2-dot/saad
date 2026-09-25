@@ -15,7 +15,9 @@ const AUDIT_LOG_COL = db.collection("auditLog"); // separate top-level collectio
 async function logAudit(action, details){
   try{
     await AUDIT_LOG_COL.add({
-      action, details: details||{},
+      // round-trip through JSON so an optional field left `undefined` is dropped instead of making
+      // Firestore reject the whole entry (the audit trail would then silently miss this action)
+      action, details: JSON.parse(JSON.stringify(details||{})),
       userId: fbAuth.currentUser ? fbAuth.currentUser.uid : "unknown",
       username: (typeof currentUser!=="undefined" && currentUser) ? currentUser.username : "unknown",
       timestamp: firebase.firestore.FieldValue.serverTimestamp(),
