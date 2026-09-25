@@ -194,9 +194,18 @@ function buildDailyReport(day){
   const openingAdjustmentsToday = (state.openingBalanceAdjustments||[]).filter(a=>a.date===day);
   let cash=0, network=0, discount=0; const paymentRows=[];
   state.invoices.forEach(inv=> (inv.payments||[]).forEach(p=>{
-    if(p.date===day){ cash+=p.cash; network+=p.network; discount+=p.discount||0; paymentRows.push({inv,p}); }
+    if(p.date===day){ cash+=p.cash||0; network+=p.network||0; discount+=p.discount||0; paymentRows.push({inv,p}); }
   }));
-  return {newInvoices, deliveredThisMonth, deliveredOverdue, legacyDelivered, vouchersToday, expensesToday, expensesTotal, openingAdjustmentsToday, cash, network, discount, paymentRows};
+  // ready-made sales, their returns and tailoring refunds of the day — none of these were in the report
+  const salesToday = state.salesInvoices.filter(s=>(s.payment&&s.payment.date||s.date)===day);
+  const saleReturnsToday = (state.salesReturns||[]).filter(r=>r.date===day);
+  const refundsToday = state.invoiceReturns.filter(r=>r.date===day && r.refundAmount);
+  // every box movement of the day, split by box type — the real in/out of cash and of network
+  const boxType = id=> (findCashBox(id)||{}).type;
+  const moves = collectBoxMovements().filter(m=>m.date===day);
+  const sumType = (t, sign)=> moves.filter(m=>boxType(m.boxId)===t && Math.sign(m.amount)===sign).reduce((a,m)=>a+m.amount,0);
+  const flows = {cashIn:sumType("cash",1), cashOut:-sumType("cash",-1), netIn:sumType("network",1), netOut:-sumType("network",-1)};
+  return {newInvoices, deliveredThisMonth, deliveredOverdue, legacyDelivered, vouchersToday, expensesToday, expensesTotal, openingAdjustmentsToday, cash, network, discount, paymentRows, salesToday, saleReturnsToday, refundsToday, flows, moves};
 }
 function renderDailyPreview(){
   const day = $("dailyDate").value || todayStr();
@@ -240,7 +249,7 @@ function buildDailyReportHtml(day, r){
   if(!r.vouchersToday.length) html+=`<tr><td colspan="5">لا يوجد</td></tr>`;
   html += `</tbody></table>`;
   html += `<h3>المصروفات اليوم (${r.expensesToday.length}) — الإجمالي: ${r.expensesTotal.toFixed(0)} ﷼</h3><table><thead><tr><th>البند</th><th>المبلغ</th><th>صُرف لـ</th><th>ملاحظات</th></tr></thead><tbody>`;
-  r.expensesToday.forEach(e=>{ const cat = state.expenseCategories.find(c=>c.id===e.categoryId); html+=`<tr><td>${cat?esc(cat.label):"—"}</td><td>${e.amount.toFixed(0)} ﷼</td><td>${esc(e.paidTo||"—")}</td><td>${esc(e.note||"—")}</td></tr>`; });
+  r.expensesToday.forEach(e=>{ const cat = state.expenseCategories.find(c=>c.id===e.categoryId); html+=`<tr><td>${cat?esc(cat.label):"—"}</td><td>${e.amount.toFixed(0)} ﷼</td><td>${esc(e.paidTo||"—")}</td><td>${esc(e.notes||"—")}</td></tr>`; });
   if(!r.expensesToday.length) html+=`<tr><td colspan="4">لا يوجد</td></tr>`;
   html += `</tbody></table>`;
   html += `<h3>تعديلات رصيد أول المدة اليوم (${r.openingAdjustmentsToday.length})</h3><table><thead><tr><th>الصنف</th><th>من</th><th>إلى</th><th>بواسطة</th></tr></thead><tbody>`;
@@ -252,12 +261,25 @@ function buildDailyReportHtml(day, r){
   r.paymentRows.forEach(({inv,p})=> html+=`<tr data-receipt="${esc((p.cashReceiptNo||"")+" "+(p.networkReceiptNo||p.receipt||""))}"><td>${esc(inv.number)}</td><td>${p.cash.toFixed(0)} ﷼</td><td>${p.cashReceiptNo||"—"}</td><td>${p.network.toFixed(0)} ﷼</td><td>${p.networkReceiptNo||p.receipt||"—"}</td><td>${p.discount?p.discount.toFixed(0)+" ﷼":"—"}</td></tr>`);
   if(!r.paymentRows.length) html+=`<tr><td colspan="6">لا يوجد</td></tr>`;
   html += `</tbody></table>`;
-  const netCash = r.cash - r.expensesTotal;
+  const saleTotal = s=> s.items.reduce((a,it)=>a+it.qty*it.price,0);
+  html += `<h3>فواتير المبيعات (أصناف جاهزة) اليوم (${r.salesToday.length})</h3><table><thead><tr><th>رقم</th><th>العميل</th><th>كاش</th><th>شبكة</th><th>الإجمالي</th></tr></thead><tbody>`;
+  r.salesToday.forEach(s=> html+=`<tr><td>${esc(s.number)}</td><td>${esc(s.customerName||"—")}</td><td>${((s.payment||{}).cash||0).toFixed(0)} ﷼</td><td>${((s.payment||{}).network||0).toFixed(0)} ﷼</td><td>${saleTotal(s).toFixed(0)} ﷼</td></tr>`);
+  if(!r.salesToday.length) html+=`<tr><td colspan="5">لا يوجد</td></tr>`;
+  html += `</tbody></table>`;
+  html += `<h3>المرتجعات والمبالغ المستردة اليوم (${r.refundsToday.length + r.saleReturnsToday.length})</h3><table><thead><tr><th>النوع</th><th>الفاتورة</th><th>المبلغ المسترد</th><th>السبب</th></tr></thead><tbody>`;
+  r.refundsToday.forEach(x=> html+=`<tr><td>مرتجع فاتورة تفصيل</td><td>${esc(x.invoiceNumber)}</td><td>${x.refundAmount.toFixed(0)} ﷼</td><td>${esc(x.reason||"—")}</td></tr>`);
+  r.saleReturnsToday.forEach(x=> html+=`<tr><td>مرتجع مبيعات</td><td>${esc(x.saleInvoiceNumber)}</td><td>${x.refundAmount.toFixed(0)} ﷼</td><td>${esc(x.reason||"—")}</td></tr>`);
+  if(!r.refundsToday.length && !r.saleReturnsToday.length) html+=`<tr><td colspan="4">لا يوجد</td></tr>`;
+  html += `</tbody></table>`;
+  // real movement of every box today (all sources: payments, sales, vouchers, expenses, refunds,
+  // purchases, suppliers, salaries, transfers) — the old "net = cash − expenses" ignored most of these
+  const f = r.flows;
   html += `<div class="report-grid" style="grid-template-columns:repeat(3,1fr);margin-top:14px;">
-    <div class="report-card"><div class="st">إجمالي الكاش المقبوض</div><div class="amt">${r.cash.toFixed(0)} ﷼</div></div>
-    <div class="report-card"><div class="st">إجمالي الشبكة</div><div class="amt">${r.network.toFixed(0)} ﷼</div></div>
-    <div class="report-card"><div class="st">صافي الصندوق (كاش − مصروفات)</div><div class="amt">${netCash.toFixed(0)} ﷼</div></div>
-  </div>`;
+    <div class="report-card"><div class="st">الكاش — داخل / خارج</div><div class="amt" style="font-size:14px;">${f.cashIn.toFixed(0)} / ${f.cashOut.toFixed(0)} ﷼</div></div>
+    <div class="report-card"><div class="st">الشبكة — داخل / خارج (بعد رسوم البنك)</div><div class="amt" style="font-size:14px;">${f.netIn.toFixed(0)} / ${f.netOut.toFixed(0)} ﷼</div></div>
+    <div class="report-card"><div class="st">صافي حركة الصناديق اليوم</div><div class="amt">${(f.cashIn-f.cashOut+f.netIn-f.netOut).toFixed(0)} ﷼</div></div>
+  </div>
+  <p class="sub" style="margin-top:6px;">صافي الكاش اليوم: ${(f.cashIn-f.cashOut).toFixed(0)} ﷼ — يشمل كل الحركات المسجّلة (دفعات، مبيعات، سندات، مصروفات، مرتجعات، مشتريات، موردين، رواتب، تحويلات).</p>`;
   return html;
 }
 function printDaily(){
@@ -934,6 +956,7 @@ $("saleCustName").addEventListener("input", ()=>{
 $("addSaleLineBtn").addEventListener("click", ()=>{ renderSaleLine(); updateSaleTotal(); });
 $("saveSaleBtn").addEventListener("click", saveSaleInvoice);
 $("saleReturnLoadBtn").addEventListener("click", loadSaleReturnLines);
+$("saleScanInput").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); addSaleLineByBarcode($("saleScanInput").value); } });
 $("saleCash").addEventListener("input", ()=>{ saleCashTouched = true; });
 $("saleNetwork").addEventListener("input", updateSaleTotal);
 $("saveInvoiceBtn").addEventListener("click", saveInvoice);

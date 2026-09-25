@@ -87,35 +87,45 @@ async function loadAndRenderAuditLog(){
 // Rebuilds every box balance, supplier balance and stock figure purely from the recorded movements
 // and compares them with the stored figures. Read-only. A difference means money/stock moved
 // without a record (or a record without the movement) — exactly what an audit has to surface.
-function computeIntegrityCheck(){
+// every recorded movement of money into or out of a box, with its date — the single source both
+// the integrity check (all dates) and the daily report (one day) are built from
+function collectBoxMovements(){
   const fee = state.settings.bankFeePercent||0;
+  const out = [];
+  const mainId = (u,t)=>{ const b=mainBoxOf(u,t); return b ? b.id : null; };
+  const add = (boxId, amount, label, date)=> out.push({boxId, amount, label, date});
+  const pay = (p, label, date)=>{
+    if((p.cash||0)+(p.network||0)<=0) return;
+    if(!p.recordedBy){ out.push({boxId:null, amount:(p.cash||0)+(p.network||0), label, date}); return; }
+    if(p.cash) add(mainId(p.recordedBy,"cash"), p.cash, label, date);
+    if(p.network) add(mainId(p.recordedBy,"network"), p.network*(1-fee/100), label, date);
+  };
+  state.invoices.forEach(inv=> (inv.payments||[]).forEach(p=> pay(p, `دفعة فاتورة ${inv.number}`, p.date)));
+  state.salesInvoices.forEach(s=>{ if(s.payment) pay(s.payment, `فاتورة مبيعات ${s.number}`, s.payment.date||s.date); });
+  (state.legacyPayments||[]).forEach(l=> add(l.recordedBy ? mainId(l.recordedBy,"cash") : null, l.amount, l.recordedBy ? "تحصيل قطعة قديمة" : "تحصيل قطعة قديمة (سجل قديم بدون مستخدم)", l.date));
+  state.vouchers.forEach(v=> add(v.boxId, v.type==="receipt" ? v.amount : -v.amount, `سند ${v.type==="receipt"?"قبض":"صرف"} ${v.voucherNo}`, v.date));
+  state.expenses.forEach(e=> add(e.sourceBoxId, -e.amount, "مصروف", e.date));
+  state.invoiceReturns.forEach(r=>{ if(r.refundAmount) add(r.boxId, -r.refundAmount, `استرداد مرتجع فاتورة ${r.invoiceNumber}`, r.date); });
+  (state.salesReturns||[]).forEach(r=> add(r.boxId, -r.refundAmount, `استرداد مرتجع مبيعات ${r.saleInvoiceNumber}`, r.date));
+  state.purchases.forEach(p=>{ if(p.payStatus==="paid") add(p.sourceBoxId, -p.total, `فاتورة شراء ${p.invoiceNo}`, p.date); });
+  state.purchaseReturns.forEach(r=>{ if(r.payStatus==="paid") add(r.boxId, r.value, "مرتجع مشتريات", r.date); });
+  state.suppliers.forEach(s=> (s.payments||[]).forEach(sp=> add(sp.boxId, -sp.amount, `تسديد مورد ${s.name}`, sp.date)));
+  state.payrollLedger.forEach(e=>{ if(e.type==="payment"||e.type==="advance") add(e.boxId, -e.amount, `${e.type==="advance"?"سلفة":"راتب"} ${e.username}`, e.date); });
+  state.transferRequests.forEach(t=>{
+    add(t.fromBoxId, -t.amount, "تحويل مرسل", t.createdAt);
+    if(t.status==="accepted") add(mainId(t.toOwner,"cash"), t.amount, "تحويل مستلم", t.resolvedAt);
+    if(t.status==="rejected") add(t.fromBoxId, t.amount, "تحويل مرفوض راجع", t.resolvedAt);
+  });
+  (state.boxTransfers||[]).forEach(t=>{ add(t.fromBoxId, -t.amount, "تحويل بين صناديقك", t.date); add(t.toBoxId, t.amount, "تحويل بين صناديقك", t.date); });
+  return out;
+}
+function computeIntegrityCheck(){
   const exp = {}; state.cashBoxes.forEach(b=> exp[b.id]=0);
   const untraceable = [];
-  const mainId = (u,t)=>{ const b=mainBoxOf(u,t); return b ? b.id : null; };
-  const add = (id, amt, why)=>{ if(!id || exp[id]===undefined){ untraceable.push({why, amount:amt}); return; } exp[id] += amt; };
-  const pay = (p, why)=>{
-    if((p.cash||0)+(p.network||0)<=0) return;
-    if(!p.recordedBy){ untraceable.push({why, amount:(p.cash||0)+(p.network||0)}); return; }
-    if(p.cash) add(mainId(p.recordedBy,"cash"), p.cash, why);
-    if(p.network) add(mainId(p.recordedBy,"network"), p.network*(1-fee/100), why);
-  };
-  state.invoices.forEach(inv=> (inv.payments||[]).forEach(p=> pay(p, `دفعة فاتورة ${inv.number}`)));
-  state.salesInvoices.forEach(s=>{ if(s.payment) pay(s.payment, `فاتورة مبيعات ${s.number}`); });
-  (state.legacyPayments||[]).forEach(l=> l.recordedBy ? add(mainId(l.recordedBy,"cash"), l.amount, "تحصيل قطعة قديمة") : untraceable.push({why:"تحصيل قطعة قديمة (سجل قديم بدون مستخدم)", amount:l.amount}));
-  state.vouchers.forEach(v=> add(v.boxId, v.type==="receipt" ? v.amount : -v.amount, `سند ${v.voucherNo}`));
-  state.expenses.forEach(e=> add(e.sourceBoxId, -e.amount, "مصروف"));
-  state.invoiceReturns.forEach(r=>{ if(r.refundAmount) add(r.boxId, -r.refundAmount, `استرداد مرتجع فاتورة ${r.invoiceNumber}`); });
-  (state.salesReturns||[]).forEach(r=> add(r.boxId, -r.refundAmount, `استرداد مرتجع مبيعات ${r.saleInvoiceNumber}`));
-  state.purchases.forEach(p=>{ if(p.payStatus==="paid") add(p.sourceBoxId, -p.total, `فاتورة شراء ${p.invoiceNo}`); });
-  state.purchaseReturns.forEach(r=>{ if(r.payStatus==="paid") add(r.boxId, r.value, "مرتجع مشتريات"); });
-  state.suppliers.forEach(s=> (s.payments||[]).forEach(sp=> add(sp.boxId, -sp.amount, `تسديد مورد ${s.name}`)));
-  state.payrollLedger.forEach(e=>{ if(e.type==="payment"||e.type==="advance") add(e.boxId, -e.amount, `${e.type==="advance"?"سلفة":"راتب"} ${e.username}`); });
-  state.transferRequests.forEach(t=>{
-    add(t.fromBoxId, -t.amount, "تحويل مرسل");
-    if(t.status==="accepted") add(mainId(t.toOwner,"cash"), t.amount, "تحويل مستلم");
-    if(t.status==="rejected") add(t.fromBoxId, t.amount, "تحويل مرفوض راجع");
+  collectBoxMovements().forEach(m=>{
+    if(!m.boxId || exp[m.boxId]===undefined){ untraceable.push({why:m.label, amount:m.amount}); return; }
+    exp[m.boxId] += m.amount;
   });
-  (state.boxTransfers||[]).forEach(t=>{ add(t.fromBoxId, -t.amount, "تحويل بين صناديقك"); add(t.toBoxId, t.amount, "تحويل بين صناديقك"); });
   const boxes = state.cashBoxes.map(b=>({name:`${b.owner} — ${b.name} (${typeLabel(b.type)})`, actual:b.balance, rebuilt:exp[b.id], diff:b.balance-exp[b.id]}));
   const suppliers = state.suppliers.map(s=>{
     let e = 0;
@@ -246,6 +256,9 @@ function computeMonthlyFinancials(monthLabel){
   cost += operationalLosses + generalExpenses;
   const rawFixed = totalFixed();
   const salesProfit = totalSalesProfitForMonth(monthLabel);
+  // fixed costs normally ride on the garments cut this month; with none cut they still have to be
+  // paid — charge them (net of ready-made sales profit) as a lump instead of letting them vanish
+  if(garmentsCutInMonth(monthLabel)===0) cost += Math.max(0, rawFixed - salesProfit);
   const excessSalesProfit = Math.max(0, salesProfit - rawFixed); // ready-made sales profit beyond what's needed to fully cover fixed costs adds straight to net profit
   cost -= excessSalesProfit;
   return {revenue, cost, profit:revenue-cost, garmentsCut, generalExpenses, operationalLosses, salesProfit, excessSalesProfit};
@@ -349,7 +362,9 @@ function renderSensitiveFinancials(){
   const issued = computeIssuedInvoicesStats(state.settings.currentMonth);
   const rfs = readyForSaleReport();
   const fixedCosts = totalFixed();
-  const remainingToBreakEven = fixedCosts - monthlyFin.revenue;
+  // break-even = the month's revenue covers its direct costs AND all fixed costs, i.e. profit ≥ 0
+  // (it compared revenue alone with fixed costs, ignoring fabric, wages and every other direct cost)
+  const remainingToBreakEven = -monthlyFin.profit;
   $("sensitiveStatsGrid").innerHTML = `
     <div class="stat-card sales"><div class="lbl">إجمالي المبيعات المحقّقة (الشهر الحالي)</div><div class="val">${monthlyFin.revenue.toFixed(0)} ﷼</div></div>
     <div class="stat-card cost"><div class="lbl">إجمالي التكاليف المحقّقة (الشهر الحالي)</div><div class="val">${monthlyFin.cost.toFixed(0)} ﷼</div></div>
@@ -733,8 +748,16 @@ async function closeMonthNow(m){
     });
   });
   const pendingCustodyCarried = totalPendingCustody();
+  // money actually received in the month (tailoring payments + ready-made sales + old-stock
+  // collections, minus refunds) — this field just repeated the recognized revenue before
+  const inMonth = d=> (d||"").slice(0,7)===m;
+  const collectedTotal = state.invoices.reduce((a,inv)=> a + (inv.payments||[]).filter(p=>inMonth(p.date)).reduce((s,p)=>s+(p.cash||0)+(p.network||0),0), 0)
+    + state.salesInvoices.filter(s=>inMonth(s.date) && s.payment).reduce((a,s)=>a+(s.payment.cash||0)+(s.payment.network||0),0)
+    + (state.legacyPayments||[]).filter(l=>inMonth(l.date)).reduce((a,l)=>a+l.amount,0)
+    - state.invoiceReturns.filter(r=>inMonth(r.date)).reduce((a,r)=>a+(r.refundAmount||0),0)
+    - (state.salesReturns||[]).filter(r=>inMonth(r.date)).reduce((a,r)=>a+(r.refundAmount||0),0);
   state.closingReports.push({
-    monthLabel:m, closedAt:serverDate().toISOString(), invoicedTotal:monthlyFin.revenue, costTotal:monthlyFin.cost, collectedTotal:monthlyFin.revenue,
+    monthLabel:m, closedAt:serverDate().toISOString(), invoicedTotal:monthlyFin.revenue, costTotal:monthlyFin.cost, collectedTotal,
     profitInvoiced: monthlyFin.profit, profitCollected: monthlyFin.profit,
     garmentCount, embroCount, embroRevenue, invoiceCount: invs.length, pendingCustodyCarried,
     readyCount, overdueCount,
@@ -914,6 +937,10 @@ function addPayrollEntry(username, type, amount, boxId, note){
     box.balance -= amount;
   }
   state.payrollLedger.push({id:newId(), username, type, amount, date:todayStr(), note, recordedBy:currentUser.username, boxId:(type==="payment"||type==="advance") ? boxId : null});
+  // tailors are paid through payroll, not the expenses screen — so their pay has to draw the
+  // "wages" guideline balance down here, or it only ever grew
+  const payee = state.users.find(u=>u.username===username);
+  if(payee && payee.role==="خياط" && (type==="payment"||type==="advance")) state.advisory.wages -= amount;
   return {ok:true};
 }
 

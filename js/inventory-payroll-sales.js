@@ -151,7 +151,7 @@ function renderItemCards(){
       <div class="actions-row" style="margin-top:8px;">
         <button class="btn btn-ghost btn-sm" onclick="toggleItemCardActive('${c.id}')">${c.active?"⏸ إيقاف":"▶ تفعيل"}</button>
         <button class="btn btn-ghost btn-sm" onclick="showItemStatement('${c.id}')">كشف حساب الصنف</button>
-        ${c.type==="fabric" ? `<button class="btn btn-ghost btn-sm" onclick="openPrintLabelModal('${c.id}')">طباعة ملصق الصنف</button>` : ""}
+        ${c.type==="fabric"||c.type==="product" ? `<button class="btn btn-ghost btn-sm" onclick="openPrintLabelModal('${c.id}')">طباعة ملصق السعر والباركود</button>` : ""}
         <button class="btn btn-danger btn-sm" onclick="writeOffItemCard('${c.id}')">إتلاف الصنف</button>
       </div>` : "";
     return `<div class="garment-card">
@@ -272,24 +272,37 @@ function confirmPrintLabel(){
   printItemCardLabel(printLabelTargetId, copies);
   closePrintLabelModal();
 }
-function printItemCardLabel(cardId, copies){
+// what an item's barcode encodes: "P" + its unique item code — can't be mistaken for an invoice
+// number (plain digits) when scanned into any of the scan fields
+function itemBarcodeValue(c){ return "P" + (c.code!==undefined ? c.code : c.id); }
+function findItemCardByBarcode(text){
+  const t = String(text||"").trim().toUpperCase();
+  const m = t.match(/^P?(\d+)$/);
+  return m ? state.itemCards.find(c=>String(c.code)===m[1]) : null;
+}
+async function printItemCardLabel(cardId, copies){
   const c = findItemCard(cardId);
   if(!c) return;
   const rootWidth = (state.settings.thermalPaperWidth||58)===80 ? 280 : 200;
   const showOrigin = state.settings.printOriginOnLabel && c.origin;
-  const oneLabel = `
+  const priceRows = c.type==="fabric" && c.prices
+    ? BODY_CATEGORIES.map(cat=>`<tr><td style="text-align:right;padding:2px;font-weight:700;">${cat}</td><td style="text-align:left;padding:2px;">${(c.prices[cat]||0).toFixed(0)} ﷼</td></tr>`).join("")
+    : `<tr><td style="text-align:right;padding:2px;font-weight:700;">السعر</td><td style="text-align:left;padding:2px;font-size:14px;font-weight:800;">${(c.salePrice||0).toFixed(0)} ﷼</td></tr>`;
+  const oneLabel = i=> `
     <div style="width:100%;max-width:${rootWidth}px;font-family:'Cairo',sans-serif;direction:rtl;text-align:center;font-size:12px;margin:0 auto;background:#fff;color:#000;padding:8px;border-bottom:1px dashed #999;">
       <h3 style="margin:0 0 4px;font-size:14px;">${esc(c.name)}</h3>
       <p style="margin:0 0 4px;font-size:11px;font-weight:700;">كود الصنف: #${c.code!==undefined?c.code:"—"}</p>
       ${showOrigin ? `<p style="margin:2px 0;font-size:11px;">الصناعة: ${esc(c.origin)}</p>` : ""}
-      <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:6px;">
-        <tr><td style="text-align:right;padding:2px;font-weight:700;">رجال</td><td style="text-align:left;padding:2px;">${(c.prices["رجال"]||0).toFixed(0)} ﷼</td></tr>
-        <tr><td style="text-align:right;padding:2px;font-weight:700;">ولادي</td><td style="text-align:left;padding:2px;">${(c.prices["ولادي"]||0).toFixed(0)} ﷼</td></tr>
-        <tr><td style="text-align:right;padding:2px;font-weight:700;">طفل</td><td style="text-align:left;padding:2px;">${(c.prices["طفل"]||0).toFixed(0)} ﷼</td></tr>
-      </table>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:6px;">${priceRows}</table>
+      <div style="margin-top:6px;"><svg class="item-label-barcode" id="itemLabelBarcode${i}"></svg></div>
     </div>`;
-  const fullHtml = `<div id="labelShareRoot">${Array(copies).fill(oneLabel).join("")}</div>`;
+  const fullHtml = `<div id="labelShareRoot">${Array.from({length:copies},(_,i)=>oneLabel(i)).join("")}</div>`;
   $("printArea").innerHTML = fullHtml;
+  try{
+    await loadBarcodeLib();
+    if(window.JsBarcode) document.querySelectorAll("#labelShareRoot .item-label-barcode").forEach(svg=>
+      window.JsBarcode(svg, itemBarcodeValue(c), {format:"CODE128", width:1.6, height:34, fontSize:11, margin:2}));
+  }catch(e){ console.error("label barcode failed", e); }
   // "auto" for the page height silently makes some print/PDF engines (verified: Chromium's own
   // print-to-PDF) drop the whole @page size and fall back to a default Letter/A4-sized page —
   // which is what was actually causing thermal receipts/labels/vouchers to print at the wrong
@@ -461,6 +474,9 @@ async function addPurchase(){
   }
   card.stockQty = (card.stockQty||0) + qty;
   card.currentCost = unitPrice;
+  // fabric bought through purchases (the normal way) draws the fabric guideline balance down —
+  // before, only a "شراء قماش" expense did, so this balance only ever grew
+  if(type==="fabric") state.advisory.fabric -= qty*unitPrice;
   const invoiceNo = nextPurchaseInvoiceNo();
   const imageFile = $("purchImageFile").files[0];
   let imageData = null;
@@ -634,6 +650,7 @@ async function addPurchaseReturn(){
   const snapshot = JSON.parse(JSON.stringify(state));
   card.stockQty = (card.stockQty||0) - qty;
   if(box) box.balance += value; else sup.balance -= value;
+  if(card.type==="fabric") state.advisory.fabric += value;
   state.purchaseReturns.push({id:newId(), date:todayStr(), itemCardId:cardId, quantity:qty, value, supplierId, payStatus, boxId: box ? box.id : null, recordedBy:currentUser.username,
     linkedPurchaseId: linkedPurchaseId||null, purchaseInvoiceNo: linkedPurchase?linkedPurchase.invoiceNo:null, supplierInvoiceNo: linkedPurchase?linkedPurchase.supplierInvoiceNo:null});
   if(!await saveStateWithRollback(snapshot)) return;
@@ -700,6 +717,23 @@ function updateSaleTotal(){
     $("saleCash").value = Math.max(total-network, 0) || "";
   }
   return total;
+}
+// a scanner types the code and presses Enter: add that item as a line, or +1 on an existing line
+function addSaleLineByBarcode(text){
+  const c = findItemCardByBarcode(text);
+  $("saleScanInput").value = "";
+  if(!c){ showToast("ما فيه صنف بهذا الباركود"); return; }
+  if(c.type!=="product" && c.type!=="fabric"){ showToast("هذا الصنف ما يُباع بفاتورة المبيعات"); return; }
+  const lines = Array.from(document.querySelectorAll("#saleItemsHolder .garment-card"));
+  const existing = lines.find(d=>d.querySelector(".sl-item").value===c.id);
+  if(existing){ const q=existing.querySelector(".sl-qty"); q.value = (parseFloat(q.value)||0) + 1; }
+  else {
+    const blank = lines.length===1 && !(parseFloat(lines[0].querySelector(".sl-price").value)>0) ? lines[0] : null;
+    if(blank) blank.remove();
+    renderSaleLine({itemCardId:c.id, qty:1, price:c.salePrice||0});
+  }
+  updateSaleTotal();
+  showToast(`تمت إضافة ${c.name}`);
 }
 function resetSaleForm(){
   $("saleNumber").value = state.settings.nextSalesInvoiceNumber;
@@ -1187,6 +1221,32 @@ function sameQuarterLastYear(qLabel){ let [y,q]=qLabel.split("-Q").map(Number); 
 function quarterDisplay(qLabel){ const [y,q]=qLabel.split("-Q"); return `الربع ${q} — ${y}`; }
 function pctGrowth(cur,prev){ if(prev===undefined||prev===null) return null; if(prev===0) return cur===0?0:null; return ((cur-prev)/Math.abs(prev))*100; }
 function fmtGrowth(v){ if(v===null||v===undefined) return "لا توجد بيانات للمقارنة"; const sign=v>=0?"+":""; const cls=v>0?"var(--profit)":(v<0?"var(--loss)":"var(--muted)"); return `<span style="color:${cls};font-weight:700;">${sign}${v.toFixed(1)}%</span>`; }
+// half-year and year totals built only from the frozen monthly closing reports — one closing
+// report per month, so a month can never be counted twice or left out; incomplete periods say so
+function periodRollups(reports){
+  const acc = {};
+  const addTo = (key, label, size, r)=>{
+    const a = acc[key] || (acc[key] = {key, label, size, months:0, revenue:0, cost:0, profit:0, collected:0, garments:0, invoices:0});
+    a.months++; a.revenue += r.invoicedTotal||0; a.cost += r.costTotal||0; a.profit += r.profitInvoiced||0;
+    a.collected += r.collectedTotal||0; a.garments += r.garmentCount||0; a.invoices += r.invoiceCount||0;
+  };
+  reports.forEach(r=>{
+    const {y,m} = monthParts(r.monthLabel);
+    const h = m<=6 ? 1 : 2;
+    addTo(`${y}-H${h}`, `${h===1?"النصف الأول":"النصف الثاني"} ${y}`, 6, r);
+    addTo(`${y}`, `سنة ${y}`, 12, r);
+  });
+  return Object.values(acc).sort((a,b)=>b.key.localeCompare(a.key));
+}
+function renderPeriodRollups(reports){
+  const el = $("periodRollupsView");
+  if(!el) return;
+  const rows = periodRollups(reports);
+  if(!rows.length){ el.innerHTML = `<p class="sub">ما فيه أشهر مقفلة بعد.</p>`; return; }
+  el.innerHTML = `<div class="table-wrap"><table><thead><tr><th>الفترة</th><th>الأشهر المقفلة</th><th>الإيرادات المحققة</th><th>التكاليف</th><th>صافي الربح</th><th>المقبوض فعلياً</th><th>فواتير / ثياب</th></tr></thead><tbody>${
+    rows.map(p=>`<tr><td><b>${p.label}</b></td><td>${p.months} من ${p.size}${p.months<p.size?` <span style="color:var(--gold-soft);">(ناقصة)</span>`:""}</td><td>${p.revenue.toFixed(0)} ﷼</td><td>${p.cost.toFixed(0)} ﷼</td><td style="color:${p.profit>=0?"var(--profit)":"var(--loss)"};font-weight:700;">${p.profit.toFixed(0)} ﷼</td><td>${p.collected.toFixed(0)} ﷼</td><td>${p.invoices} / ${p.garments}</td></tr>`).join("")
+  }</tbody></table></div>`;
+}
 function renderGrowthReport(){
   const reports = state.closingReports.slice().sort((a,b)=>a.monthLabel.localeCompare(b.monthLabel));
   const monthlyEl = $("monthlyGrowthList"), qEl = $("quarterlyGrowthList");
@@ -1199,6 +1259,7 @@ function renderGrowthReport(){
     return;
   }
   const byMonth={}; reports.forEach(r=>byMonth[r.monthLabel]=r);
+  renderPeriodRollups(reports);
 
   // ===== Card 1: work-volume growth (sales + garment count) =====
   monthlyEl.innerHTML = reports.slice().reverse().map(r=>{

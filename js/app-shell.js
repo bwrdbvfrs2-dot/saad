@@ -313,11 +313,22 @@ function normalizeState(){
 let stateSaveConflict = false; // true when the most recent failed save was rejected for this reason
 const ownCommittedRevs = new Map(); // base revision -> revision this device's own save moved it to
 let saveQueue = Promise.resolve();
+// While this device has saves in flight, server snapshots are held back (see the listener below):
+// applying one mid-flight replaced `state` with a copy that lacked the still-pending change, and the
+// next save — chained onto that pending one — then wrote that older copy over it (a lost update on
+// a single device). Local state therefore always = last server copy + every change of our own.
+let pendingSaves = 0;
+let deferredSnapshot = null;
+let latestOwnRev = 0;
 function saveState(){
   // captured now, so a later in-memory change can't leak into this save; queued so this device's
   // own back-to-back saves never race (and reject) each other
   const payload = JSON.parse(JSON.stringify(state));
-  const run = saveQueue.then(()=> commitStatePayload(payload));
+  pendingSaves++;
+  const run = saveQueue.then(()=> commitStatePayload(payload)).finally(()=>{
+    pendingSaves--;
+    if(pendingSaves===0 && deferredSnapshot){ const snap = deferredSnapshot; deferredSnapshot = null; applyServerSnapshot(snap, false); }
+  });
   saveQueue = run.catch(()=>{});
   return run;
 }
@@ -336,6 +347,7 @@ async function commitStatePayload(payload){
       tx.set(STATE_DOC, payload);
     });
     ownCommittedRevs.set(baseRev, payload._rev);
+    latestOwnRev = Math.max(latestOwnRev, payload._rev);
     return true;
   }
   catch(e){
@@ -381,23 +393,30 @@ async function saveStateWithRollback(snapshot){
 // update. That structurally removes the failure mode that previously let a transient error cause
 // a blank state to be written over real data.
 let stateUnsubscribe = null;
+async function applyServerSnapshot(snap, isFirstLoad){
+  // an older copy than this device's own latest save (its snapshot is on the way) is skipped
+  if(!isFirstLoad && ((snap.data()._rev||0) < latestOwnRev)) return;
+  state = snap.data();
+  typeLibrariesReseeded = false;
+  addonSnapshotsBackfilled = false;
+  normalizeState();
+  // awaited so this self-triggered write always lands before any write a caller makes
+  // right after login — otherwise the two could race, both reading the same pre-reseed
+  // `state`, with the later one seeing a server document its own local copy has already
+  // drifted from.
+  if(typeLibrariesReseeded || addonSnapshotsBackfilled) await saveState();
+  if(!isFirstLoad && currentUser) renderAll();
+}
 async function startListeningToState(){
   return new Promise((resolve)=>{
     let firstLoad = true;
     stateUnsubscribe = STATE_DOC.onSnapshot(async snap=>{
       if(snap.exists){
-        state = snap.data();
-        typeLibrariesReseeded = false;
-        addonSnapshotsBackfilled = false;
-        normalizeState();
-        // awaited so this self-triggered write always lands before any write a caller makes
-        // right after login — otherwise the two could race, both reading the same pre-reseed
-        // `state`, with the later one seeing a server document its own local copy has already
-        // drifted from.
-        if(typeLibrariesReseeded || addonSnapshotsBackfilled) await saveState();
+        if(!firstLoad && pendingSaves>0){ deferredSnapshot = snap; return; } // applied once our saves land
+        const wasFirst = firstLoad;
+        await applyServerSnapshot(snap, wasFirst);
       }
       if(firstLoad){ firstLoad=false; resolve(); }
-      else if(currentUser){ renderAll(); }
     }, err=>{
       console.error("Firestore listen error", err);
       showToast("تعذّر الاتصال بقاعدة البيانات السحابية");

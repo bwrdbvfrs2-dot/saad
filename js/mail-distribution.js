@@ -571,7 +571,9 @@ function renderDashboardKPIs(){
   const todaysSalesInvoices = state.salesInvoices.filter(i=>i.date===today);
   const salesToday = state.invoices.reduce((a,inv)=> a + (inv.payments||[]).filter(p=>p.date===today).reduce((s,p)=>s+(p.cash||0)+(p.network||0),0), 0)
     + todaysSalesInvoices.reduce((a,inv)=> a + (inv.payment?(inv.payment.cash||0)+(inv.payment.network||0):0), 0)
-    - (state.salesReturns||[]).filter(r=>r.date===today).reduce((a,r)=>a+(r.refundAmount||0),0);
+    - (state.salesReturns||[]).filter(r=>r.date===today).reduce((a,r)=>a+(r.refundAmount||0),0)
+    - state.invoiceReturns.filter(r=>r.date===today).reduce((a,r)=>a+(r.refundAmount||0),0)
+    + (state.legacyPayments||[]).filter(l=>l.date===today).reduce((a,l)=>a+l.amount,0);
   const {cuttingOverdue, deliveryOverdue, dueToday} = computeOverdueLists();
   const overdueCount = cuttingOverdue.length + deliveryOverdue.length;
   const pending = allPendingGarments();
