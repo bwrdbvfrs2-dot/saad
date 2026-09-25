@@ -899,7 +899,7 @@ async function saveSaleInvoice(){
   const snapshot = JSON.parse(JSON.stringify(state));
   items.forEach(it=>{ const c=findItemCard(it.itemCardId); if(c) c.stockQty -= it.qty; });
   const freeGifts = [];
-  if(d.gift){ const g = findItemCard(d.gift.itemCardId); if(g){ g.stockQty = (g.stockQty||0) - d.gift.qty; freeGifts.push(d.gift); } }
+  if(d.gift){ const g = findItemCard(d.gift.itemCardId); if(g){ g.stockQty = (g.stockQty||0) - d.gift.qty; freeGifts.push({...d.gift, costAtSale: g.currentCost||0}); } }
   const discounts = {promoCode: salePromo ? salePromo.code : null, promoDiscount:+d.promoDisc.toFixed(2), offerName: d.offer ? d.offer.name : null, offerDiscount:+d.offerDisc.toFixed(2), direct:+d.direct.toFixed(2), gift: salePromo && salePromo.type==="gift" ? (salePromo.giftDescription||"") : null};
   const payment = {id:newId(), date, cash, network, receipt};
   applyPaymentToBalances(payment);

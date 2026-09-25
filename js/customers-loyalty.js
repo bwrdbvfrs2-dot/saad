@@ -843,7 +843,9 @@ function saleSubtotal(inv){ return inv.items.reduce((a,it)=>a+it.qty*it.price,0)
 function saleNetTotal(inv){ return Math.max(0, saleSubtotal(inv) - (inv.discountTotal||0)); }
 function saleNetFactor(inv){ const s = saleSubtotal(inv); return s>0 ? saleNetTotal(inv)/s : 1; }
 function salesInvoiceProfit(inv){
-  return inv.items.reduce((a,it)=>a+((it.price-(it.costAtSale||0))*it.qty),0) - (inv.discountTotal||0);
+  // a free gift leaves stock at its cost with nothing charged for it — that cost comes off the sale's profit
+  const giftCost = (inv.freeGifts||[]).reduce((a,f)=>a+(f.qty||0)*(f.costAtSale||0),0);
+  return inv.items.reduce((a,it)=>a+((it.price-(it.costAtSale||0))*it.qty),0) - (inv.discountTotal||0) - giftCost;
 }
 // ---------------- sales returns ----------------
 // a return is booked on the day it happens (its own month / VAT period), never back-dated into the
