@@ -66,7 +66,9 @@ function submitMailReturnRequest(){
   if(!inv){ showToast("ما فيه فاتورة بهذا الرقم"); return; }
   const responsibleUsername = $("mailReturnResponsible").value;
   const reason = $("mailReturnReason").value.trim();
+  if(!responsibleUsername){ showToast("اختر الموظف المتسبّب من الاقتراحات"); return; }
   if(!reason){ showToast("أدخل سبب الخلل"); return; }
+  if(state.mailRequests.some(m=>m.type==="invoice_return_defect" && m.invoiceId===inv.id && m.status==="pending")){ showToast(`فيه طلب مفتوح مسبقاً لفاتورة ${invoiceNumber} بانتظار قرار المدير`); return; }
   const amount = invoiceSaleTotal(inv);
   state.mailRequests.push({id:Date.now()+"", seq:nextMailRequestNo(), type:"invoice_return_defect", invoiceId:inv.id, invoiceNumber:inv.number, amount, responsibleUsername, reason, status:"pending", createdBy:currentUser.username, date:todayStr()});
   saveState(); renderAll();
@@ -115,7 +117,9 @@ function openMailDecisionModal(reqId){
   const r = state.mailRequests.find(x=>x.id===reqId);
   if(!r) return;
   mailDecisionTargetId = reqId;
-  $("mailDecisionSummary").textContent = `فاتورة ${r.invoiceNumber} — مبلغ ${r.amount.toFixed(0)} ريال — المتسبّب: ${r.responsibleUsername}`;
+  const alreadyReturned = state.invoiceReturns.some(x=>x.invoiceId===r.invoiceId);
+  $("mailDecisionSummary").textContent = `فاتورة ${r.invoiceNumber} — مبلغ ${r.amount.toFixed(0)} ريال — المتسبّب: ${r.responsibleUsername}` + (alreadyReturned ? " — المرتجع واسترداد العميل مسجّلين مسبقاً، القرار يحدد التحميل فقط" : "");
+  $("mailDecisionBoxWrap").style.display = alreadyReturned ? "none" : "";
   $("mailDecisionBox").innerHTML = userBoxes(currentUser.username).map(b=>`<option value="${b.id}">${esc(b.name)} (${typeLabel(b.type)})</option>`).join("");
   $("mailDecisionChoice").value = "full";
   $("mailDecisionPartialWrap").style.display = "none";
@@ -140,10 +144,21 @@ async function confirmMailDecision(){
     showToast(`تم رفض الترجيع رقم ${seq} — ما انخصم أي مبلغ`);
     return;
   }
-  const boxId = $("mailDecisionBox").value;
-  const box = findCashBox(boxId);
-  if(!box){ showToast("اختر الصندوق"); return; }
-  if(boxTotal(box) < r.amount){ showToast(`رصيد الصندوق (${boxTotal(box).toFixed(0)} ريال) أقل من مبلغ الاسترداد`); return; }
+  const inv = state.invoices.find(i=>i.id===r.invoiceId);
+  // when the return was already recorded (from the returns screen) the customer was refunded and
+  // the garments cancelled there, so this decision only settles who bears it: no second refund and
+  // no second return record
+  const alreadyReturned = state.invoiceReturns.some(x=>x.invoiceId===r.invoiceId);
+  // cancelled garments drop out of revenue on their own, so the shop's share is booked as an
+  // "operational loss" only when the return leaves the garments standing (already delivered) —
+  // booking it on top of a cancellation counted the same money twice
+  const revenueReversedByCancel = !!inv && inv.garments.some(g=> g.status==="ملغي" || (!alreadyReturned && g.status!=="تسليم"));
+  // otherwise the customer gets back what they actually paid, never more
+  const refundDue = alreadyReturned || !inv ? 0 : Math.max(0, Math.min(r.amount, invoicePaid(inv) - invoiceRefunded(inv)));
+  const boxId = alreadyReturned ? "" : $("mailDecisionBox").value;
+  const box = alreadyReturned ? null : findCashBox(boxId);
+  if(!alreadyReturned && !box){ showToast("اختر الصندوق"); return; }
+  if(box && boxTotal(box) < refundDue){ showToast(`رصيد الصندوق (${boxTotal(box).toFixed(0)} ريال) أقل من مبلغ الاسترداد`); return; }
   // validate the partial-amount input BEFORE any mutation below — this used to run after the
   // refund was already deducted from the box, so an invalid amount here left that deduction
   // applied with no ledger entry to explain it (and applied a second time on a valid retry)
@@ -154,9 +169,7 @@ async function confirmMailDecision(){
   }
   const decisionSnapshot = JSON.parse(JSON.stringify(state));
   // 1) refund the customer
-  box.balance -= r.amount;
-  // 2) mark the invoice's garments as cancelled + log as a return (customer already had it — no stock impact)
-  const inv = state.invoices.find(i=>i.id===r.invoiceId);
+  if(box) box.balance -= refundDue;
   let decisionLabel = "", deductedAmount = 0;
   const seq = nextDecisionNo();
   if(choice==="full"){
@@ -172,23 +185,27 @@ async function confirmMailDecision(){
     if(partialAmount>0) addPayrollEntry(r.responsibleUsername, "deduction", partialAmount, null, `خصم جزئي فاتورة مرتجعة #${inv?inv.number:r.invoiceNumber} بسبب خلل — طلب بريد #${r.seq}`);
     deductedAmount = partialAmount;
     const shopShare = r.amount - partialAmount;
-    if(shopShare>0.01){
+    if(shopShare>0.01 && !revenueReversedByCancel){
       state.operationalLosses.push({id:Date.now()+"", date:todayStr(), amount:shopShare, invoiceNumber:r.invoiceNumber, reason:`فرق قرار جزئي #${seq} — ${r.reason}`});
     }
-    decisionLabel = `خصم جزئي (${partialAmount.toFixed(0)} ﷼) من ${r.responsibleUsername} — والمحل يتحمّل الباقي (${shopShare.toFixed(0)} ﷼) كخسارة تشغيلية`;
+    decisionLabel = `خصم جزئي (${partialAmount.toFixed(0)} ﷼) من ${r.responsibleUsername} — والمحل يتحمّل الباقي (${shopShare.toFixed(0)} ﷼)`;
   } else {
-    state.operationalLosses.push({id:Date.now()+"", date:todayStr(), amount:r.amount, invoiceNumber:r.invoiceNumber, reason:`تجاوز كامل — ${r.reason}`});
+    if(!revenueReversedByCancel) state.operationalLosses.push({id:Date.now()+"", date:todayStr(), amount:r.amount, invoiceNumber:r.invoiceNumber, reason:`تجاوز كامل — ${r.reason}`});
     decisionLabel = `تحمّلها المحل بالكامل (تجاوز) — بدون خصم على ${r.responsibleUsername}`;
   }
-  state.invoiceReturns.push({id:Date.now()+"", invoiceId:r.invoiceId, invoiceNumber:r.invoiceNumber, reason:`خلل موظف: ${r.reason}`, refundAmount:r.amount, boxId, lostCost:0, date:todayStr(), recordedBy:currentUser.username});
-  if(inv) reverseInvoiceLoyaltyIfNeeded(inv, "مرتجع بسبب خلل موظف");
+  // 2) an employee-filed request: record the return itself now, exactly as the returns screen does
+  // (cancel the garments, reverse stock/loyalty) — the invoice used to stay open, still showing the
+  // customer as owing its full price after they'd been refunded
+  if(!alreadyReturned && inv){
+    applyInvoiceReturn(inv, {reason:`خلل موظف: ${r.reason}`, refundAmount:refundDue, boxId, responsibleUsername:r.responsibleUsername, loyaltyNote:"مرتجع بسبب خلل موظف"});
+  }
   const message = deductedAmount>0
     ? `تم إصدار قرار رقم ${seq} بخصم مبلغ ${deductedAmount.toFixed(0)} ريال بحقك بسبب: ${r.reason}`
     : `تم إصدار قرار رقم ${seq} بخصوص فاتورة مرتجعة بسببك (${r.reason}) — قرر المدير تحمّل المحل للمبلغ، بدون خصم عليك.`;
   state.decisions.push({id:Date.now()+"", seq, type:"return_defect", recipientUsername:r.responsibleUsername, amount:deductedAmount, reason:r.reason, message, decidedBy:currentUser.username, date:todayStr()});
   r.status="decided"; r.decidedBy=currentUser.username; r.decidedAt=todayStr(); r.decisionLabel=`قرار رقم ${seq} — ${decisionLabel}`;
   if(!await saveStateWithRollback(decisionSnapshot)) return;
-  logAudit("mail_decision_resolved", {seq, choice, invoiceNumber:r.invoiceNumber, responsibleUsername:r.responsibleUsername, refundAmount:r.amount, deductedAmount});
+  logAudit("mail_decision_resolved", {seq, choice, invoiceNumber:r.invoiceNumber, responsibleUsername:r.responsibleUsername, refundAmount:refundDue, deductedAmount});
   closeMailDecisionModal();
   showToast(`تم تنفيذ القرار رقم ${seq} مالياً`);
 }
@@ -839,7 +856,9 @@ function nextStatusOf(status){ const i=STATUS_ORDER.indexOf(status); return i>=0
 function garmentProportionalPaid(g, inv){
   const totalPrice = inv.garments.reduce((a,gg)=>a+(gg.status==="ملغي"?0:garmentSalePrice(gg)),0);
   if(totalPrice<=0) return 0;
-  const paidTotal = invoicePaid(inv) - (inv.discountTotal||0);
+  // a discount settles part of the price just like a payment (inv.discountTotal never existed — discounts
+  // live on each payment — so every discounted invoice showed its discount as a debt the customer owed)
+  const paidTotal = invoicePaid(inv) + invoiceDiscountTotal(inv);
   return paidTotal * (garmentSalePrice(g)/totalPrice);
 }
 function garmentRemaining(g, inv){ return garmentSalePrice(g) - garmentProportionalPaid(g, inv); }

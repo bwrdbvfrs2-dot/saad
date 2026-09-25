@@ -825,7 +825,14 @@ function invoicePaid(inv){ return (inv.payments||[]).reduce((a,p)=>a+(p.cash||0)
 function invoiceDiscountTotal(inv){ return (inv.payments||[]).reduce((a,p)=>a+(p.discount||0),0); }
 function invoiceSaleTotal(inv){ return inv.garments.reduce((a,g)=> a+(g.status==="ملغي"?0:garmentSalePrice(g)),0); }
 function invoiceCostTotal(inv){ return inv.garments.reduce((a,g)=> a+(g.status==="ملغي"?0:garmentCostFor(g,inv)),0); }
-function invoiceRemaining(inv){ return invoiceSaleTotal(inv) - invoicePaid(inv) - invoiceDiscountTotal(inv); }
+// money already handed back to the customer through a recorded return
+function invoiceRefunded(inv){ return (state.invoiceReturns||[]).filter(r=>r.invoiceId===inv.id).reduce((a,r)=>a+(r.refundAmount||0),0); }
+function invoiceRemaining(inv){
+  const remaining = invoiceSaleTotal(inv) - invoicePaid(inv) - invoiceDiscountTotal(inv);
+  // once a return is recorded the refund (or a kept deposit) settles the difference — without this a
+  // returned invoice showed the shop owing the customer everything they'd paid, refunded or not
+  return (state.invoiceReturns||[]).some(r=>r.invoiceId===inv.id) ? Math.max(0, remaining) : remaining;
+}
 function userDiscountEnabled(user){ return !!(user && user.discountEnabled); }
 function userMaxDiscountAmount(user, baseAmount){
   if(!user || !user.discountEnabled) return 0;

@@ -180,8 +180,20 @@ function computeShiftExpected(username, date){
     if(box.type==="cash") recordedCashExpenses += e.amount;
     else if(box.type==="network") recordedNetworkExpenses += e.amount;
   });
-  const total = sysCash+sysNetwork+sysTransfers-sysTransfersOut+sysTransfersReturned-recordedCashExpenses-recordedNetworkExpenses;
-  return {sysCash, sysNetwork, sysTransfers, sysTransfersOut, sysTransfersReturned, recordedCashExpenses, recordedNetworkExpenses, total, payRefs};
+  // every other documented movement in/out of this user's boxes today — vouchers, customer refunds,
+  // paid purchases and supplier payments, salaries/advances, cash back from a supplier return.
+  // These all move real money but were left out, so each one showed up as a false shortage/surplus.
+  const ownBox = id=>{ const b=findCashBox(id); return !!b && b.owner===username; };
+  const otherMoves = [];
+  state.vouchers.forEach(v=>{ if(v.date===date && ownBox(v.boxId)) otherMoves.push({label:`سند ${v.type==="receipt"?"قبض":"صرف"} ${v.voucherNo}`, amount: v.type==="receipt" ? v.amount : -v.amount}); });
+  state.invoiceReturns.forEach(r=>{ if(r.date===date && r.refundAmount && ownBox(r.boxId)) otherMoves.push({label:`استرداد مرتجع فاتورة ${r.invoiceNumber}`, amount:-r.refundAmount}); });
+  state.purchases.forEach(p=>{ if(p.date===date && p.payStatus==="paid" && ownBox(p.sourceBoxId)) otherMoves.push({label:`فاتورة شراء ${p.invoiceNo}`, amount:-p.total}); });
+  state.purchaseReturns.forEach(r=>{ if(r.date===date && r.payStatus==="paid" && ownBox(r.boxId)) otherMoves.push({label:"مرتجع مشتريات (مبلغ مسترد)", amount:r.value}); });
+  state.suppliers.forEach(s=> (s.payments||[]).forEach(sp=>{ if(sp.date===date && ownBox(sp.boxId)) otherMoves.push({label:`تسديد مورد ${s.name}`, amount:-sp.amount}); }));
+  state.payrollLedger.forEach(e=>{ if(e.date===date && (e.type==="payment"||e.type==="advance") && ownBox(e.boxId)) otherMoves.push({label:`${e.type==="advance"?"سلفة":"راتب"} ${e.username}`, amount:-e.amount}); });
+  const sysOtherNet = otherMoves.reduce((a,m)=>a+m.amount,0);
+  const total = sysCash+sysNetwork+sysTransfers-sysTransfersOut+sysTransfersReturned-recordedCashExpenses-recordedNetworkExpenses+sysOtherNet;
+  return {sysCash, sysNetwork, sysTransfers, sysTransfersOut, sysTransfersReturned, recordedCashExpenses, recordedNetworkExpenses, sysOtherNet, otherMoves, total, payRefs};
 }
 function runShiftAudit(){
   const date = $("shiftAuditDate").value || todayStr();
@@ -195,12 +207,15 @@ function runShiftAudit(){
   window.__lastShiftAudit = {date, actualCash, networkActual, transfersActual, pettyExpenses, expected, physicalTotal, diff};
   const recordedExpTotal = expected.recordedCashExpenses + expected.recordedNetworkExpenses;
   const netTransfersOut = expected.sysTransfersOut - expected.sysTransfersReturned;
-  let html = `<div class="remaining-box"><span>المتوقع من النظام (كاش ${expected.sysCash.toFixed(0)} + شبكة ${expected.sysNetwork.toFixed(0)} + تحويلات مستلمة ${expected.sysTransfers.toFixed(0)}${netTransfersOut>0?` − تحويلات مرسلة ${netTransfersOut.toFixed(0)}`:""}${recordedExpTotal>0?` − مصروفات مسجّلة ${recordedExpTotal.toFixed(0)}`:""})</span><span class="amt">${expected.total.toFixed(2)} ريال</span></div>`;
+  let html = `<div class="remaining-box"><span>المتوقع من النظام (كاش ${expected.sysCash.toFixed(0)} + شبكة ${expected.sysNetwork.toFixed(0)} + تحويلات مستلمة ${expected.sysTransfers.toFixed(0)}${netTransfersOut>0?` − تحويلات مرسلة ${netTransfersOut.toFixed(0)}`:""}${recordedExpTotal>0?` − مصروفات مسجّلة ${recordedExpTotal.toFixed(0)}`:""}${Math.abs(expected.sysOtherNet)>0.001?` ${expected.sysOtherNet>0?"+":"−"} حركات صندوق أخرى ${Math.abs(expected.sysOtherNet).toFixed(0)}`:""})</span><span class="amt">${expected.total.toFixed(2)} ريال</span></div>`;
   if(netTransfersOut>0){
     html += `<p class="sub" style="margin:4px 0;">ℹ تم خصم ${netTransfersOut.toFixed(0)} ريال تحويلات أرسلتها من صندوقك اليوم لمستخدم آخر (ما رجعت لك حتى الآن).</p>`;
   }
   if(recordedExpTotal>0){
     html += `<p class="sub" style="margin:4px 0;">ℹ تم خصم ${recordedExpTotal.toFixed(0)} ريال مصروفات مسجّلة رسمياً من صندوقك اليوم تلقائياً — لا تكتبها مرة ثانية بخانة "المصروفات النثرية" تحت، إلا لو فيه مصروف ثاني ما سجّلته رسمياً بعد.</p>`;
+  }
+  if(expected.otherMoves.length){
+    html += `<p class="sub" style="margin:4px 0;">ℹ حركات صندوق أخرى اليوم محسوبة تلقائياً: ${expected.otherMoves.map(m=>`${esc(m.label)} (${m.amount>0?"+":"−"}${Math.abs(m.amount).toFixed(0)})`).join("، ")}</p>`;
   }
   html += `<div class="remaining-box" style="margin-top:6px;"><span>الإجمالي الفعلي (من واقع الدرج)</span><span class="amt">${physicalTotal.toFixed(2)} ريال</span></div>`;
   if(Math.abs(diff)<0.5){
@@ -722,23 +737,12 @@ function renderReturnResponsibleSelect(){
   $("returnResponsibleDatalist").innerHTML = employees.map(u=>`<option value="${esc(u.username)}"></option>`).join("");
   if(current){ const u = employees.find(x=>x.username===current); if(u) $("returnResponsibleSearch").value = u.username; }
 }
-async function submitInvoiceReturn(){
-  const num = $("returnInvNumber").value.trim();
-  const inv = state.invoices.find(i=>i.number===num);
-  if(!inv){ showToast("ما فيه فاتورة بهذا الرقم"); return; }
-  const reason = $("returnReason").value.trim();
-  const refundAmount = parseFloat($("returnAmount").value)||0;
-  const boxId = $("returnSourceBox").value;
-  if(!reason){ showToast("أدخل سبب المرتجع"); return; }
-  const preReturnSaleTotal = invoiceSaleTotal(inv);
-  const returnSnapshot = JSON.parse(JSON.stringify(state));
-  if(refundAmount>0){
-    if(!boxId){ showToast("اختر الصندوق اللي يخصم منه المبلغ المرتجع"); return; }
-    const box = state.cashBoxes.find(b=>b.id===boxId);
-    if(box) box.balance -= refundAmount;
-  }
-  // update garment statuses: anything not yet delivered gets cancelled; fabric already CUT (not just reserved) is a real loss, not a stock credit
-  const responsibleUsername = $("returnResponsible").value;
+// cancels every not-yet-delivered garment on the invoice (reversing stock, fabric and advisory
+// credits) and records the return — shared by the returns screen and a manager's decision on an
+// employee-filed defect request, so both leave the invoice, stock and reports in the same state.
+// Moving the refund out of a cash box is the caller's job.
+function applyInvoiceReturn(inv, {reason, refundAmount, boxId, responsibleUsername, loyaltyNote}){
+  // fabric already CUT (not just reserved) is a real loss, not a stock credit
   let lostCost = 0;
   const wasCut = [];
   const wageClawbacks = [];
@@ -761,11 +765,42 @@ async function submitInvoiceReturn(){
     g.status = "ملغي"; g.cancelledDate = todayStr();
   });
   state.invoiceReturns.push({id:Date.now()+"", invoiceId:inv.id, invoiceNumber:inv.number, reason, refundAmount, boxId, lostCost, date:todayStr(), recordedBy:currentUser.username});
-  reverseInvoiceLoyaltyIfNeeded(inv, "مرتجع فاتورة");
+  reverseInvoiceLoyaltyIfNeeded(inv, loyaltyNote);
+  return {lostCost, wasCut, wageClawbacks};
+}
+async function submitInvoiceReturn(){
+  const num = $("returnInvNumber").value.trim();
+  const inv = state.invoices.find(i=>i.number===num);
+  if(!inv){ showToast("ما فيه فاتورة بهذا الرقم"); return; }
+  const reason = $("returnReason").value.trim();
+  const refundAmount = parseFloat($("returnAmount").value)||0;
+  const boxId = $("returnSourceBox").value;
+  if(!reason){ showToast("أدخل سبب المرتجع"); return; }
+  // a second return on the same invoice would refund the customer again
+  if(state.invoiceReturns.some(r=>r.invoiceId===inv.id)){ showToast(`الفاتورة ${num} مسجّل لها مرتجع مسبقاً — ما يمكن ترجيعها مرة ثانية`); return; }
+  const refundable = invoicePaid(inv) - invoiceRefunded(inv);
+  if(refundAmount - refundable > 0.01){ showToast(`المبلغ المرتجع أكبر من اللي دفعه العميل فعلياً (${refundable.toFixed(0)} ريال)`); return; }
+  const responsibleUsername = $("returnResponsible").value;
+  const pendingRequest = responsibleUsername && state.mailRequests.find(m=>m.type==="invoice_return_defect" && m.invoiceId===inv.id && m.status==="pending");
+  const preReturnSaleTotal = invoiceSaleTotal(inv);
+  let refundBox = null;
+  if(refundAmount>0){
+    if(!boxId){ showToast("اختر الصندوق اللي يخصم منه المبلغ المرتجع"); return; }
+    refundBox = state.cashBoxes.find(b=>b.id===boxId);
+    if(!refundBox){ showToast("الصندوق المختار غير موجود"); return; }
+    if(boxTotal(refundBox) < refundAmount){ showToast(`رصيد الصندوق (${boxTotal(refundBox).toFixed(0)} ريال) أقل من المبلغ المرتجع`); return; }
+  }
+  const returnSnapshot = JSON.parse(JSON.stringify(state));
+  if(refundBox) refundBox.balance -= refundAmount;
+  const {lostCost, wasCut, wageClawbacks} = applyInvoiceReturn(inv, {reason, refundAmount, boxId, responsibleUsername, loyaltyNote:"مرتجع فاتورة"});
   let requestMsg = "";
-  if(responsibleUsername){
+  if(pendingRequest){
+    requestMsg = ` — فيه طلب قرار مسؤولية مفتوح مسبقاً لهذي الفاتورة (طلب #${pendingRequest.seq}) بشاشة البريد`;
+  } else if(responsibleUsername){
     const amount = preReturnSaleTotal;
-    state.mailRequests.push({id:Date.now()+"-ret", seq:nextMailRequestNo(), type:"invoice_return_defect", invoiceId:inv.id, invoiceNumber:inv.number, amount, responsibleUsername, reason, status:"pending", createdBy:currentUser.username, date:todayStr()});
+    // returnRecorded: the refund and cancellation are done right here, so the manager's decision
+    // must only settle who bears it — never refund the customer a second time
+    state.mailRequests.push({id:Date.now()+"-ret", seq:nextMailRequestNo(), type:"invoice_return_defect", invoiceId:inv.id, invoiceNumber:inv.number, amount, responsibleUsername, reason, status:"pending", createdBy:currentUser.username, date:todayStr(), returnRecorded:true});
     requestMsg = ` — تم فتح طلب قرار مسؤولية تلقائياً لـ${responsibleUsername} بشاشة البريد`;
   }
   if(wageClawbacks.length) requestMsg += ` — تم استرداد أجرة مصروفة مسبقاً: ${wageClawbacks.join("، ")}`;

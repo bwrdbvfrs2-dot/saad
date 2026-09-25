@@ -3,10 +3,19 @@ function garmentPriceShare(g, inv){
   const totalPrice = inv.garments.reduce((a,gg)=>a+(gg.status==="ملغي"?0:garmentSalePrice(gg)),0);
   return totalPrice>0 ? garmentSalePrice(g)/totalPrice : 0;
 }
-function garmentRevenueEvents(g, inv){
+// a cancelled garment's share of the payments as it stood when it was cancelled — among the
+// garments still active at that moment (itself and anything cancelled together with or after it).
+// garmentPriceShare() leaves every cancelled garment out, so for a cancelled garment it gave 0 (or,
+// on a partial return, the wrong share) and the revenue it had earned was never reversed.
+function garmentShareAtCancellation(g, inv){
+  const at = g.cancelledDate || "";
+  const totalPrice = inv.garments.reduce((a,gg)=> a + ((gg.status!=="ملغي" || (gg.cancelledDate||"") >= at) ? garmentSalePrice(gg) : 0), 0);
+  return totalPrice>0 ? garmentSalePrice(g)/totalPrice : 0;
+}
+function garmentRevenueEvents(g, inv, shareOverride){
   // returns [{month, amount}] — deposits collected pre-cut accumulate and release at cutDate's month;
   // anything paid on/after cutDate is recognized in its own payment month.
-  const share = garmentPriceShare(g, inv);
+  const share = shareOverride!==undefined ? shareOverride : garmentPriceShare(g, inv);
   const events = [];
   let preCutAccumulated = 0;
   (inv.payments||[]).forEach(p=>{
@@ -107,8 +116,11 @@ function computeMonthlyFinancials(monthLabel){
         // clean reversal if never cut; permanent fabric+fixed-share loss if it WAS cut before cancellation
         if(g.cutDate && g.cutDate.slice(0,7)===monthLabel) cost += garmentFabricCost(g) + currentFixedShare(0, monthLabel);
         if(g.cancelledDate && g.cancelledDate.slice(0,7)===monthLabel && g.cutDate){
-          // revenue that had been recognized pre-cancellation is reversed as a return/loss THIS month
-          const alreadyRecognized = garmentRevenueEvents(g, inv).reduce((a,e)=>a+e.amount,0);
+          // revenue that had been recognized in EARLIER months is reversed as a return/loss THIS month
+          // (a cancelled garment is skipped entirely in its own and later months, so anything dated
+          // from this month on was never counted and must not be taken off again)
+          const alreadyRecognized = garmentRevenueEvents(g, inv, garmentShareAtCancellation(g, inv))
+            .filter(e=>e.month < monthLabel).reduce((a,e)=>a+e.amount,0);
           revenue -= alreadyRecognized;
         }
         return;
@@ -742,7 +754,7 @@ function addPayrollEntry(username, type, amount, boxId, note){
     if(boxTotal(box) < amount) return {ok:false,msg:`الرصيد غير كافٍ بالصندوق (المتاح ${boxTotal(box).toFixed(0)} ريال)`};
     box.balance -= amount;
   }
-  state.payrollLedger.push({id:Date.now()+"", username, type, amount, date:todayStr(), note, recordedBy:currentUser.username});
+  state.payrollLedger.push({id:Date.now()+"", username, type, amount, date:todayStr(), note, recordedBy:currentUser.username, boxId:(type==="payment"||type==="advance") ? boxId : null});
   return {ok:true};
 }
 

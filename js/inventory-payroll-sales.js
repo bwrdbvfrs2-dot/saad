@@ -319,6 +319,8 @@ async function paySupplier(supId){
   if(boxTotal(box) < amount){ showToast(`الرصيد غير كافٍ بالصندوق (المتاح ${boxTotal(box).toFixed(0)} ريال)`); return; }
   const snapshot = JSON.parse(JSON.stringify(state));
   box.balance -= amount; s.balance -= amount;
+  s.payments = s.payments||[];
+  s.payments.push({id:Date.now()+"", date:todayStr(), amount, boxId:box.id, recordedBy:currentUser.username});
   if(await saveStateWithRollback(snapshot)){
     logAudit("supplier_paid", {supplierName:s.name, amount});
     showToast("تم تسديد المورد");
@@ -576,18 +578,31 @@ async function addPurchaseReturn(){
   const card = findItemCard(cardId);
   if(!card){ showToast("اختر صنف"); return; }
   if(qty<=0){ showToast("أدخل كمية صحيحة"); return; }
-  const snapshot = JSON.parse(JSON.stringify(state));
-  const value = qty * card.currentCost;
-  card.stockQty = (card.stockQty||0) - qty;
-  if(payStatus==="deferred"){
-    const sup = state.suppliers.find(s=>s.id===supplierId);
-    if(sup) sup.balance = Math.max(0, sup.balance - value);
-  } else {
-    const box = findCashBox(boxId);
-    if(box) box.balance += value;
-  }
+  // every check runs before anything is touched — a failed check used to leave a half-applied return
+  if(qty - cardAvailableQty(card) > 0.001){ showToast(`الكمية أكبر من المتاح بالمخزون (${cardAvailableQty(card).toFixed(1)})`); return; }
+  const sup = state.suppliers.find(s=>s.id===supplierId);
+  if(!sup){ showToast("اختر المورد"); return; }
   const linkedPurchase = linkedPurchaseId ? state.purchases.find(p=>p.id===linkedPurchaseId) : null;
-  state.purchaseReturns.push({id:Date.now()+"", date:todayStr(), itemCardId:cardId, quantity:qty, value, supplierId, payStatus, recordedBy:currentUser.username,
+  if(linkedPurchase){
+    if(linkedPurchase.itemCardId!==card.id || linkedPurchase.supplierId!==supplierId){ showToast("فاتورة الشراء المرتبطة لصنف أو مورد مختلف"); return; }
+    const alreadyReturned = state.purchaseReturns.filter(r=>r.linkedPurchaseId===linkedPurchase.id).reduce((a,r)=>a+r.quantity,0);
+    if(qty - (linkedPurchase.quantity - alreadyReturned) > 0.001){ showToast(`الكمية أكبر من المتبقي بفاتورة الشراء #${linkedPurchase.invoiceNo} (${(linkedPurchase.quantity-alreadyReturned).toFixed(1)})`); return; }
+  }
+  // valued at what was actually paid for it when the purchase is known — the card's latest cost
+  // (from a newer purchase at a different price) used to over/under-credit the refund
+  const value = qty * (linkedPurchase ? linkedPurchase.unitPrice : card.currentCost);
+  let box = null;
+  if(payStatus==="deferred"){
+    // the excess over what's owed used to be silently dropped (balance clamped at 0)
+    if(value - sup.balance > 0.01){ showToast(`قيمة المرتجع (${value.toFixed(0)} ريال) أكبر من المستحق للمورد (${sup.balance.toFixed(0)} ريال) — لو كانت الفاتورة مدفوعة اختر "مدفوعة"`); return; }
+  } else {
+    box = findCashBox(boxId);
+    if(!box){ showToast("اختر الصندوق المستلم للمبلغ"); return; }
+  }
+  const snapshot = JSON.parse(JSON.stringify(state));
+  card.stockQty = (card.stockQty||0) - qty;
+  if(box) box.balance += value; else sup.balance -= value;
+  state.purchaseReturns.push({id:Date.now()+"", date:todayStr(), itemCardId:cardId, quantity:qty, value, supplierId, payStatus, boxId: box ? box.id : null, recordedBy:currentUser.username,
     linkedPurchaseId: linkedPurchaseId||null, purchaseInvoiceNo: linkedPurchase?linkedPurchase.invoiceNo:null, supplierInvoiceNo: linkedPurchase?linkedPurchase.supplierInvoiceNo:null});
   if(!await saveStateWithRollback(snapshot)) return;
   logAudit("purchase_return_recorded", {cardName:card.name, qty, value});
