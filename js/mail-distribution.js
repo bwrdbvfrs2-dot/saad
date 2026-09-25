@@ -70,7 +70,7 @@ function submitMailReturnRequest(){
   if(!reason){ showToast("أدخل سبب الخلل"); return; }
   if(state.mailRequests.some(m=>m.type==="invoice_return_defect" && m.invoiceId===inv.id && m.status==="pending")){ showToast(`فيه طلب مفتوح مسبقاً لفاتورة ${invoiceNumber} بانتظار قرار المدير`); return; }
   const amount = invoiceSaleTotal(inv);
-  state.mailRequests.push({id:Date.now()+"", seq:nextMailRequestNo(), type:"invoice_return_defect", invoiceId:inv.id, invoiceNumber:inv.number, amount, responsibleUsername, reason, status:"pending", createdBy:currentUser.username, date:todayStr()});
+  state.mailRequests.push({id:newId(), seq:nextMailRequestNo(), type:"invoice_return_defect", invoiceId:inv.id, invoiceNumber:inv.number, amount, responsibleUsername, reason, status:"pending", createdBy:currentUser.username, date:todayStr()});
   saveState(); renderAll();
   $("mailReturnInvNumber").value=""; $("mailReturnReason").value=""; switchMailComposeForm(null);
   showToast("تم إرسال الطلب للمدير");
@@ -80,7 +80,7 @@ function submitMailAdvanceRequest(){
   const amount = parseFloat($("mailAdvanceAmount").value)||0;
   const reason = $("mailAdvanceReason").value.trim();
   if(amount<=0){ showToast("أدخل مبلغ صحيح"); return; }
-  state.mailRequests.push({id:Date.now()+"", seq:nextMailRequestNo(), type:"advance", employeeUsername, amount, reason, status:"pending", createdBy:currentUser.username, date:todayStr()});
+  state.mailRequests.push({id:newId(), seq:nextMailRequestNo(), type:"advance", employeeUsername, amount, reason, status:"pending", createdBy:currentUser.username, date:todayStr()});
   saveState(); renderAll();
   $("mailAdvanceAmount").value=""; $("mailAdvanceReason").value=""; switchMailComposeForm(null);
   showToast("تم إرسال طلب السلفة للمدير");
@@ -91,7 +91,7 @@ function submitMailLeaveRequest(){
   const reason = $("mailLeaveReason").value.trim();
   if(!fromDate || !toDate){ showToast("حدد تاريخ البداية والنهاية"); return; }
   if(toDate < fromDate){ showToast("تاريخ النهاية قبل البداية؟"); return; }
-  state.mailRequests.push({id:Date.now()+"", seq:nextMailRequestNo(), type:"leave", employeeUsername:currentUser.username, fromDate, toDate, reason, status:"pending", createdBy:currentUser.username, date:todayStr()});
+  state.mailRequests.push({id:newId(), seq:nextMailRequestNo(), type:"leave", employeeUsername:currentUser.username, fromDate, toDate, reason, status:"pending", createdBy:currentUser.username, date:todayStr()});
   saveState(); renderAll();
   $("mailLeaveFrom").value=""; $("mailLeaveTo").value=""; $("mailLeaveReason").value=""; switchMailComposeForm(null);
   showToast("تم إرسال طلب الإجازة للمدير");
@@ -99,6 +99,7 @@ function submitMailLeaveRequest(){
 async function decideSimpleMailRequest(reqId, approved){
   const r = state.mailRequests.find(x=>x.id===reqId);
   if(!r) return;
+  if(r.status!=="pending"){ showToast("هذا الطلب تم البت فيه مسبقاً"); return; }
   const snapshot = JSON.parse(JSON.stringify(state));
   if(r.type==="advance" && approved){
     const boxId = userBoxes(currentUser.username)[0]?.id;
@@ -131,12 +132,13 @@ function nextDecisionNo(){ const n=state.settings.nextDecisionNumber||1; state.s
 async function confirmMailDecision(){
   const r = state.mailRequests.find(x=>x.id===mailDecisionTargetId);
   if(!r) return;
+  if(r.status!=="pending"){ showToast("هذا الطلب تم البت فيه مسبقاً"); closeMailDecisionModal(); return; }
   const choice = $("mailDecisionChoice").value;
   if(choice==="reject"){
     const rejectSnapshot = JSON.parse(JSON.stringify(state));
     const seq = nextDecisionNo();
     const message = `تم رفض طلب الترجيع الخاص بفاتورة #${r.invoiceNumber} — لن يتم استرداد أي مبلغ ولا خصم عليك.`;
-    state.decisions.push({id:Date.now()+"", seq, type:"return_defect", recipientUsername:r.responsibleUsername, amount:0, reason:r.reason, message, decidedBy:currentUser.username, date:todayStr()});
+    state.decisions.push({id:newId(), seq, type:"return_defect", recipientUsername:r.responsibleUsername, amount:0, reason:r.reason, message, decidedBy:currentUser.username, date:todayStr()});
     r.status="decided"; r.decidedBy=currentUser.username; r.decidedAt=todayStr(); r.decisionLabel=`قرار رقم ${seq} — رفض الترجيع، بدون أي خصم من أي صندوق`;
     if(!await saveStateWithRollback(rejectSnapshot)) return;
     logAudit("mail_decision_resolved", {seq, choice:"reject", invoiceNumber:r.invoiceNumber, responsibleUsername:r.responsibleUsername});
@@ -186,11 +188,11 @@ async function confirmMailDecision(){
     deductedAmount = partialAmount;
     const shopShare = r.amount - partialAmount;
     if(shopShare>0.01 && !revenueReversedByCancel){
-      state.operationalLosses.push({id:Date.now()+"", date:todayStr(), amount:shopShare, invoiceNumber:r.invoiceNumber, reason:`فرق قرار جزئي #${seq} — ${r.reason}`});
+      state.operationalLosses.push({id:newId(), date:todayStr(), amount:shopShare, invoiceNumber:r.invoiceNumber, reason:`فرق قرار جزئي #${seq} — ${r.reason}`});
     }
     decisionLabel = `خصم جزئي (${partialAmount.toFixed(0)} ﷼) من ${r.responsibleUsername} — والمحل يتحمّل الباقي (${shopShare.toFixed(0)} ﷼)`;
   } else {
-    if(!revenueReversedByCancel) state.operationalLosses.push({id:Date.now()+"", date:todayStr(), amount:r.amount, invoiceNumber:r.invoiceNumber, reason:`تجاوز كامل — ${r.reason}`});
+    if(!revenueReversedByCancel) state.operationalLosses.push({id:newId(), date:todayStr(), amount:r.amount, invoiceNumber:r.invoiceNumber, reason:`تجاوز كامل — ${r.reason}`});
     decisionLabel = `تحمّلها المحل بالكامل (تجاوز) — بدون خصم على ${r.responsibleUsername}`;
   }
   // 2) an employee-filed request: record the return itself now, exactly as the returns screen does
@@ -202,7 +204,7 @@ async function confirmMailDecision(){
   const message = deductedAmount>0
     ? `تم إصدار قرار رقم ${seq} بخصم مبلغ ${deductedAmount.toFixed(0)} ريال بحقك بسبب: ${r.reason}`
     : `تم إصدار قرار رقم ${seq} بخصوص فاتورة مرتجعة بسببك (${r.reason}) — قرر المدير تحمّل المحل للمبلغ، بدون خصم عليك.`;
-  state.decisions.push({id:Date.now()+"", seq, type:"return_defect", recipientUsername:r.responsibleUsername, amount:deductedAmount, reason:r.reason, message, decidedBy:currentUser.username, date:todayStr()});
+  state.decisions.push({id:newId(), seq, type:"return_defect", recipientUsername:r.responsibleUsername, amount:deductedAmount, reason:r.reason, message, decidedBy:currentUser.username, date:todayStr()});
   r.status="decided"; r.decidedBy=currentUser.username; r.decidedAt=todayStr(); r.decisionLabel=`قرار رقم ${seq} — ${decisionLabel}`;
   if(!await saveStateWithRollback(decisionSnapshot)) return;
   logAudit("mail_decision_resolved", {seq, choice, invoiceNumber:r.invoiceNumber, responsibleUsername:r.responsibleUsername, refundAmount:refundDue, deductedAmount});
@@ -223,7 +225,7 @@ async function submitBonusOrDeduction(){
   const message = type==="bonus"
     ? `تم إصدار قرار رقم ${seq} — تمت مكافأتك بمبلغ ${amount.toFixed(0)} ريال نظير: ${reason}`
     : `تم إصدار قرار رقم ${seq} بخصم مبلغ ${amount.toFixed(0)} ريال بحقك بسبب: ${reason}`;
-  state.decisions.push({id:Date.now()+"", seq, type, recipientUsername:username, amount, reason, message, decidedBy:currentUser.username, date:todayStr()});
+  state.decisions.push({id:newId(), seq, type, recipientUsername:username, amount, reason, message, decidedBy:currentUser.username, date:todayStr()});
   if(!await saveStateWithRollback(snapshot)) return;
   logAudit("bonus_or_deduction", {seq, type, username, amount, reason});
   $("bonusAmount").value=""; $("bonusReason").value="";
@@ -306,6 +308,15 @@ async function saveInvoice(){
       }
     }
   }
+  // the same order entered twice (double submit, or two employees entering it) — same customer, same
+  // day, same garments and prices as an invoice that already exists. Not blocked (a customer can
+  // legitimately order the same again) but it must be a conscious choice.
+  if(isNewInvoice){
+    const newPrices = cards.map(c=>parseFloat(c.querySelector(".g-price").value)||0).sort((a,b)=>a-b).join(",");
+    const twin = state.invoices.find(i=> i.customerMobile===custMobile && i.date===date &&
+      i.garments.map(g=>g.price||0).sort((a,b)=>a-b).join(",")===newPrices);
+    if(twin && !await showConfirm(`تنبيه ازدواجية: فيه فاتورة لنفس العميل اليوم بنفس الثياب والأسعار (فاتورة رقم ${twin.number}).\nمتأكد إنها طلب جديد مختلف وتبي تحفظها؟`)) return;
+  }
   const originMonth = editingId ? state.invoices.find(i=>i.id===editingId).originMonth : date.slice(0,7);
   if(isMonthClosed(originMonth) && editingId){ showToast("هذا الشهر مقفول"); return; }
   // snapshot the whole state before any mutation below (advisory credits, fabric reservation,
@@ -324,6 +335,11 @@ async function saveInvoice(){
   garments.forEach(g=>{ g.costSnapshot = computeCostSnapshot(g, fixedShare); });
   // advisory balances: reverse old garment credits (if editing), then re-apply fresh for current garments
   if(oldInv) oldInv.garments.forEach(g=>{ reverseGarmentAdvisory(g); returnFabricForGarment(g); reverseAddonsStock(g); });
+  // the re-read garments carry over the OLD stock flags, but the lines above just reversed that
+  // stock — clear the flags so it's re-applied below. Otherwise every edit released the fabric
+  // reservation and handed the garments' physical addons (buttons...) back to stock for good.
+  // Fabric already cut ("consumed") stays consumed: it was never given back above.
+  if(oldInv) garments.forEach(g=>{ if(g.stockApplied==="reserved") g.stockApplied = null; g.addonsStockApplied = false; });
   garments.forEach(g=>{
     if(g.status!=="ملغي"){
       applyGarmentAdvisory(g);
@@ -369,7 +385,7 @@ async function saveInvoice(){
     }
   }
   const invData = {
-    id: editingId || (Date.now()+""),
+    id: editingId || (newId()),
     number, date, originMonth,
     customerName: custName, customerMobile: custMobile,
     payments: JSON.parse(JSON.stringify(paymentsListTemp)),
@@ -686,7 +702,7 @@ function renderDistributionArea(inv){
         return true;
       });
       const canCreditDeliver = isAdmin && g.status!=="تسليم" && g.status!=="ملغي" && g.status!=="جديد" && g.status!=="قص";
-      const creditBadge = g.creditDelivered ? `<p class="locked-note" style="color:var(--loss);">مسلَّم بدين — متبقٍ عليه ${(g.creditAmount-g.creditPaid).toFixed(0)} ﷼ (تابعه من "مديونية الثياب")</p>` : "";
+      const creditBadge = g.creditDelivered ? `<p class="locked-note" style="color:var(--loss);">مسلَّم بدين — متبقٍ عليه ${creditGarmentOwed(g, inv).toFixed(0)} ﷼ (تابعه من "مديونية الثياب")</p>` : "";
       return `<div class="garment-card"><span class="tag">ثوب ${i+1} — ${esc(g.fabricType)}</span>
         ${buildStepperHtml(g.status)}
         <div class="row-2">
@@ -743,7 +759,7 @@ async function addDistPayment(inv){
   });
   inv.payments = inv.payments || [];
   const cashReceiptNo = cash>0 ? nextVoucherNo() : null;
-  const newPayment = {id:Date.now()+"", date:todayStr(), cash, network, cashReceiptNo, networkReceiptNo, discount};
+  const newPayment = {id:newId(), date:todayStr(), cash, network, cashReceiptNo, networkReceiptNo, discount};
   inv.payments.push(newPayment);
   applyPaymentToBalances(newPayment);
   let autoDelivered=0;
@@ -844,7 +860,7 @@ function claimSingleTailorGarment(inv, idx, number, conflicts){
   if(!g || g.status==="تسليم" || g.status==="ملغي" || g.status==="تفصيل" || g.status==="جاهز"){ showToast("هذا الثوب ما عاد متاح للتسجيل — يمكن سجّله خياط ثاني قبلك"); $("tailorScanPicker").innerHTML=""; return; }
   g.tailor = currentUser.username; g.status = "تفصيل"; g.tailorCompletedDate = todayStr();
   const alterationsCompleted = resolvePendingAlterationsForTailor(inv);
-  state.tailorScans.push({id:Date.now()+"", tailorUsername:currentUser.username, invoiceNumber:number, date:todayStr(), claimedCount:1});
+  state.tailorScans.push({id:newId(), tailorUsername:currentUser.username, invoiceNumber:number, date:todayStr(), claimedCount:1});
   saveState(); renderAll();
   $("tailorScanInput").value=""; $("tailorScanPicker").innerHTML="";
   const parts = [`تم تسجيل ثوب لصالحك`];

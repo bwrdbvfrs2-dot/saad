@@ -1075,6 +1075,11 @@
 
 <div class="tab-panel" id="tab-report-auditLog">
 <div class="panel">
+  <h3 style="margin:0 0 10px;font-size:14px;">فحص سلامة الحسابات والمخزون</h3>
+  <p class="sub">يعيد بناء رصيد كل صندوق وكل صنف ومستحق كل مورد من الحركات المسجّلة فقط (دفعات، مبيعات، سندات، مصروفات، مرتجعات، مشتريات، رواتب، تحويلات...) ويقارنه بالرصيد الفعلي المخزّن، ويكشف أي فرق أو تكرار أو حركة معلّقة. للقراءة فقط — ما يعدّل أي شي.</p>
+  <button class="btn btn-gold btn-sm" id="runIntegrityCheckBtn">تشغيل الفحص</button>
+  <div id="integrityCheckView" style="margin-top:14px;"></div>
+  <div class="stitch"></div>
 
   <h3 style="margin:0 0 10px;font-size:14px;">سجل التدقيق</h3>
   <p class="sub">سجل بكل العمليات الحساسة (مصاريف، إقفال شهر، تعديل سعر، تحويل أموال، مرتجعات، تغييرات المستخدمين والصلاحيات) — للقراءة فقط، مخزّن بمجموعة Firestore منفصلة تماماً عن بيانات المحل، لا يتأثر بأي تعديل على الحالة العامة.</p>

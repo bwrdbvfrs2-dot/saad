@@ -110,7 +110,7 @@ function renderCustomers(){
   document.querySelectorAll(".cust-vip-toggle").forEach(cb=> cb.addEventListener("change", ()=>{
     const mobile = cb.dataset.mobile;
     let cust = findCustomerByMobile(mobile);
-    if(!cust){ cust = {id:Date.now()+"", code:nextCustomerCode(), mobile, individuals:[], loyaltyPoints:0, vip:false}; state.customers.push(cust); }
+    if(!cust){ cust = {id:newId(), code:nextCustomerCode(), mobile, individuals:[], loyaltyPoints:0, vip:false}; state.customers.push(cust); }
     cust.vip = cb.checked;
     if(cust.vip) cust.loyaltyPoints = 0;
     saveState(); renderAll();
@@ -120,7 +120,7 @@ function renderCustomers(){
 }
 function saveCustomerNotes(mobile){
   let cust = findCustomerByMobile(mobile);
-  if(!cust){ cust = {id:Date.now()+"", code:nextCustomerCode(), mobile, individuals:[], loyaltyPoints:0, vip:false}; state.customers.push(cust); }
+  if(!cust){ cust = {id:newId(), code:nextCustomerCode(), mobile, individuals:[], loyaltyPoints:0, vip:false}; state.customers.push(cust); }
   cust.notes = $("customerNotesInput").value;
   saveState();
   showToast("تم حفظ الملاحظات");
@@ -1241,6 +1241,14 @@ $("setMeasureUnit").addEventListener("change", ()=>{
     if(c.qty) BODY_CATEGORIES.forEach(cat=> c.qty[cat] = (c.qty[cat]||0) * factor);
   });
   state.invoices.forEach(inv=> inv.garments.forEach(g=>{ if(g.qtyUsed) g.qtyUsed = g.qtyUsed * factor; }));
+  // purchase history too — otherwise a linked supplier return compares the converted stock against
+  // quantities still in the old unit (and values it at a per-old-unit price)
+  const isFabric = id=> (findItemCard(id)||{}).type==="fabric";
+  state.purchases.forEach(p=>{ if(isFabric(p.itemCardId)){ p.quantity = p.quantity * factor; p.unitPrice = p.unitPrice / factor; } });
+  state.purchaseReturns.forEach(r=>{ if(isFabric(r.itemCardId)) r.quantity = r.quantity * factor; });
+  (state.stockWriteOffs||[]).forEach(w=>{ if(isFabric(w.itemCardId)) w.qty = w.qty * factor; });
+  state.salesInvoices.forEach(s=> s.items.forEach(it=>{ if(isFabric(it.itemCardId)){ it.qty = it.qty * factor; it.price = it.price / factor; it.costAtSale = (it.costAtSale||0) / factor; } }));
+  (state.salesReturns||[]).forEach(r=> r.lines.forEach(l=>{ if(isFabric(l.itemCardId)){ l.qty = l.qty * factor; l.price = l.price / factor; l.costAtSale = (l.costAtSale||0) / factor; } }));
   BODY_CATEGORIES.forEach(cat=> state.settings.defaultFabricQty[cat] = (state.settings.defaultFabricQty[cat]||0) * factor);
   state.settings.fabricQtyBuffer = state.settings.fabricQtyBuffer * factor;
   state.settings.measureUnit = newUnit;
@@ -1415,11 +1423,12 @@ $("setWaPromo").addEventListener("input", ()=>{
     const amount = parseFloat($("vatPaymentAmount").value)||0;
     const note = $("vatPaymentNote").value.trim();
     if(amount<=0){ showToast("أدخل مبلغ صحيح"); return; }
-    state.vatPayments.push({id:Date.now()+"", date, amount, note, recordedBy:currentUser.username});
+    state.vatPayments.push({id:newId(), date, amount, note, recordedBy:currentUser.username});
     saveState(); renderVatLedger();
     $("vatPaymentAmount").value=""; $("vatPaymentNote").value="";
     showToast("تم تسجيل دفعة الضريبة");
   });
   $("loadAuditLogBtn").addEventListener("click", loadAndRenderAuditLog);
+  $("runIntegrityCheckBtn").addEventListener("click", renderIntegrityCheck);
   $("submitReturnBtn").addEventListener("click", submitInvoiceReturn);
 })();

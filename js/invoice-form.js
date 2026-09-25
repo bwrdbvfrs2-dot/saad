@@ -94,7 +94,7 @@ function addSeason(){
   const endDate = $("seasonEnd").value;
   if(!startDate || !endDate){ showToast("حدد تاريخ البداية والنهاية"); return; }
   if(endDate < startDate){ showToast("تاريخ النهاية قبل البداية؟"); return; }
-  state.seasons.push({id:Date.now()+"", name, startDate, endDate, capacity:0});
+  state.seasons.push({id:newId(), name, startDate, endDate, capacity:0});
   saveState(); renderAll();
   $("seasonName").value=""; $("seasonStart").value=""; $("seasonEnd").value="";
   showToast("تم إضافة الموسم — حدد قدرة كل خياط من شاشة المستخدمين عشان تحتسب الطاقة");
@@ -188,6 +188,7 @@ function computeShiftExpected(username, date){
   state.vouchers.forEach(v=>{ if(v.date===date && ownBox(v.boxId)) otherMoves.push({label:`سند ${v.type==="receipt"?"قبض":"صرف"} ${v.voucherNo}`, amount: v.type==="receipt" ? v.amount : -v.amount}); });
   state.invoiceReturns.forEach(r=>{ if(r.date===date && r.refundAmount && ownBox(r.boxId)) otherMoves.push({label:`استرداد مرتجع فاتورة ${r.invoiceNumber}`, amount:-r.refundAmount}); });
   (state.salesReturns||[]).forEach(r=>{ if(r.date===date && r.refundAmount && ownBox(r.boxId)) otherMoves.push({label:`استرداد مرتجع مبيعات ${r.saleInvoiceNumber}`, amount:-r.refundAmount}); });
+  (state.legacyPayments||[]).forEach(l=>{ if(l.date===date && l.recordedBy===username) otherMoves.push({label:"تحصيل قطعة قديمة (سجل سابق)", amount:l.amount}); });
   state.purchases.forEach(p=>{ if(p.date===date && p.payStatus==="paid" && ownBox(p.sourceBoxId)) otherMoves.push({label:`فاتورة شراء ${p.invoiceNo}`, amount:-p.total}); });
   state.purchaseReturns.forEach(r=>{ if(r.date===date && r.payStatus==="paid" && ownBox(r.boxId)) otherMoves.push({label:"مرتجع مشتريات (مبلغ مسترد)", amount:r.value}); });
   state.suppliers.forEach(s=> (s.payments||[]).forEach(sp=>{ if(sp.date===date && ownBox(sp.boxId)) otherMoves.push({label:`تسديد مورد ${s.name}`, amount:-sp.amount}); }));
@@ -260,7 +261,7 @@ async function saveShiftClosing(){
   if(!a){ showToast("اضغط احسب أولاً"); return; }
   const snapshot = JSON.parse(JSON.stringify(state));
   state.shiftClosings.push({
-    id: Date.now()+"", username: currentUser.username, date: a.date,
+    id: newId(), username: currentUser.username, date: a.date,
     actualCash:a.actualCash, networkActual:a.networkActual, transfersActual:a.transfersActual, pettyExpenses:a.pettyExpenses,
     systemCash:a.expected.sysCash, systemNetwork:a.expected.sysNetwork, systemTransfers:a.expected.sysTransfers,
     systemTotal:a.expected.total, physicalTotal:a.physicalTotal, diff:a.diff, timestamp:serverDate().toISOString(),
@@ -303,7 +304,7 @@ async function submitVoucher(){
   const snapshot = JSON.parse(JSON.stringify(state));
   box.balance += (type==="receipt" ? amount : -amount);
   const voucherNo = type==="receipt" ? nextReceiptVoucherNo() : nextPaymentVoucherNo();
-  state.vouchers.push({id:Date.now()+"", voucherNo, type, amount, party, reason, boxId, boxName:box.name, date:todayStr(), recordedBy:currentUser.username});
+  state.vouchers.push({id:newId(), voucherNo, type, amount, party, reason, boxId, boxName:box.name, date:todayStr(), recordedBy:currentUser.username});
   if(await saveStateWithRollback(snapshot)){
     logAudit("voucher_recorded", {voucherNo, type, amount, party, reason, boxName:box.name});
     $("voucherAmount").value=""; $("voucherParty").value=""; $("voucherReason").value="";
@@ -373,11 +374,15 @@ function transferFunds(fromBoxId, toOwnerUsername, toBoxId, amount, purpose){
     const toBox = findCashBox(toBoxId);
     if(!toBox){ fromBox.balance += amount; return {ok:false,msg:"صندوق الوجهة غير موجود"}; }
     toBox.balance += amount;
+    // kept so each box's balance can be traced back to its movements (this used to leave no record
+    // at all besides the audit log, so cash vs network per box couldn't be reconciled)
+    if(!state.boxTransfers) state.boxTransfers = [];
+    state.boxTransfers.push({id:newId(), date:todayStr(), owner:fromBox.owner, fromBoxId, toBoxId, amount, purpose:purpose||"", recordedBy:currentUser.username});
     return {ok:true, instant:true};
   } else {
     // cross-user transfer: pending request, amount already reserved (deducted) from sender
     state.transferRequests.push({
-      id: Date.now()+"", seq: null,
+      id: newId(), seq: null,
       fromBoxId, fromOwner: fromBox.owner, toOwner: toOwnerUsername,
       amount, purpose: purpose||"", status:"pending",
       createdAt: todayStr(), resolvedAt: null, voucherNumber: null,
@@ -418,7 +423,7 @@ function addExpense(data){
   // snapshot the sub-item's label so this expense's history stays readable even if the sub-item is later renamed/deleted
   const subItem = cat && data.subItemId ? (cat.subItems||[]).find(s=>s.id===data.subItemId) : null;
   state.expenses.push({
-    id: Date.now()+"", invoiceNumber:data.invoiceNumber, taxNumber:data.taxNumber, date:data.date,
+    id: newId(), invoiceNumber:data.invoiceNumber, taxNumber:data.taxNumber, date:data.date,
     categoryId:data.categoryId, subItemId: subItem?subItem.id:"", subItemLabel: subItem?subItem.label:"",
     amount:data.amount, paidTo:data.paidTo, storeName:data.storeName,
     notes:data.notes, sourceBoxId:data.sourceBoxId, recordedBy: currentUser.username, vatStatus:data.vatStatus,
@@ -673,7 +678,7 @@ function addPaymentTemp(){
   if(cash<=0 && network<=0){ showToast("أدخل مبلغ كاش أو شبكة"); return; }
   if(network>0 && !networkReceiptNo){ showToast("أدخل رقم سند الشبكة"); return; }
   const cashReceiptNo = cash>0 ? nextVoucherNo() : null;
-  paymentsListTemp.push({id:Date.now()+"", date:todayStr(), cash, network, cashReceiptNo, networkReceiptNo});
+  paymentsListTemp.push({id:newId(), date:todayStr(), cash, network, cashReceiptNo, networkReceiptNo});
   $("newPayCash").value=""; $("newPayNetwork").value=""; $("newPayReceipt").value="";
   renderPaymentsList();
   if(cashReceiptNo) showToast(`تم إصدار سند كاش رقم ${cashReceiptNo} تلقائياً`);
@@ -765,7 +770,7 @@ function applyInvoiceReturn(inv, {reason, refundAmount, boxId, responsibleUserna
     reverseGarmentAdvisory(g); returnFabricForGarment(g); reverseAddonsStock(g);
     g.status = "ملغي"; g.cancelledDate = todayStr();
   });
-  state.invoiceReturns.push({id:Date.now()+"", invoiceId:inv.id, invoiceNumber:inv.number, reason, refundAmount, boxId, lostCost, date:todayStr(), recordedBy:currentUser.username});
+  state.invoiceReturns.push({id:newId(), invoiceId:inv.id, invoiceNumber:inv.number, reason, refundAmount, boxId, lostCost, date:todayStr(), recordedBy:currentUser.username});
   reverseInvoiceLoyaltyIfNeeded(inv, loyaltyNote);
   return {lostCost, wasCut, wageClawbacks};
 }

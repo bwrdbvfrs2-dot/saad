@@ -19,7 +19,7 @@ function requestOpeningBalanceEdit(cardId){
     showToast("فيه طلب سابق لنفس الصنف بانتظار موافقة المدير");
     return;
   }
-  state.openingBalanceEditRequests.push({id:Date.now()+"", cardId, cardName:card.name, requestedBy:currentUser.username, requestedAt:new Date().toISOString(), status:"pending"});
+  state.openingBalanceEditRequests.push({id:newId(), cardId, cardName:card.name, requestedBy:currentUser.username, requestedAt:new Date().toISOString(), status:"pending"});
   saveState(); renderAll();
   showToast("تم إرسال طلب التعديل للمدير");
 }
@@ -153,7 +153,7 @@ function renderItemCards(){
     card.openingBalance = newVal;
     if(!isFirstEntry){
       if(!state.openingBalanceAdjustments) state.openingBalanceAdjustments=[];
-      state.openingBalanceAdjustments.push({id:Date.now()+"", date:todayStr(), cardId:card.id, cardName:card.name, oldValue:oldVal, newValue:newVal, username:currentUser.username});
+      state.openingBalanceAdjustments.push({id:newId(), date:todayStr(), cardId:card.id, cardName:card.name, oldValue:oldVal, newValue:newVal, username:currentUser.username});
       if(hasSessionGrant){
         openingBalanceSessionGrants.delete(card.id); // single use — the one-time admin approval is now spent
         const req = (state.openingBalanceEditRequests||[]).find(r=>r.cardId===card.id && r.requestedBy===currentUser.username && r.status==="approved");
@@ -279,7 +279,7 @@ async function writeOffItemCard(id){
   const snapshot = JSON.parse(JSON.stringify(state));
   card.stockQty = (card.stockQty||0) - avail; // brings cardAvailableQty(card) to exactly 0
   card.active = false;
-  state.stockWriteOffs.push({id:Date.now()+"", itemCardId:id, date:todayStr(), qty:avail, recordedBy:currentUser.username});
+  state.stockWriteOffs.push({id:newId(), itemCardId:id, date:todayStr(), qty:avail, recordedBy:currentUser.username});
   if(await saveStateWithRollback(snapshot)){
     logAudit("item_written_off", {cardName:card.name, qty:avail});
     showToast("تم إتلاف الصنف وتصفير رصيده");
@@ -303,7 +303,7 @@ function renderSuppliers(){
 function addSupplier(){
   const name = $("newSupplierName").value.trim(), phone = $("newSupplierPhone").value.trim();
   if(!name){ showToast("أدخل اسم المورد"); return; }
-  state.suppliers.push({id:Date.now()+"", name, phone, notes:"", balance:0});
+  state.suppliers.push({id:newId(), name, phone, notes:"", balance:0});
   $("newSupplierName").value=""; $("newSupplierPhone").value="";
   saveState(); renderAll(); showToast("تم إضافة المورد");
 }
@@ -320,7 +320,7 @@ async function paySupplier(supId){
   const snapshot = JSON.parse(JSON.stringify(state));
   box.balance -= amount; s.balance -= amount;
   s.payments = s.payments||[];
-  s.payments.push({id:Date.now()+"", date:todayStr(), amount, boxId:box.id, recordedBy:currentUser.username});
+  s.payments.push({id:newId(), date:todayStr(), amount, boxId:box.id, recordedBy:currentUser.username});
   if(await saveStateWithRollback(snapshot)){
     logAudit("supplier_paid", {supplierName:s.name, amount});
     showToast("تم تسديد المورد");
@@ -380,7 +380,7 @@ function addManualItemCard(){
     origin = $("manualCardOrigin").value; season = $("manualCardSeason").value;
     if(!origin || !season){ showToast("صنف قماش جديد — لازم تحدد الصناعة والموسم قبل الحفظ"); return; }
   }
-  const card = {id:Date.now()+"", code:nextItemCode(), name, type, unit: type==="fabric"?state.settings.measureUnit:"piece",
+  const card = {id:newId(), code:nextItemCode(), name, type, unit: type==="fabric"?state.settings.measureUnit:"piece",
     currentCost:cost, openingBalance:qty, stockQty:0, reservedQty:0, active:true, minSalePrice:0, minPrices: type==="fabric"?{"رجال":0,"ولادي":0,"طفل":0}:{},
     origin: type==="fabric" ? origin : undefined, season: type==="fabric" ? season : undefined,
     prices: type==="fabric" ? {"رجال":0,"ولادي":0,"طفل":0} : undefined,
@@ -410,7 +410,7 @@ async function addPurchase(){
       origin = $("purchOrigin").value; season = $("purchSeason").value;
       if(!origin || !season){ showToast("صنف قماش جديد — لازم تحدد الصناعة والموسم قبل الحفظ"); return; }
     }
-    card = {id:Date.now()+"", code:nextItemCode(), name:itemName, type, unit: type==="fabric"?state.settings.measureUnit:"piece",
+    card = {id:newId(), code:nextItemCode(), name:itemName, type, unit: type==="fabric"?state.settings.measureUnit:"piece",
       currentCost:0, openingBalance:0, stockQty:0, reservedQty:0, active:true, minSalePrice:0, minPrices: type==="fabric"?{"رجال":0,"ولادي":0,"طفل":0}:{},
       origin: type==="fabric" ? origin : undefined, season: type==="fabric" ? season : undefined,
       prices: type==="fabric" ? {"رجال":0,"ولادي":0,"طفل":0} : undefined,
@@ -444,7 +444,7 @@ async function addPurchase(){
     });
   }
   const vatStatus = $("purchVatStatus").value;
-  state.purchases.push({id:Date.now()+"", invoiceNo, date:todayStr(), supplierId, itemCardId:card.id, quantity:qty, unitPrice, total, payStatus, sourceBoxId: payStatus==="paid"?sourceBoxId:null, recordedBy:currentUser.username, supplierInvoiceNo, imageData, vatStatus});
+  state.purchases.push({id:newId(), invoiceNo, date:todayStr(), supplierId, itemCardId:card.id, quantity:qty, unitPrice, total, payStatus, sourceBoxId: payStatus==="paid"?sourceBoxId:null, recordedBy:currentUser.username, supplierInvoiceNo, imageData, vatStatus});
   if(await saveStateWithRollback(purchaseSnapshot)){
     logAudit("purchase_recorded", {invoiceNo, itemName, qty, unitPrice, total, payStatus});
     $("purchQty").value=""; $("purchUnitPrice").value=""; $("purchItemName").value=""; $("purchTotal").value=""; $("purchItemStatus").textContent=""; $("purchOrigin").value=""; $("purchSeason").value=""; $("purchFabricExtraWrap").style.display="none"; $("purchSupplierInvNo").value=""; $("purchImageFile").value="";
@@ -602,7 +602,7 @@ async function addPurchaseReturn(){
   const snapshot = JSON.parse(JSON.stringify(state));
   card.stockQty = (card.stockQty||0) - qty;
   if(box) box.balance += value; else sup.balance -= value;
-  state.purchaseReturns.push({id:Date.now()+"", date:todayStr(), itemCardId:cardId, quantity:qty, value, supplierId, payStatus, boxId: box ? box.id : null, recordedBy:currentUser.username,
+  state.purchaseReturns.push({id:newId(), date:todayStr(), itemCardId:cardId, quantity:qty, value, supplierId, payStatus, boxId: box ? box.id : null, recordedBy:currentUser.username,
     linkedPurchaseId: linkedPurchaseId||null, purchaseInvoiceNo: linkedPurchase?linkedPurchase.invoiceNo:null, supplierInvoiceNo: linkedPurchase?linkedPurchase.supplierInvoiceNo:null});
   if(!await saveStateWithRollback(snapshot)) return;
   logAudit("purchase_return_recorded", {cardName:card.name, qty, value});
@@ -712,10 +712,10 @@ async function saveSaleInvoice(){
   const lowStock = items.filter(it=>{ const c=findItemCard(it.itemCardId); return c && cardAvailableQty(c) < it.qty; });
   const snapshot = JSON.parse(JSON.stringify(state));
   items.forEach(it=>{ const c=findItemCard(it.itemCardId); if(c) c.stockQty -= it.qty; });
-  const payment = {id:Date.now()+"", date, cash, network, receipt};
+  const payment = {id:newId(), date, cash, network, receipt};
   applyPaymentToBalances(payment);
   ensureCustomerIndividual(custMobile, custName);
-  state.salesInvoices.push({id:Date.now()+"", number, date, customerName:custName, customerMobile:custMobile, items, payment, recordedBy:currentUser.username});
+  state.salesInvoices.push({id:newId(), number, date, customerName:custName, customerMobile:custMobile, items, payment, recordedBy:currentUser.username});
   state.settings.nextSalesInvoiceNumber++;
   if(!await saveStateWithRollback(snapshot)) return; // form stays filled in so the cashier can just retry
   logAudit("sale_invoice_recorded", {number, total, cash, network});
@@ -786,7 +786,7 @@ async function submitSaleReturn(invId){
   const snapshot = JSON.parse(JSON.stringify(state));
   lines.forEach(l=>{ const c=findItemCard(l.itemCardId); if(c) c.stockQty = (c.stockQty||0) + l.qty; });
   box.balance -= refundAmount;
-  state.salesReturns.push({id:Date.now()+"", saleInvoiceId:inv.id, saleInvoiceNumber:inv.number, saleRecordedBy:inv.recordedBy, lines, refundAmount, boxId:box.id, reason, date:todayStr(), recordedBy:currentUser.username});
+  state.salesReturns.push({id:newId(), saleInvoiceId:inv.id, saleInvoiceNumber:inv.number, saleRecordedBy:inv.recordedBy, lines, refundAmount, boxId:box.id, reason, date:todayStr(), recordedBy:currentUser.username});
   if(!await saveStateWithRollback(snapshot)) return;
   logAudit("sale_invoice_returned", {number:inv.number, refundAmount, items:lines.map(l=>`${l.name} x${l.qty}`).join(", "), reason});
   $("saleReturnNumber").value=""; $("saleReturnLines").innerHTML="";

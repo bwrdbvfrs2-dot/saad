@@ -52,6 +52,14 @@ function normalizeState(){
   if(!state.customers) state.customers=[];
   if(!state.salesInvoices) state.salesInvoices=[];
   if(!state.salesReturns) state.salesReturns=[];
+  if(!state.boxTransfers) state.boxTransfers=[];
+  // records created in the same millisecond used to share an id; find-by-id then always hit the
+  // first one, leaving the other stuck for good (a transfer that could never be accepted/rejected).
+  // Nothing else references these ids, so a duplicate can safely get a fresh one.
+  ["transferRequests","mailRequests"].forEach(k=>{
+    const seen = new Set();
+    (state[k]||[]).forEach(r=>{ if(seen.has(r.id)) r.id = newId(); seen.add(r.id); });
+  });
   if(!state.addonDefs) state.addonDefs=[];
   if(!state.tailorScans) state.tailorScans=[];
   state.invoices.forEach(inv=> inv.garments.forEach(g=>{

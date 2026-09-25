@@ -423,11 +423,18 @@ function findCustomerByMobile(mobile){ return state.customers.find(c=>c.mobile==
 function isStuckReadyGarment(g){
   return g.status==="جاهز" || (g.status==="معلقة" && !!g.readyDate); // معلقة = carried over at month close
 }
+// what's still owed on a garment handed over on credit: its own tracked balance, capped by what is
+// still unpaid on the invoice as a whole — a payment taken from "مديونيات العملاء" or the
+// distribution screen goes on the invoice without touching creditPaid, so the "مديونية الثياب"
+// list kept showing the full amount owed and invited collecting it a second time
+function creditGarmentOwed(g, inv){
+  return Math.max(0, Math.min((g.creditAmount||0) - (g.creditPaid||0), invoiceRemaining(inv)));
+}
 function deliveredGarmentOwed(g, inv){
   if(g.status!=="تسليم") return 0;
   // a garment handed over on credit tracks its own balance; any other delivered garment owes
   // its share of whatever is still unpaid on the invoice
-  if(g.creditDelivered) return Math.max(0, (g.creditAmount||0) - (g.creditPaid||0));
+  if(g.creditDelivered) return creditGarmentOwed(g, inv);
   return Math.max(0, garmentRemaining(g, inv));
 }
 function getCustomerStandingAlert(mobile){
@@ -492,7 +499,7 @@ function renderCustomerNameDatalist(datalistId){
 function ensureCustomerIndividual(mobile, name){
   if(!mobile || !name) return;
   let cust = findCustomerByMobile(mobile);
-  if(!cust){ cust = {id:Date.now()+"", code:nextCustomerCode(), mobile, individuals:[], loyaltyPoints:0, vip:false}; state.customers.push(cust); }
+  if(!cust){ cust = {id:newId(), code:nextCustomerCode(), mobile, individuals:[], loyaltyPoints:0, vip:false}; state.customers.push(cust); }
   if(!cust.individuals.some(i=>i.name===name)) cust.individuals.push({id:Date.now()+"-"+Math.random().toString(36).slice(2,6), name, subCode:`${cust.code}-${cust.individuals.length+1}`});
 }
 function findLastGarmentDataForCustomer(mobile, name){

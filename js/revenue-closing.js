@@ -83,6 +83,117 @@ async function loadAndRenderAuditLog(){
     el.innerHTML = `<p class="sub">تعذّر تحميل السجل: ${esc(e.message||"خطأ غير معروف")}</p>`;
   }
 }
+// ---------------- accounts & inventory integrity check ----------------
+// Rebuilds every box balance, supplier balance and stock figure purely from the recorded movements
+// and compares them with the stored figures. Read-only. A difference means money/stock moved
+// without a record (or a record without the movement) — exactly what an audit has to surface.
+function computeIntegrityCheck(){
+  const fee = state.settings.bankFeePercent||0;
+  const exp = {}; state.cashBoxes.forEach(b=> exp[b.id]=0);
+  const untraceable = [];
+  const mainId = (u,t)=>{ const b=mainBoxOf(u,t); return b ? b.id : null; };
+  const add = (id, amt, why)=>{ if(!id || exp[id]===undefined){ untraceable.push({why, amount:amt}); return; } exp[id] += amt; };
+  const pay = (p, why)=>{
+    if((p.cash||0)+(p.network||0)<=0) return;
+    if(!p.recordedBy){ untraceable.push({why, amount:(p.cash||0)+(p.network||0)}); return; }
+    if(p.cash) add(mainId(p.recordedBy,"cash"), p.cash, why);
+    if(p.network) add(mainId(p.recordedBy,"network"), p.network*(1-fee/100), why);
+  };
+  state.invoices.forEach(inv=> (inv.payments||[]).forEach(p=> pay(p, `دفعة فاتورة ${inv.number}`)));
+  state.salesInvoices.forEach(s=>{ if(s.payment) pay(s.payment, `فاتورة مبيعات ${s.number}`); });
+  (state.legacyPayments||[]).forEach(l=> l.recordedBy ? add(mainId(l.recordedBy,"cash"), l.amount, "تحصيل قطعة قديمة") : untraceable.push({why:"تحصيل قطعة قديمة (سجل قديم بدون مستخدم)", amount:l.amount}));
+  state.vouchers.forEach(v=> add(v.boxId, v.type==="receipt" ? v.amount : -v.amount, `سند ${v.voucherNo}`));
+  state.expenses.forEach(e=> add(e.sourceBoxId, -e.amount, "مصروف"));
+  state.invoiceReturns.forEach(r=>{ if(r.refundAmount) add(r.boxId, -r.refundAmount, `استرداد مرتجع فاتورة ${r.invoiceNumber}`); });
+  (state.salesReturns||[]).forEach(r=> add(r.boxId, -r.refundAmount, `استرداد مرتجع مبيعات ${r.saleInvoiceNumber}`));
+  state.purchases.forEach(p=>{ if(p.payStatus==="paid") add(p.sourceBoxId, -p.total, `فاتورة شراء ${p.invoiceNo}`); });
+  state.purchaseReturns.forEach(r=>{ if(r.payStatus==="paid") add(r.boxId, r.value, "مرتجع مشتريات"); });
+  state.suppliers.forEach(s=> (s.payments||[]).forEach(sp=> add(sp.boxId, -sp.amount, `تسديد مورد ${s.name}`)));
+  state.payrollLedger.forEach(e=>{ if(e.type==="payment"||e.type==="advance") add(e.boxId, -e.amount, `${e.type==="advance"?"سلفة":"راتب"} ${e.username}`); });
+  state.transferRequests.forEach(t=>{
+    add(t.fromBoxId, -t.amount, "تحويل مرسل");
+    if(t.status==="accepted") add(mainId(t.toOwner,"cash"), t.amount, "تحويل مستلم");
+    if(t.status==="rejected") add(t.fromBoxId, t.amount, "تحويل مرفوض راجع");
+  });
+  (state.boxTransfers||[]).forEach(t=>{ add(t.fromBoxId, -t.amount, "تحويل بين صناديقك"); add(t.toBoxId, t.amount, "تحويل بين صناديقك"); });
+  const boxes = state.cashBoxes.map(b=>({name:`${b.owner} — ${b.name} (${typeLabel(b.type)})`, actual:b.balance, rebuilt:exp[b.id], diff:b.balance-exp[b.id]}));
+  const suppliers = state.suppliers.map(s=>{
+    let e = 0;
+    state.purchases.forEach(p=>{ if(p.supplierId===s.id && p.payStatus==="deferred") e += p.total; });
+    state.purchaseReturns.forEach(r=>{ if(r.supplierId===s.id && r.payStatus==="deferred") e -= r.value; });
+    (s.payments||[]).forEach(sp=> e -= sp.amount);
+    return {name:s.name, actual:s.balance, rebuilt:e, diff:s.balance-e};
+  });
+  const st = {}, rs = {};
+  state.itemCards.forEach(c=>{ st[c.id]=0; rs[c.id]=0; });
+  const bump = (m,id,q)=>{ if(m[id]!==undefined) m[id]+=q; };
+  state.purchases.forEach(p=> bump(st, p.itemCardId, p.quantity));
+  state.purchaseReturns.forEach(r=> bump(st, r.itemCardId, -r.quantity));
+  state.salesInvoices.forEach(s=> s.items.forEach(it=> bump(st, it.itemCardId, -it.qty)));
+  (state.salesReturns||[]).forEach(r=> r.lines.forEach(l=> bump(st, l.itemCardId, l.qty)));
+  (state.stockWriteOffs||[]).forEach(w=> bump(st, w.itemCardId, -w.qty));
+  state.invoices.forEach(inv=>{
+    (inv.freeGifts||[]).forEach(f=> bump(st, f.itemCardId, -f.qty));
+    inv.garments.forEach(g=>{
+      if(g.itemCardId && (g.stockApplied==="consumed" || (g.status==="ملغي" && g.cutDate && !g.stockApplied))) bump(st, g.itemCardId, -(g.qtyUsed||0));
+      if(g.itemCardId && g.stockApplied==="reserved") bump(rs, g.itemCardId, g.qtyUsed||0);
+      if(g.addonsStockApplied) garmentAddonsInfo(g).filter(a=>a.kind==="physical").forEach(a=> bump(st, a.itemCardId, -(a.qtyPerGarment||1)));
+    });
+  });
+  const stock = state.itemCards.map(c=>({name:c.name, actual:c.stockQty||0, rebuilt:st[c.id], diff:(c.stockQty||0)-st[c.id], reserved:c.reservedQty||0, reservedRebuilt:rs[c.id], reservedDiff:(c.reservedQty||0)-rs[c.id], available:cardAvailableQty(c)}));
+  const seenPay = {}, dupPayroll = [];
+  state.payrollLedger.filter(e=>e.type==="entitlement").forEach(e=>{ const k=e.username+" — "+e.monthLabel; if(seenPay[k]) dupPayroll.push(k); seenPay[k]=1; });
+  const seenNum = {}, dupNumbers = [];
+  state.invoices.forEach(i=>{ if(seenNum[i.number]) dupNumbers.push(i.number); seenNum[i.number]=1; });
+  const twins = [];
+  state.invoices.forEach((a,ai)=> state.invoices.slice(ai+1).forEach(b=>{
+    if(a.customerMobile && a.customerMobile===b.customerMobile && a.date===b.date &&
+       a.garments.map(g=>g.price||0).sort().join()===b.garments.map(g=>g.price||0).sort().join()) twins.push(`${a.number} و ${b.number}`);
+  }));
+  const deliveredUnpaid = [];
+  state.invoices.forEach(inv=> inv.garments.forEach((g,i)=>{
+    if(g.status==="تسليم" && !g.creditDelivered && garmentRemaining(g, inv) > 0.5) deliveredUnpaid.push(`فاتورة ${inv.number} ثوب ${i+1}: ${garmentRemaining(g, inv).toFixed(0)} ﷼`);
+  }));
+  const pendingTransfers = state.transferRequests.filter(t=>t.status==="pending");
+  const pendingRequests = state.mailRequests.filter(r=>r.status==="pending");
+  const negativeBoxes = state.cashBoxes.filter(b=>boxTotal(b) < -0.01);
+  const negativeStock = state.itemCards.filter(c=>cardAvailableQty(c) < -0.001);
+  return {boxes, suppliers, stock, untraceable, dupPayroll, dupNumbers, twins, deliveredUnpaid, pendingTransfers, pendingRequests, negativeBoxes, negativeStock,
+    openingAdjustments:(state.openingBalanceAdjustments||[]).length};
+}
+function renderIntegrityCheck(){
+  const el = $("integrityCheckView");
+  if(!el) return;
+  const r = computeIntegrityCheck();
+  const ok = v=> Math.abs(v) < 0.01;
+  const mark = good=> good ? `<span style="color:var(--profit);font-weight:800;">✓</span>` : `<span style="color:var(--loss);font-weight:800;">✗</span>`;
+  const table = (head, rows)=> `<div class="table-wrap"><table><thead><tr>${head.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.join("")||`<tr><td colspan="${head.length}">—</td></tr>`}</tbody></table></div>`;
+  const list = (title, items, goodText, reviewOnly)=> `<p style="margin:10px 0 4px;font-weight:700;">${items.length && reviewOnly ? `<span style="color:var(--gold);font-weight:800;">⚠</span>` : mark(!items.length)} ${title}</p>` + (items.length ? `<p class="sub" style="margin:0;">${items.map(esc).join("<br>")}</p>` : `<p class="sub" style="margin:0;">${goodText}</p>`);
+  const badBoxes = r.boxes.filter(b=>!ok(b.diff)).length, badSup = r.suppliers.filter(s=>!ok(s.diff)).length, badStock = r.stock.filter(s=>!ok(s.diff)||!ok(s.reservedDiff)).length;
+  const issues = badBoxes + badSup + badStock + r.dupPayroll.length + r.dupNumbers.length + r.negativeBoxes.length + r.negativeStock.length;
+  let html = `<div class="remaining-box" style="border-color:${issues?"var(--loss)":"var(--profit)"};"><span><b>${issues ? `يوجد ${issues} ملاحظة تحتاج مراجعة` : "كل الأرصدة مطابقة للحركات المسجّلة"}</b></span><span class="amt">${todayStr()}</span></div>`;
+  html += `<h4 style="margin:14px 0 6px;">1) الصناديق — الرصيد الفعلي مقابل المعاد بناؤه من الحركات</h4>` +
+    table(["","الصندوق","الفعلي","من الحركات","الفرق"], r.boxes.map(b=>`<tr><td>${mark(ok(b.diff))}</td><td>${esc(b.name)}</td><td>${fmtSar(b.actual)}</td><td>${fmtSar(b.rebuilt)}</td><td style="color:${ok(b.diff)?"inherit":"var(--loss)"};">${fmtSar(b.diff)}</td></tr>`));
+  if(r.untraceable.length){
+    const total = r.untraceable.reduce((a,u)=>a+u.amount,0);
+    html += `<p class="sub" style="margin:6px 0;">ℹ حركات قديمة بدون صندوق محدد (سُجّلت قبل تحديث التتبع — تفسّر جزءاً من أي فرق أعلاه): ${r.untraceable.length} حركة بصافي ${fmtSar(total)} ﷼.</p>`;
+  }
+  html += `<h4 style="margin:14px 0 6px;">2) مستحقات الموردين</h4>` +
+    table(["","المورد","الفعلي","من الحركات","الفرق"], r.suppliers.map(s=>`<tr><td>${mark(ok(s.diff))}</td><td>${esc(s.name)}</td><td>${fmtSar(s.actual)}</td><td>${fmtSar(s.rebuilt)}</td><td>${fmtSar(s.diff)}</td></tr>`));
+  html += `<h4 style="margin:14px 0 6px;">3) المخزون — الرصيد والمحجوز مقابل الحركات</h4>` +
+    table(["","الصنف","الرصيد","من الحركات","المحجوز","المحجوز من الفواتير","المتاح"], r.stock.map(s=>`<tr><td>${mark(ok(s.diff)&&ok(s.reservedDiff))}</td><td>${esc(s.name)}</td><td>${fmtSar(s.actual)}</td><td>${fmtSar(s.rebuilt)}</td><td>${fmtSar(s.reserved)}</td><td>${fmtSar(s.reservedRebuilt)}</td><td>${fmtSar(s.available)}</td></tr>`));
+  html += list("أرصدة صناديق بالسالب", r.negativeBoxes.map(b=>`${b.owner} — ${b.name}: ${fmtSar(boxTotal(b))} ﷼`), "ما فيه صندوق بالسالب");
+  html += list("أصناف رصيدها المتاح بالسالب", r.negativeStock.map(c=>`${c.name}: ${fmtSar(cardAvailableQty(c))}`), "ما فيه صنف بالسالب");
+  html += list("استحقاق راتب مكرر لنفس الموظف ونفس الشهر", r.dupPayroll, "ما فيه تكرار");
+  html += list("أرقام فواتير مكررة", r.dupNumbers, "ما فيه تكرار");
+  html += `<h4 style="margin:14px 0 6px;">للمراجعة (ليست بالضرورة أخطاء)</h4>`;
+  html += list("فواتير محتملة الازدواجية (نفس العميل ونفس اليوم ونفس الأسعار)", r.twins, "ما فيه", true);
+  html += list("ثياب مسلّمة وعليها مبلغ غير مسدد بدون تسجيلها كتسليم بدين", r.deliveredUnpaid, "ما فيه", true);
+  html += list("مبالغ قيد التحويل (خصمت من المرسل ولم يستلمها أحد بعد)", r.pendingTransfers.map(t=>`${t.fromOwner} ← ${t.toOwner}: ${fmtSar(t.amount)} ﷼ منذ ${t.createdAt}`), "ما فيه", true);
+  html += list("طلبات بريد معلقة بانتظار قرار", r.pendingRequests.map(q=>`طلب #${q.seq} (${q.type==="advance"?"سلفة":q.type==="leave"?"إجازة":"مرتجع خلل"})${q.amount?` — ${fmtSar(q.amount)} ﷼`:""}`), "ما فيه", true);
+  html += `<p class="sub" style="margin-top:10px;">تعديلات يدوية مسجلة على أرصدة أول المدة للأصناف: ${r.openingAdjustments} (تفاصيلها بسجل التدقيق أدناه).</p>`;
+  el.innerHTML = html;
+}
 function renderTopExpensesReport(){
   const el = $("topExpensesView");
   if(!el) return;
@@ -429,11 +540,11 @@ function renderDebtsTab(){
   const el = $("debtsList");
   const debts = [];
   state.invoices.forEach(inv=> inv.garments.forEach((g,i)=>{
-    if(g.creditDelivered && (g.creditAmount-g.creditPaid) > 0.01) debts.push({inv, g, idx:i});
+    if(g.creditDelivered && creditGarmentOwed(g, inv) > 0.01) debts.push({inv, g, idx:i});
   }));
   if(!debts.length){ el.innerHTML = emptyStateHtml("credit-card","ما فيه ديون مسجّلة حالياً."); return; }
   el.innerHTML = debts.map(({inv,g,idx})=>{
-    const owed = g.creditAmount - g.creditPaid;
+    const owed = creditGarmentOwed(g, inv);
     return `<div class="garment-card">
       <span class="tag">فاتورة ${esc(inv.number)} — ${esc(inv.customerName||"—")} (${esc(g.fabricType)})</span>
       <p class="sub" style="margin:6px 0;">القيمة الأصلية: ${g.creditAmount.toFixed(0)} ﷼ — المسدد: ${g.creditPaid.toFixed(0)} ﷼</p>
@@ -521,10 +632,10 @@ async function payCreditDebt(invId, idx){
   const receipt = receiptInp.value.trim();
   if(cash<=0 && network<=0){ showToast("أدخل مبلغ كاش أو شبكة"); return; }
   if(network>0 && !receipt){ showToast("أدخل رقم السند لدفعة الشبكة"); return; }
-  const owed = g.creditAmount - g.creditPaid;
+  const owed = creditGarmentOwed(g, inv);
   if((cash+network) - owed > 0.01){ showToast(`المبلغ أكبر من المتبقي على هذا الثوب (${owed.toFixed(0)} ريال)`); return; }
   const snapshot = JSON.parse(JSON.stringify(state));
-  const payment = {id:Date.now()+"", date:todayStr(), cash, network, receipt, discount:0};
+  const payment = {id:newId(), date:todayStr(), cash, network, receipt, discount:0};
   inv.payments = inv.payments || [];
   inv.payments.push(payment);
   applyPaymentToBalances(payment);
@@ -757,7 +868,7 @@ function addPayrollEntry(username, type, amount, boxId, note){
     if(boxTotal(box) < amount) return {ok:false,msg:`الرصيد غير كافٍ بالصندوق (المتاح ${boxTotal(box).toFixed(0)} ريال)`};
     box.balance -= amount;
   }
-  state.payrollLedger.push({id:Date.now()+"", username, type, amount, date:todayStr(), note, recordedBy:currentUser.username, boxId:(type==="payment"||type==="advance") ? boxId : null});
+  state.payrollLedger.push({id:newId(), username, type, amount, date:todayStr(), note, recordedBy:currentUser.username, boxId:(type==="payment"||type==="advance") ? boxId : null});
   return {ok:true};
 }
 

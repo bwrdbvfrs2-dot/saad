@@ -243,6 +243,10 @@ function esc(s){ if(s===undefined||s===null) return ""; return String(s).replace
 // whole riyals show with no decimals; fractional amounts (e.g. from a fractional qty × unit price) show
 // 2 decimals instead of silently rounding away halalas — a flat toFixed(0) elsewhere made a real 71.5
 // total display as "72", which looked like a calculation bug even though the underlying total was correct
+// record ids: time first (so they still sort chronologically as before) plus a random tail — a bare
+// Date.now() gave two records made in the same millisecond the same id, and every find-by-id then
+// hit the first one (e.g. a second transfer could never be accepted or rejected: money stuck in transit)
+function newId(){ return Date.now()+"-"+Math.random().toString(36).slice(2,8); }
 function fmtSar(n){ n = n||0; return Number.isInteger(Math.round(n*100)/100) ? n.toFixed(0) : n.toFixed(2); }
 // shared anatomical overlay positions for collar/chest-pocket/jabzour/cufflink images on the front
 // mannequin -- used by both the on-screen measurement-card preview and the printed cutting card,

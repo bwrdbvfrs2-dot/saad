@@ -103,7 +103,7 @@ function saveFixedItemEdit(i){
 function addFixedItem(){
   const label=$("newItemLabel").value.trim(), amount=parseFloat($("newItemAmount").value)||0;
   if(!label){ showToast("أدخل اسم البند"); return; }
-  state.settings.fixedItems.push({id:Date.now()+"", label, amount});
+  state.settings.fixedItems.push({id:newId(), label, amount});
   $("newItemLabel").value=""; $("newItemAmount").value="";
   saveState(); renderAll();
 }
@@ -125,7 +125,7 @@ function addCustomShopField(){
   const label = $("newCustomFieldLabel").value.trim();
   const value = $("newCustomFieldValue").value.trim();
   if(!label || !value){ showToast("أدخل اسم البند والقيمة"); return; }
-  state.settings.customShopFields.push({id:Date.now()+"", label, value, showOnInvoice:false});
+  state.settings.customShopFields.push({id:newId(), label, value, showOnInvoice:false});
   $("newCustomFieldLabel").value=""; $("newCustomFieldValue").value="";
   saveState(); renderAll();
   showToast("تمت إضافة البند");
@@ -156,7 +156,7 @@ function renderExpenseCategories(){
 function addExpenseCategory(){
   const label=$("newCatLabel").value.trim(), advisoryKey=$("newCatAdvisory").value||null;
   if(!label){ showToast("أدخل اسم التصنيف"); return; }
-  state.expenseCategories.push({id:Date.now()+"", label, advisoryKey, subItems:[]});
+  state.expenseCategories.push({id:newId(), label, advisoryKey, subItems:[]});
   $("newCatLabel").value=""; $("newCatAdvisory").value="";
   saveState(); renderAll();
 }
@@ -168,7 +168,7 @@ function addExpenseSubItem(catId){
   const label = inp.value.trim();
   if(!label){ showToast("أدخل اسم البند"); return; }
   if(!cat.subItems) cat.subItems=[];
-  cat.subItems.push({id:Date.now()+"", label});
+  cat.subItems.push({id:newId(), label});
   saveState(); renderAll();
   showToast("تمت إضافة البند");
 }
@@ -199,13 +199,13 @@ function addAddonDef(){
   if(!name){ showToast("أدخل اسم الملحق أو الخدمة"); return; }
   if(kind==="service"){
     const servicePrice = parseFloat($("newAddonServicePrice").value)||0;
-    state.addonDefs.push({id:Date.now()+"", name, kind:"service", servicePrice, active:true});
+    state.addonDefs.push({id:newId(), name, kind:"service", servicePrice, active:true});
   } else {
     const itemCardId = $("newAddonCard").value;
     if(!itemCardId){ showToast("اختر صنف من المخزون (أضف ملحق فعلي من المشتريات أول)"); return; }
     const qtyPerGarment = parseFloat($("newAddonQty").value)||1;
     const markupPercent = parseFloat($("newAddonMarkup").value)||0;
-    state.addonDefs.push({id:Date.now()+"", name, kind:"physical", itemCardId, qtyPerGarment, markupPercent, active:true});
+    state.addonDefs.push({id:newId(), name, kind:"physical", itemCardId, qtyPerGarment, markupPercent, active:true});
   }
   $("newAddonName").value=""; $("newAddonServicePrice").value=""; $("newAddonMarkup").value="0";
   saveState(); renderAll();
@@ -385,13 +385,13 @@ function addOffer(){
     if(!matchValue){ showToast("اختر القيمة (الصناعة أو الصنف)"); return; }
     if(requiredQty<2){ showToast("العدد المطلوب لازم يكون 2 أو أكثر"); return; }
     if(discountPercent<=0 || discountPercent>100){ showToast("أدخل نسبة خصم صحيحة"); return; }
-    state.offers.push({id:Date.now()+"", name, type, matchBy, matchValue, requiredQty, discountPercent, active:true});
+    state.offers.push({id:newId(), name, type, matchBy, matchValue, requiredQty, discountPercent, active:true});
   } else {
     const minGarments = parseInt($("offerMinGarments").value)||1;
     const giftItemCard = $("offerGiftItem").value;
     const giftQty = parseInt($("offerGiftQty").value)||1;
     if(!giftItemCard){ showToast("اختر الصنف الهدية"); return; }
-    state.offers.push({id:Date.now()+"", name, type, minGarments, giftItemCard, giftQty, active:true});
+    state.offers.push({id:newId(), name, type, minGarments, giftItemCard, giftQty, active:true});
   }
   $("newOfferName").value="";
   saveState(); renderAll();
@@ -449,7 +449,7 @@ function submitAlteration(invId, idx){
   if(!reason){ showToast("اختر سبب التعديل (أضف أسباب من الإعدادات لو القائمة فاضية)"); return; }
   if(!responsible){ showToast("اختر المتسبب"); return; }
   state.alterations.push({
-    id: Date.now()+"", alterationNumber: state.settings.nextAlterationNumber, invoiceId: invId, invoiceNumber: inv.number, garmentIndex: idx,
+    id: newId(), alterationNumber: state.settings.nextAlterationNumber, invoiceId: invId, invoiceNumber: inv.number, garmentIndex: idx,
     reason, responsible, notes: notesInp?notesInp.value.trim():"",
     status:"pending", dateReceived: todayStr(), recordedBy: currentUser.username, dateCompleted: null,
   });
@@ -494,7 +494,7 @@ function addLegacyItem(){
   if(!name){ showToast("أدخل اسم العميل"); return; }
   if(!mobile || !/^[0-9]{10}$/.test(mobile)){ showToast("رقم الجوال لازم يكون 10 أرقام بالضبط"); return; }
   if(!desc){ showToast("أدخل وصف القطعة"); return; }
-  state.legacyItems.push({id:Date.now()+"", name, mobile, desc, count, deliveredCount:0, remaining, notes, status:"جاهز", addedDate:todayStr(), deliveredDate:null});
+  state.legacyItems.push({id:newId(), name, mobile, desc, count, deliveredCount:0, remaining, notes, status:"جاهز", addedDate:todayStr(), deliveredDate:null});
   saveState(); renderAll();
   $("legName").value=""; $("legMobile").value=""; $("legDesc").value=""; $("legCount").value=""; $("legRemaining").value=""; $("legNotes").value="";
   showToast("تمت الإضافة للجرد الافتتاحي");
@@ -533,7 +533,7 @@ async function confirmLegacyDeliver(){
   item.deliveredCount = (item.deliveredCount||0) + qty;
   item.lastDeliveryDate = todayStr();
   if(amountReceived>0.01){
-    state.legacyPayments.push({id:Date.now()+"", itemId:item.id, amount:amountReceived, date:todayStr()});
+    state.legacyPayments.push({id:newId(), itemId:item.id, amount:amountReceived, date:todayStr(), recordedBy:currentUser.username});
     applyPaymentToBalances({cash:amountReceived, network:0}); // this screen has no cash/network split in its UI — treated as cash, same as the amount was previously tracked in reports but never actually credited to any box
   }
   if(item.deliveredCount>=item.count){ item.status="تم التسليم"; item.deliveredDate=todayStr(); }
