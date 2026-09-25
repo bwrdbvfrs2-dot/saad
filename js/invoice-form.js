@@ -612,6 +612,9 @@ function updateLiveTotals(){
   const directDiscountVip = isCustomerVip(($("custMobile")?.value||"").trim());
   const remainingForDirectDiscount = Math.max(0, prices - loyaltyDiscount - promoDiscount);
   const maxDirectDiscount = directDiscountVip ? remainingForDirectDiscount : Math.min(remainingForDirectDiscount, userMaxDiscountAmount(currentUser, prices));
+  if($("directDiscountLabel")) $("directDiscountLabel").textContent = directDiscountVip
+    ? "خصم مباشر (ريال) — عميل VIP: أي موظف يقدر يخصم بدون حد (حتى 100%)"
+    : userDiscountEnabled(currentUser) ? `خصم مباشر (ريال) — حدّك الأقصى ${maxDirectDiscount.toFixed(0)} ريال` : "خصم مباشر (ريال) — ما عندك صلاحية خصم (إلا لعميل VIP)";
   if(directDiscount > maxDirectDiscount){ directDiscount = maxDirectDiscount; if(directDiscountInp) directDiscountInp.value = maxDirectDiscount.toFixed(0); }
   const totalDiscount = loyaltyDiscount + promoDiscount + directDiscount;
   $("liveInvoiceTotal").textContent = prices.toFixed(0)+" ﷼";

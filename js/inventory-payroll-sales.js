@@ -821,8 +821,8 @@ function updateSaleTotal(){
     const allowed = d.vip || userDiscountEnabled(currentUser);
     directInp.disabled = !allowed;
     $("saleDirectDiscountLabel").textContent = allowed
-      ? `خصم مباشر على الإجمالي (ريال) — ${d.vip ? "عميل VIP بدون حد" : `حدّك الأقصى ${fmtSar(d.maxDirect)} ريال`}`
-      : "خصم مباشر على الإجمالي — ما عندك صلاحية خصم";
+      ? `خصم مباشر على الإجمالي (ريال) — ${d.vip ? "عميل VIP: أي موظف يقدر يخصم بدون حد (حتى 100%)" : `حدّك الأقصى ${fmtSar(d.maxDirect)} ريال`}`
+      : "خصم مباشر على الإجمالي — ما عندك صلاحية خصم (إلا لعميل VIP)";
   }
   const parts = [];
   if(d.offerDisc>0.001) parts.push(`عرض "${d.offer.name}": ${fmtSar(d.offerDisc)} ﷼`);
