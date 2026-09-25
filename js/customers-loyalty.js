@@ -447,7 +447,7 @@ function openingDebtPaymentsOf(cust){ return (state.openingDebtPayments||[]).fil
 function openingDebtRemaining(cust){
   if(!cust || !(cust.openingDebt>0)) return 0;
   const paid = openingDebtPaymentsOf(cust).reduce((a,p)=>a+(p.cash||0)+(p.network||0),0);
-  return Math.max(0, cust.openingDebt - paid);
+  return Math.max(0, cust.openingDebt - paid - (cust.openingDebtWrittenOff||0));
 }
 function totalOpeningDebtRemaining(){ return state.customers.reduce((a,c)=>a+openingDebtRemaining(c),0); }
 function getCustomerStandingAlert(mobile){

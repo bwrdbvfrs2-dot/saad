@@ -599,6 +599,7 @@ function renderCustomerDebts(){
   const el = $("customerDebtsList");
   const debts = customerDebtInvoices();
   const openings = openingDebtCustomers();
+  const isAdmin = currentUser && currentUser.role==="مدير";
   if(!debts.length && !openings.length){ el.innerHTML = emptyStateHtml("wallet","ما فيه مديونيات حالياً."); return; }
   const totalOwed = debts.reduce((a,inv)=>a+invoiceRemaining(inv),0) + openings.reduce((a,c)=>a+openingDebtRemaining(c),0);
   el.innerHTML = `<p class="sub" style="margin-bottom:10px;">عدد المديونيات: <b>${debts.length+openings.length}</b> — إجمالي المتبقي: <b style="color:var(--loss);">${totalOwed.toFixed(0)} ﷼</b></p>` +
@@ -616,6 +617,17 @@ function renderCustomerDebts(){
           <button class="btn btn-gold btn-sm" onclick="settleOpeningDebt('${c.id}')">سداد</button>
           <a class="btn btn-ghost btn-sm" target="_blank" href="${waLink(c.mobile, buildOpeningDebtReminderMessage(c))}">تذكير</a>
         </div>
+        ${isAdmin ? `<div class="stitch"></div>
+        <p class="sub" style="margin:0 0 6px;font-weight:700;">إجراءات المدير</p>
+        <div class="row-2">
+          <div class="field" style="margin-bottom:0;"><label>المبلغ الأصلي الصحيح (ريال)</label><input type="number" class="od-edit-amount" data-cust="${c.id}" min="0" value="${c.openingDebt}"></div>
+          <div class="field" style="margin-bottom:0;"><label>السبب</label><input type="text" class="od-admin-reason" data-cust="${c.id}" placeholder="مثلاً: غلط بالإدخال / العميل متوفى"></div>
+        </div>
+        <div class="actions-row" style="margin-top:8px;">
+          <button class="btn btn-ghost btn-sm" onclick="editOpeningDebt('${c.id}')">تعديل المبلغ</button>
+          <button class="btn btn-ghost btn-sm" onclick="writeOffOpeningDebt('${c.id}')">إتلاف الدين</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteOpeningDebt('${c.id}')">حذف الدين</button>
+        </div>` : ""}
       </div>`;
     }).join("") +
     debts.map(inv=>{
@@ -689,6 +701,63 @@ async function addOpeningDebtCustomer(){
     logAudit("opening_debt_added", {customerCode:cust.code, mobile, amount});
     ["odName","odMobile","odAmount","odNote"].forEach(id=> $(id).value="");
     showToast(`تم حفظ العميل — كوده ${cust.code} — وعليه دين سابق ${amount.toFixed(0)} ريال`);
+  }
+}
+// ---- admin-only corrections of an opening debt. Each one is audited with the old and new figures.
+function openingDebtAdminCheck(custId){
+  if(!currentUser || currentUser.role!=="مدير"){ showToast("هذا الإجراء للمدير فقط"); return null; }
+  const cust = state.customers.find(c=>c.id===custId);
+  if(!cust || !(cust.openingDebt>0)) return null;
+  return cust;
+}
+function openingDebtAdminReason(custId){ return (document.querySelector(`.od-admin-reason[data-cust="${custId}"]`)||{}).value?.trim() || ""; }
+async function editOpeningDebt(custId){
+  const cust = openingDebtAdminCheck(custId); if(!cust) return;
+  const newAmount = parseFloat(document.querySelector(`.od-edit-amount[data-cust="${custId}"]`).value);
+  const paid = openingDebtPaymentsOf(cust).reduce((a,p)=>a+(p.cash||0)+(p.network||0),0);
+  const floor = paid + (cust.openingDebtWrittenOff||0);
+  if(!(newAmount>0)){ showToast("أدخل مبلغ صحيح — ولو تبي تلغيه استخدم الحذف"); return; }
+  if(newAmount - floor < -0.01){ showToast(`المبلغ ما يقل عن المسدد منه (${floor.toFixed(0)} ريال)`); return; }
+  if(Math.abs(newAmount - cust.openingDebt) < 0.01){ showToast("نفس المبلغ الحالي"); return; }
+  const reason = openingDebtAdminReason(custId);
+  if(!reason){ showToast("اكتب سبب التعديل"); return; }
+  const oldAmount = cust.openingDebt;
+  const snapshot = JSON.parse(JSON.stringify(state));
+  cust.openingDebt = newAmount;
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("opening_debt_edited", {customerCode:cust.code, oldAmount, newAmount, reason});
+    showToast(`تم تعديل الدين السابق للعميل ${cust.code} من ${oldAmount.toFixed(0)} إلى ${newAmount.toFixed(0)} ريال`);
+  }
+}
+async function writeOffOpeningDebt(custId){
+  const cust = openingDebtAdminCheck(custId); if(!cust) return;
+  const remaining = openingDebtRemaining(cust);
+  if(remaining<=0.01){ showToast("ما عليه متبقي"); return; }
+  const reason = openingDebtAdminReason(custId);
+  if(!reason){ showToast("اكتب سبب الإتلاف"); return; }
+  if(!await showConfirm(`إتلاف المتبقي من الدين السابق على العميل ${cust.code} (${remaining.toFixed(0)} ريال)؟ يختفي من المديونيات والتنبيهات ويبقى مسجّلاً في سجل التدقيق.`)) return;
+  const snapshot = JSON.parse(JSON.stringify(state));
+  // the debt was never booked as revenue, so writing it off moves no money and touches no P&L figure
+  cust.openingDebtWrittenOff = (cust.openingDebtWrittenOff||0) + remaining;
+  cust.openingDebtWriteOffs = (cust.openingDebtWriteOffs||[]).concat([{date:todayStr(), amount:remaining, reason, by:currentUser.username}]);
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("opening_debt_written_off", {customerCode:cust.code, amount:remaining, reason});
+    showToast(`تم إتلاف ${remaining.toFixed(0)} ريال من الدين السابق للعميل ${cust.code}`);
+  }
+}
+async function deleteOpeningDebt(custId){
+  const cust = openingDebtAdminCheck(custId); if(!cust) return;
+  // collected payments are real money already in the boxes — deleting the debt under them would orphan them
+  if(openingDebtPaymentsOf(cust).length){ showToast("انسدد جزء من هذا الدين — ما ينحذف. عدّل المبلغ أو أتلف المتبقي"); return; }
+  const reason = openingDebtAdminReason(custId);
+  if(!reason){ showToast("اكتب سبب الحذف"); return; }
+  if(!await showConfirm(`حذف الدين السابق (${cust.openingDebt.toFixed(0)} ريال) عن العميل ${cust.code} نهائياً؟ العميل نفسه يبقى مسجّلاً.`)) return;
+  const snapshot = JSON.parse(JSON.stringify(state));
+  const amount = cust.openingDebt;
+  ["openingDebt","openingDebtDate","openingDebtBy","openingDebtNote","openingDebtWrittenOff","openingDebtWriteOffs"].forEach(k=> delete cust[k]);
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("opening_debt_deleted", {customerCode:cust.code, amount, reason});
+    showToast(`تم حذف الدين السابق عن العميل ${cust.code}`);
   }
 }
 async function settleOpeningDebt(custId){
