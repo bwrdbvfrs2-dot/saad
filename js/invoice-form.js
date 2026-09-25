@@ -187,6 +187,7 @@ function computeShiftExpected(username, date){
   const otherMoves = [];
   state.vouchers.forEach(v=>{ if(v.date===date && ownBox(v.boxId)) otherMoves.push({label:`سند ${v.type==="receipt"?"قبض":"صرف"} ${v.voucherNo}`, amount: v.type==="receipt" ? v.amount : -v.amount}); });
   state.invoiceReturns.forEach(r=>{ if(r.date===date && r.refundAmount && ownBox(r.boxId)) otherMoves.push({label:`استرداد مرتجع فاتورة ${r.invoiceNumber}`, amount:-r.refundAmount}); });
+  (state.salesReturns||[]).forEach(r=>{ if(r.date===date && r.refundAmount && ownBox(r.boxId)) otherMoves.push({label:`استرداد مرتجع مبيعات ${r.saleInvoiceNumber}`, amount:-r.refundAmount}); });
   state.purchases.forEach(p=>{ if(p.date===date && p.payStatus==="paid" && ownBox(p.sourceBoxId)) otherMoves.push({label:`فاتورة شراء ${p.invoiceNo}`, amount:-p.total}); });
   state.purchaseReturns.forEach(r=>{ if(r.date===date && r.payStatus==="paid" && ownBox(r.boxId)) otherMoves.push({label:"مرتجع مشتريات (مبلغ مسترد)", amount:r.value}); });
   state.suppliers.forEach(s=> (s.payments||[]).forEach(sp=>{ if(sp.date===date && ownBox(sp.boxId)) otherMoves.push({label:`تسديد مورد ${s.name}`, amount:-sp.amount}); }));

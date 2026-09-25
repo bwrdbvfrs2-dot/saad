@@ -728,6 +728,68 @@ function renderSalesInvoicesList(){
     const total = inv.items.reduce((a,it)=>a+it.qty*it.price,0);
     return `<tr><td>${esc(inv.number)}</td><td>${inv.date}</td><td>${esc(inv.customerName)}</td><td>${fmtSar(total)} ﷼</td></tr>`;
   }).join("") : `<tr><td colspan="4">${emptyStateHtml("shopping-bag","ما فيه فواتير مبيعات بعد.")}</td></tr>`;
+  renderSaleReturnsLog();
+}
+// ---------------- sales invoice returns ----------------
+function renderSaleReturnsLog(){
+  const panel = $("saleReturnPanel");
+  if(!panel || !currentUser) return;
+  panel.style.display = currentUser.role==="مدير" ? "" : "none";
+  const rows = (state.salesReturns||[]).slice().reverse();
+  $("saleReturnsBody").innerHTML = rows.length ? rows.map(r=>`<tr><td>${r.date}</td><td>${esc(r.saleInvoiceNumber)}</td><td>${r.lines.map(l=>`${esc(l.name)} ×${l.qty}`).join("، ")}</td><td>${fmtSar(r.refundAmount||0)} ﷼</td><td>${esc(r.reason||"—")}</td><td>${esc(r.recordedBy)}</td></tr>`).join("")
+    : `<tr><td colspan="6" class="sub" style="text-align:center;padding:12px;">ما فيه مرتجعات مبيعات بعد.</td></tr>`;
+}
+function loadSaleReturnLines(){
+  const wrap = $("saleReturnLines");
+  const num = $("saleReturnNumber").value.trim();
+  const inv = state.salesInvoices.find(s=>s.number===num);
+  if(!inv){ wrap.innerHTML = ""; showToast("ما فيه فاتورة مبيعات بهذا الرقم"); return; }
+  const lines = inv.items.map((it,i)=>({it, i, left: it.qty - saleLineReturnedQty(inv, i)}));
+  if(!lines.some(l=>l.left>0.0001)){ wrap.innerHTML = `<p class="sub">كل أصناف هذي الفاتورة مرتجعة بالكامل مسبقاً.</p>`; return; }
+  wrap.innerHTML = `<p class="sub" style="margin:0 0 8px;">فاتورة ${esc(inv.number)} — ${inv.date} — ${esc(inv.customerName||"—")}</p>` +
+    lines.map(({it,i,left})=>`<div class="garment-card"><div class="row-3" style="align-items:flex-end;">
+      <div class="field" style="margin-bottom:0;"><label>${esc(it.name)} — ${fmtSar(it.price)} ﷼ للوحدة</label><p class="sub" style="margin:0;">المباع ${it.qty}${left<it.qty?` — المتبقي القابل للترجيع ${left}`:""}</p></div>
+      <div class="field" style="margin-bottom:0;"><label>الكمية المرتجعة</label><input type="number" class="sr-qty" data-line="${i}" min="0" max="${left}" step="0.1" placeholder="0" ${left<=0.0001?"disabled":""}></div>
+    </div></div>`).join("") +
+    `<div class="row-2" style="margin-top:8px;">
+      <div class="field"><label>الصندوق اللي يُرد منه المبلغ</label><select id="saleReturnBox">${userBoxes(currentUser.username).map(b=>`<option value="${b.id}">${esc(b.name)} (${typeLabel(b.type)}) — ${boxTotal(b).toFixed(0)} ﷼</option>`).join("")}</select></div>
+      <div class="field"><label>سبب الترجيع</label><input type="text" id="saleReturnReason" placeholder="مثلاً: مقاس غير مناسب"></div>
+    </div>
+    <p class="sub" id="saleReturnTotalNote">المبلغ المسترد: 0 ﷼</p>
+    <button class="btn btn-gold btn-sm" onclick="submitSaleReturn('${inv.id}')">تسجيل المرتجع</button>`;
+  wrap.querySelectorAll(".sr-qty").forEach(inp=> inp.addEventListener("input", ()=>{
+    const total = Array.from(wrap.querySelectorAll(".sr-qty")).reduce((a,x)=>a+(parseFloat(x.value)||0)*inv.items[+x.dataset.line].price,0);
+    $("saleReturnTotalNote").textContent = `المبلغ المسترد: ${fmtSar(total)} ﷼`;
+  }));
+}
+async function submitSaleReturn(invId){
+  if(!currentUser || currentUser.role!=="مدير"){ showToast("ترجيع فواتير المبيعات متاح للمدير فقط"); return; }
+  const inv = state.salesInvoices.find(s=>s.id===invId);
+  if(!inv){ showToast("الفاتورة غير موجودة"); return; }
+  const reason = ($("saleReturnReason").value||"").trim();
+  if(!reason){ showToast("أدخل سبب الترجيع"); return; }
+  const lines = [];
+  for(const inp of document.querySelectorAll("#saleReturnLines .sr-qty")){
+    const qty = parseFloat(inp.value)||0;
+    if(qty<=0) continue;
+    const i = +inp.dataset.line, it = inv.items[i];
+    const left = it.qty - saleLineReturnedQty(inv, i);
+    if(qty - left > 0.0001){ showToast(`كمية "${it.name}" المرتجعة أكبر من المتبقي بالفاتورة (${left})`); return; }
+    lines.push({lineIdx:i, itemCardId:it.itemCardId, name:it.name, qty, price:it.price, costAtSale:it.costAtSale||0});
+  }
+  if(!lines.length){ showToast("أدخل كمية مرتجعة لصنف واحد على الأقل"); return; }
+  const refundAmount = lines.reduce((a,l)=>a+l.qty*l.price,0);
+  const box = findCashBox($("saleReturnBox").value);
+  if(!box){ showToast("اختر الصندوق"); return; }
+  if(boxTotal(box) < refundAmount){ showToast(`رصيد الصندوق (${boxTotal(box).toFixed(0)} ريال) أقل من المبلغ المسترد`); return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
+  lines.forEach(l=>{ const c=findItemCard(l.itemCardId); if(c) c.stockQty = (c.stockQty||0) + l.qty; });
+  box.balance -= refundAmount;
+  state.salesReturns.push({id:Date.now()+"", saleInvoiceId:inv.id, saleInvoiceNumber:inv.number, saleRecordedBy:inv.recordedBy, lines, refundAmount, boxId:box.id, reason, date:todayStr(), recordedBy:currentUser.username});
+  if(!await saveStateWithRollback(snapshot)) return;
+  logAudit("sale_invoice_returned", {number:inv.number, refundAmount, items:lines.map(l=>`${l.name} x${l.qty}`).join(", "), reason});
+  $("saleReturnNumber").value=""; $("saleReturnLines").innerHTML="";
+  showToast(`تم تسجيل مرتجع فاتورة المبيعات ${inv.number} — المبلغ المسترد ${fmtSar(refundAmount)} ﷼ ورجعت الكمية للمخزون`);
 }
 
 function computeItemSalesTotals(){
@@ -743,6 +805,11 @@ function computeItemSalesTotals(){
     if(!totals[it.itemCardId]) totals[it.itemCardId] = {qty:0, revenue:0};
     totals[it.itemCardId].qty += it.qty||0;
     totals[it.itemCardId].revenue += (it.qty||0)*(it.price||0);
+  }));
+  (state.salesReturns||[]).forEach(r=> r.lines.forEach(l=>{
+    if(!totals[l.itemCardId]) totals[l.itemCardId] = {qty:0, revenue:0};
+    totals[l.itemCardId].qty -= l.qty;
+    totals[l.itemCardId].revenue -= l.qty*l.price;
   }));
   return totals;
 }
@@ -760,6 +827,11 @@ function computeVatSummary(from, to){
     if(!inDateRange(inv.date, from, to)) return;
     const total = inv.items.reduce((a,it)=>a+it.qty*it.price,0);
     outputVat += outputVatFromTotal(total); salesTotal += total;
+  });
+  // returned goods reverse their output VAT in the period the return happens
+  salesReturnsInRange(from, to).forEach(r=>{
+    const total = saleReturnValue(r);
+    outputVat -= outputVatFromTotal(total); salesTotal -= total;
   });
   state.purchases.forEach(p=>{
     if(!inDateRange(p.date, from, to)) return;

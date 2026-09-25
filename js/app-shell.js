@@ -51,6 +51,7 @@ function normalizeState(){
   if(!state.purchaseReturns) state.purchaseReturns=[];
   if(!state.customers) state.customers=[];
   if(!state.salesInvoices) state.salesInvoices=[];
+  if(!state.salesReturns) state.salesReturns=[];
   if(!state.addonDefs) state.addonDefs=[];
   if(!state.tailorScans) state.tailorScans=[];
   state.invoices.forEach(inv=> inv.garments.forEach(g=>{

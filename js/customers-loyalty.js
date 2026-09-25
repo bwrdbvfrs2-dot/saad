@@ -515,7 +515,7 @@ function renderCustomerPicker(mobileInputId, nameInputId, pickerWrapId){
 function customerTotalSpend(mobile){
   let total = 0;
   state.invoices.forEach(inv=>{ if(inv.customerMobile===mobile) total += invoiceSaleTotal(inv); });
-  state.salesInvoices.forEach(inv=>{ if(inv.customerMobile===mobile) total += inv.items.reduce((a,it)=>a+it.qty*it.price,0); });
+  state.salesInvoices.forEach(inv=>{ if(inv.customerMobile===mobile) total += inv.items.reduce((a,it)=>a+it.qty*it.price,0) - saleReturnsOf(inv).reduce((a,r)=>a+saleReturnValue(r),0); });
   return total;
 }
 function customerTier(mobile){
@@ -766,11 +766,23 @@ function garmentsCutInMonth(monthLabel){
 function salesInvoiceProfit(inv){
   return inv.items.reduce((a,it)=>a+((it.price-(it.costAtSale||0))*it.qty),0);
 }
+// ---------------- sales returns ----------------
+// a return is booked on the day it happens (its own month / VAT period), never back-dated into the
+// original sale — the same way a garment return reverses revenue in the month it's cancelled
+function saleReturnsOf(inv){ return (state.salesReturns||[]).filter(r=>r.saleInvoiceId===inv.id); }
+function saleLineReturnedQty(inv, lineIdx){
+  return saleReturnsOf(inv).reduce((a,r)=>a+r.lines.filter(l=>l.lineIdx===lineIdx).reduce((s,l)=>s+l.qty,0),0);
+}
+function saleReturnValue(r){ return r.lines.reduce((a,l)=>a+l.qty*l.price,0); }
+function saleReturnProfit(r){ return r.lines.reduce((a,l)=>a+l.qty*(l.price-(l.costAtSale||0)),0); }
+function salesReturnsInRange(from, to){ return (state.salesReturns||[]).filter(r=>inDateRange(r.date, from, to)); }
 function legacySoldProfitForMonth(monthLabel){
   return state.legacyPayments.filter(p=>(p.date||"").slice(0,7)===monthLabel).reduce((a,p)=>a+p.amount,0);
 }
 function totalSalesProfitForMonth(monthLabel){
-  return state.salesInvoices.filter(inv=>(inv.date||"").slice(0,7)===monthLabel).reduce((a,inv)=>a+salesInvoiceProfit(inv),0) + legacySoldProfitForMonth(monthLabel);
+  return state.salesInvoices.filter(inv=>(inv.date||"").slice(0,7)===monthLabel).reduce((a,inv)=>a+salesInvoiceProfit(inv),0)
+    - (state.salesReturns||[]).filter(r=>(r.date||"").slice(0,7)===monthLabel).reduce((a,r)=>a+saleReturnProfit(r),0)
+    + legacySoldProfitForMonth(monthLabel);
 }
 function currentFixedShare(extra=0, monthLabel=state.settings.currentMonth){
   const n = garmentsCutInMonth(monthLabel)+extra;

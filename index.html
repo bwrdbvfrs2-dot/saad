@@ -700,6 +700,18 @@
   <div class="stitch"></div>
   <h3 style="margin:0 0 10px;font-size:14px;">سجل فواتير المبيعات</h3>
   <div class="table-wrap"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>العميل</th><th>الإجمالي</th></tr></thead><tbody id="salesInvoicesBody"></tbody></table></div>
+  <div id="saleReturnPanel">
+    <div class="stitch"></div>
+    <h3 style="margin:0 0 6px;font-size:14px;">ترجيع فاتورة مبيعات</h3>
+    <p class="sub">العميل يرجّع صنف (أو جزء منه) — الكمية ترجع للمخزون، والمبلغ يُرد من الصندوق اللي تختاره. متاح للمدير فقط.</p>
+    <div class="row-2" style="align-items:flex-end;">
+      <div class="field" style="margin-bottom:0;"><label>رقم فاتورة المبيعات</label><input type="text" id="saleReturnNumber" placeholder="مثلاً: 12"></div>
+      <button type="button" class="btn btn-ghost btn-sm" id="saleReturnLoadBtn" style="margin-bottom:2px;">عرض الأصناف</button>
+    </div>
+    <div id="saleReturnLines" style="margin-top:10px;"></div>
+    <h4 style="margin:14px 0 8px;font-size:13px;">سجل مرتجعات المبيعات</h4>
+    <div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>فاتورة</th><th>الأصناف</th><th>المبلغ المسترد</th><th>السبب</th><th>بواسطة</th></tr></thead><tbody id="saleReturnsBody"></tbody></table></div>
+  </div>
 </div>
 </div>
 

@@ -365,6 +365,9 @@ function buildFullActivityLog(from, to){
       rows.push({date:inv.date, section:"فواتير مبيعات", desc:`فاتورة مبيعات #${esc(inv.number)} — ${esc(inv.customerName||"—")}`, amount: total});
     }
   });
+  (state.salesReturns||[]).forEach(r=>{
+    if(inDateRange(r.date, from, to)) rows.push({date:r.date, section:"مرتجعات مبيعات", desc:`مرتجع فاتورة مبيعات #${esc(r.saleInvoiceNumber)} — ${r.lines.map(l=>`${esc(l.name)} ×${l.qty}`).join("، ")}`, amount:-(r.refundAmount||0)});
+  });
   state.purchases.forEach(p=>{
     if(inDateRange(p.date, from, to)){
       const card = findItemCard(p.itemCardId); const sup = state.suppliers.find(s=>s.id===p.supplierId);
@@ -937,6 +940,7 @@ $("saleCustName").addEventListener("input", ()=>{
 });
 $("addSaleLineBtn").addEventListener("click", ()=>{ renderSaleLine(); updateSaleTotal(); });
 $("saveSaleBtn").addEventListener("click", saveSaleInvoice);
+$("saleReturnLoadBtn").addEventListener("click", loadSaleReturnLines);
 $("saleCash").addEventListener("input", ()=>{ saleCashTouched = true; });
 $("saleNetwork").addEventListener("input", updateSaleTotal);
 $("saveInvoiceBtn").addEventListener("click", saveInvoice);
