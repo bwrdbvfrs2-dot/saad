@@ -372,7 +372,7 @@ async function saveInvoice(){
           const giftCard = findItemCard(offer.giftItemCard);
           if(giftCard){
             giftCard.stockQty = (giftCard.stockQty||0) - offer.giftQty;
-            freeGifts.push({itemCardId: giftCard.id, name: giftCard.name, qty: offer.giftQty});
+            freeGifts.push({itemCardId: giftCard.id, name: giftCard.name, qty: offer.giftQty, costAtSale: giftCard.currentCost||0});
             appliedOffers.push(`${offer.name} (هدية: ${offer.giftQty} × ${giftCard.name})`);
           }
         }

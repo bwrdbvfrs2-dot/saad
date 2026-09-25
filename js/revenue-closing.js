@@ -252,9 +252,11 @@ function computeMonthlyFinancials(monthLabel){
       if(g.cutDate && g.cutDate.slice(0,7)===monthLabel) garmentsCut++;
     });
   });
+  // tailoring-offer gifts leave stock the day the invoice is issued — their cost lands in that month
+  const giftsCost = state.invoices.filter(inv=>(inv.date||"").slice(0,7)===monthLabel).reduce((a,inv)=>a+freeGiftsCost(inv),0);
   const operationalLosses = totalOperationalLossesForMonth(monthLabel);
   const generalExpenses = generalExpensesForMonth(monthLabel);
-  cost += operationalLosses + generalExpenses;
+  cost += operationalLosses + generalExpenses + giftsCost;
   const rawFixed = totalFixed();
   const salesProfit = totalSalesProfitForMonth(monthLabel);
   // fixed costs normally ride on the garments cut this month; with none cut they still have to be
@@ -262,7 +264,7 @@ function computeMonthlyFinancials(monthLabel){
   if(garmentsCutInMonth(monthLabel)===0) cost += Math.max(0, rawFixed - salesProfit);
   const excessSalesProfit = Math.max(0, salesProfit - rawFixed); // ready-made sales profit beyond what's needed to fully cover fixed costs adds straight to net profit
   cost -= excessSalesProfit;
-  return {revenue, cost, profit:revenue-cost, garmentsCut, generalExpenses, operationalLosses, salesProfit, excessSalesProfit};
+  return {revenue, cost, profit:revenue-cost, garmentsCut, generalExpenses, operationalLosses, giftsCost, salesProfit, excessSalesProfit};
 }
 function totalPendingCustody(){
   let total = 0;
@@ -296,7 +298,7 @@ function invoiceProfitColumnData(inv){
   if(!activeGarments.length) return null;
   const cutGarments = activeGarments.filter(g=>g.cutDate);
   if(!cutGarments.length) return null; // deposit is still just a trust before cutting — show nothing
-  const totalDirectCost = cutGarments.reduce((a,g)=>a+garmentDirectCostOnly(g),0);
+  const totalDirectCost = cutGarments.reduce((a,g)=>a+garmentDirectCostOnly(g),0) + freeGiftsCost(inv);
   const allDelivered = activeGarments.every(g=>g.status==="تسليم");
   if(allDelivered){
     const totalPrice = activeGarments.reduce((a,g)=>a+garmentSalePrice(g),0);
