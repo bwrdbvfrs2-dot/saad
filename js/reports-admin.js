@@ -261,7 +261,7 @@ function buildDailyReportHtml(day, r){
   r.paymentRows.forEach(({inv,p})=> html+=`<tr data-receipt="${esc((p.cashReceiptNo||"")+" "+(p.networkReceiptNo||p.receipt||""))}"><td>${esc(inv.number)}</td><td>${p.cash.toFixed(0)} ﷼</td><td>${p.cashReceiptNo||"—"}</td><td>${p.network.toFixed(0)} ﷼</td><td>${p.networkReceiptNo||p.receipt||"—"}</td><td>${p.discount?p.discount.toFixed(0)+" ﷼":"—"}</td></tr>`);
   if(!r.paymentRows.length) html+=`<tr><td colspan="6">لا يوجد</td></tr>`;
   html += `</tbody></table>`;
-  const saleTotal = s=> s.items.reduce((a,it)=>a+it.qty*it.price,0);
+  const saleTotal = s=> saleNetTotal(s);
   html += `<h3>فواتير المبيعات (أصناف جاهزة) اليوم (${r.salesToday.length})</h3><table><thead><tr><th>رقم</th><th>العميل</th><th>كاش</th><th>شبكة</th><th>الإجمالي</th></tr></thead><tbody>`;
   r.salesToday.forEach(s=> html+=`<tr><td>${esc(s.number)}</td><td>${esc(s.customerName||"—")}</td><td>${((s.payment||{}).cash||0).toFixed(0)} ﷼</td><td>${((s.payment||{}).network||0).toFixed(0)} ﷼</td><td>${saleTotal(s).toFixed(0)} ﷼</td></tr>`);
   if(!r.salesToday.length) html+=`<tr><td colspan="5">لا يوجد</td></tr>`;
@@ -383,7 +383,7 @@ function buildFullActivityLog(from, to){
   });
   state.salesInvoices.forEach(inv=>{
     if(inDateRange(inv.date, from, to)){
-      const total = inv.items.reduce((a,it)=>a+it.qty*it.price,0);
+      const total = saleNetTotal(inv);
       rows.push({date:inv.date, section:"فواتير مبيعات", desc:`فاتورة مبيعات #${esc(inv.number)} — ${esc(inv.customerName||"—")}`, amount: total});
     }
   });
@@ -947,7 +947,11 @@ $("saleCustMobile").addEventListener("input", ()=>{
   const mobile = $("saleCustMobile").value.trim();
   $("saleCustNewBadge").style.display = (/^[0-9]{10}$/.test(mobile) && !findCustomerByMobile(mobile)) ? "" : "none";
   renderCustomerStandingAlerts(mobile, "saleCustomerAlertWrap");
+  updateSaleTotal();
 });
+$("saleApplyPromoBtn").addEventListener("click", applySalePromo);
+$("odSaveBtn").addEventListener("click", addOpeningDebtCustomer);
+$("saleDirectDiscount").addEventListener("input", updateSaleTotal);
 $("saleCustName").addEventListener("input", ()=>{
   if($("saleCustMobile").value.trim()) return;
   const match = findCustomerByIndividualName($("saleCustName").value.trim());
@@ -956,6 +960,11 @@ $("saleCustName").addEventListener("input", ()=>{
 $("addSaleLineBtn").addEventListener("click", ()=>{ renderSaleLine(); updateSaleTotal(); });
 $("saveSaleBtn").addEventListener("click", saveSaleInvoice);
 $("saleReturnLoadBtn").addEventListener("click", loadSaleReturnLines);
+$("quickLabelBtn").addEventListener("click", openQuickLabelModal);
+$("quickLabelCancelBtn").addEventListener("click", closeQuickLabelModal);
+$("quickLabelPrintBtn").addEventListener("click", printQuickLabel);
+$("quickLabelSearch").addEventListener("input", updateQuickLabelPreview);
+$("quickLabelSearch").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); if(quickLabelFind($("quickLabelSearch").value)) printQuickLabel(); } });
 $("saleScanInput").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); addSaleLineByBarcode($("saleScanInput").value); } });
 $("saleCash").addEventListener("input", ()=>{ saleCashTouched = true; });
 $("saleNetwork").addEventListener("input", updateSaleTotal);

@@ -441,9 +441,19 @@ function deliveredGarmentOwed(g, inv){
   if(g.creditDelivered) return creditGarmentOwed(g, inv);
   return Math.max(0, garmentRemaining(g, inv));
 }
+// ---- opening (pre-system) debt: what a customer already owed before being entered into the system.
+// It isn't revenue (no VAT, no profit) — only collecting it moves money into the boxes.
+function openingDebtPaymentsOf(cust){ return (state.openingDebtPayments||[]).filter(p=>p.customerId===cust.id); }
+function openingDebtRemaining(cust){
+  if(!cust || !(cust.openingDebt>0)) return 0;
+  const paid = openingDebtPaymentsOf(cust).reduce((a,p)=>a+(p.cash||0)+(p.network||0),0);
+  return Math.max(0, cust.openingDebt - paid - (cust.openingDebtWrittenOff||0));
+}
+function totalOpeningDebtRemaining(){ return state.customers.reduce((a,c)=>a+openingDebtRemaining(c),0); }
 function getCustomerStandingAlert(mobile){
   const invs = state.invoices.filter(inv=>inv.customerMobile===mobile);
-  if(!invs.length) return null;
+  const openingDebt = openingDebtRemaining(findCustomerByMobile(mobile));
+  if(!invs.length && openingDebt<=0.01) return null;
   let debtAmount = 0;
   const debtInvoices = new Set();
   const stuckGarments = [];
@@ -457,8 +467,8 @@ function getCustomerStandingAlert(mobile){
       if(isStuckReadyGarment(g)) stuckGarments.push({inv, g});
     });
   });
-  if(debtAmount<=0.01 && !stuckGarments.length && !convertedGarments.length) return null;
-  return {debtAmount: debtAmount>0.01 ? debtAmount : 0, debtInvoices:[...debtInvoices], stuckGarments, convertedGarments};
+  if(debtAmount<=0.01 && openingDebt<=0.01 && !stuckGarments.length && !convertedGarments.length) return null;
+  return {debtAmount: debtAmount>0.01 ? debtAmount : 0, openingDebt: openingDebt>0.01 ? openingDebt : 0, debtInvoices:[...debtInvoices], stuckGarments, convertedGarments};
 }
 // renders the standing as separate, independent alert boxes — one per kind — into wrapId
 function renderCustomerStandingAlerts(mobile, wrapId){
@@ -470,9 +480,12 @@ function renderCustomerStandingAlerts(mobile, wrapId){
     <div style="color:${color};font-weight:800;margin-bottom:4px;">${title}</div>
     <div style="font-size:13px;">${body}</div>${action||""}</div>`;
   let html = "";
-  if(alert.debtAmount>0){
-    html += box("var(--loss)", "rgba(224,90,90,0.12)", `💰 تنبيه دين: على العميل ${alert.debtAmount.toFixed(0)} ريال`,
-      `مبلغ مالي مستحق عن ثياب <b>تم تسليمها له</b> ولم يُسدد كامل قيمتها — فاتورة ${alert.debtInvoices.map(n=>"#"+esc(n)).join("، ")}.`,
+  if(alert.debtAmount>0 || alert.openingDebt>0){
+    const parts = [];
+    if(alert.openingDebt>0) parts.push(`دين سابق (مسجّل قبل النظام): <b>${alert.openingDebt.toFixed(0)} ريال</b>`);
+    if(alert.debtAmount>0) parts.push(`مبلغ مستحق عن ثياب <b>تم تسليمها له</b> ولم يُسدد كامل قيمتها: <b>${alert.debtAmount.toFixed(0)} ريال</b> — فاتورة ${alert.debtInvoices.map(n=>"#"+esc(n)).join("، ")}`);
+    html += box("var(--loss)", "rgba(224,90,90,0.12)", `💰 تنبيه دين: على العميل ${(alert.debtAmount+alert.openingDebt).toFixed(0)} ريال`,
+      parts.join("<br>"),
       `<button type="button" class="btn btn-ghost btn-sm" onclick="switchTab('customerDebts')" style="margin-top:6px;">الذهاب لتسوية المديونية</button>`);
   }
   if(alert.stuckGarments.length){
@@ -574,7 +587,7 @@ function renderCustomerPicker(mobileInputId, nameInputId, pickerWrapId){
 function customerTotalSpend(mobile){
   let total = 0;
   state.invoices.forEach(inv=>{ if(inv.customerMobile===mobile) total += invoiceSaleTotal(inv); });
-  state.salesInvoices.forEach(inv=>{ if(inv.customerMobile===mobile) total += inv.items.reduce((a,it)=>a+it.qty*it.price,0) - saleReturnsOf(inv).reduce((a,r)=>a+saleReturnValue(r),0); });
+  state.salesInvoices.forEach(inv=>{ if(inv.customerMobile===mobile) total += saleNetTotal(inv) - saleReturnsOf(inv).reduce((a,r)=>a+saleReturnValue(r),0); });
   return total;
 }
 function customerTier(mobile){
@@ -824,8 +837,15 @@ function garmentsCutInMonth(monthLabel){
   }));
   return n;
 }
+// a sales invoice's lines keep their list prices; any promo code / offer / direct discount is stored
+// once on the invoice (discountTotal) — every total, profit, VAT and refund goes through these
+function saleSubtotal(inv){ return inv.items.reduce((a,it)=>a+it.qty*it.price,0); }
+function saleNetTotal(inv){ return Math.max(0, saleSubtotal(inv) - (inv.discountTotal||0)); }
+function saleNetFactor(inv){ const s = saleSubtotal(inv); return s>0 ? saleNetTotal(inv)/s : 1; }
 function salesInvoiceProfit(inv){
-  return inv.items.reduce((a,it)=>a+((it.price-(it.costAtSale||0))*it.qty),0);
+  // a free gift leaves stock at its cost with nothing charged for it — that cost comes off the sale's profit
+  const giftCost = (inv.freeGifts||[]).reduce((a,f)=>a+(f.qty||0)*(f.costAtSale||0),0);
+  return inv.items.reduce((a,it)=>a+((it.price-(it.costAtSale||0))*it.qty),0) - (inv.discountTotal||0) - giftCost;
 }
 // ---------------- sales returns ----------------
 // a return is booked on the day it happens (its own month / VAT period), never back-dated into the

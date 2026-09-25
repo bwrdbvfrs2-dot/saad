@@ -191,6 +191,7 @@ function normalizeState(){
   if(!state.payrollLedger) state.payrollLedger=[];
   if(!state.vatPayments) state.vatPayments=[];
   if(!state.legacyPayments) state.legacyPayments=[];
+  if(!state.openingDebtPayments) state.openingDebtPayments=[];
   if(!state.mailRequests) state.mailRequests=[];
   if(!state.decisions) state.decisions=[];
   if(!state.seasons) state.seasons=[];
@@ -577,6 +578,7 @@ function applyRolePermissions(){
     btn.style.display = allowedTabs.includes(btn.dataset.tab) ? "" : "none";
   });
   $("hamburgerBtn").style.display = (isTailor||isQc) ? "none" : "";
+  $("quickLabelBtn").style.display = (isTailor||isQc) ? "none" : "";
   renderNavDrawer();
   renderSidebar();
   renderBottomNav();

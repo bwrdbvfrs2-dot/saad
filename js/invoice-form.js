@@ -161,6 +161,12 @@ function computeShiftExpected(username, date){
       payRefs.push({source:"فاتورة مبيعات", invNumber:inv.number, cash:inv.payment.cash||0, network:inv.payment.network||0, cashReceiptNo:null, networkReceiptNo:inv.payment.receipt});
     }
   });
+  (state.openingDebtPayments||[]).forEach(p=>{
+    if(p.recordedBy===username && p.date===date){
+      sysCash += p.cash||0; sysNetwork += p.network||0;
+      payRefs.push({source:"دين سابق", invNumber:"عميل "+p.customerCode, cash:p.cash||0, network:p.network||0, cashReceiptNo:null, networkReceiptNo:p.receipt||null});
+    }
+  });
   const sysTransfers = state.transferRequests.filter(r=>r.status==="accepted" && r.toOwner===username && r.resolvedAt===date).reduce((a,r)=>a+r.amount,0);
   // a cross-user transfer this user SENT is deducted from their box the instant it's sent (see
   // transferFunds()), not when it's accepted/rejected — so it must reduce today's expected cash too,
@@ -612,6 +618,9 @@ function updateLiveTotals(){
   const directDiscountVip = isCustomerVip(($("custMobile")?.value||"").trim());
   const remainingForDirectDiscount = Math.max(0, prices - loyaltyDiscount - promoDiscount);
   const maxDirectDiscount = directDiscountVip ? remainingForDirectDiscount : Math.min(remainingForDirectDiscount, userMaxDiscountAmount(currentUser, prices));
+  if($("directDiscountLabel")) $("directDiscountLabel").textContent = directDiscountVip
+    ? "خصم مباشر (ريال) — عميل VIP: أي موظف يقدر يخصم بدون حد (حتى 100%)"
+    : userDiscountEnabled(currentUser) ? `خصم مباشر (ريال) — حدّك الأقصى ${maxDirectDiscount.toFixed(0)} ريال` : "خصم مباشر (ريال) — ما عندك صلاحية خصم (إلا لعميل VIP)";
   if(directDiscount > maxDirectDiscount){ directDiscount = maxDirectDiscount; if(directDiscountInp) directDiscountInp.value = maxDirectDiscount.toFixed(0); }
   const totalDiscount = loyaltyDiscount + promoDiscount + directDiscount;
   $("liveInvoiceTotal").textContent = prices.toFixed(0)+" ﷼";

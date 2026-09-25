@@ -311,6 +311,32 @@ async function printItemCardLabel(cardId, copies){
   $("dynamicPageSize").textContent = `@media print{ @page{ size:${state.settings.thermalPaperWidth||58}mm 2000mm; margin:0; } }`;
   setTimeout(()=> safePrint(), 300);
 }
+// ---- quick price-label printing from the top bar (accountant, cashier, manager) ----
+function quickLabelCards(){ return state.itemCards.filter(c=>c.active!==false && (c.type==="product" || c.type==="fabric")); }
+function quickLabelFind(text){
+  const t = (text||"").trim();
+  if(!t) return null;
+  return findItemCardByBarcode(t) || quickLabelCards().find(c=>c.name===t || `${c.name} — #${c.code}`===t) || null;
+}
+function openQuickLabelModal(){
+  $("quickLabelDatalist").innerHTML = quickLabelCards().map(c=>`<option value="${esc(c.name)} — #${c.code}"></option>`).join("");
+  $("quickLabelSearch").value = ""; $("quickLabelCopies").value = 1; $("quickLabelPreview").textContent = "";
+  $("quickLabelModalOverlay").classList.remove("hidden");
+  setTimeout(()=> $("quickLabelSearch").focus(), 50);
+}
+function closeQuickLabelModal(){ $("quickLabelModalOverlay").classList.add("hidden"); }
+function updateQuickLabelPreview(){
+  const c = quickLabelFind($("quickLabelSearch").value);
+  $("quickLabelPreview").innerHTML = c ? `${esc(c.name)} — كود #${c.code} — ${c.type==="fabric" ? BODY_CATEGORIES.map(cat=>`${cat} ${((c.prices||{})[cat]||0).toFixed(0)} ﷼`).join(" / ") : `السعر ${(c.salePrice||0).toFixed(0)} ﷼`}` : "";
+}
+function printQuickLabel(){
+  const c = quickLabelFind($("quickLabelSearch").value);
+  if(!c){ showToast("اختر صنف من القائمة أو امسح باركوده"); return; }
+  const copies = parseInt($("quickLabelCopies").value)||1;
+  if(copies<1){ showToast("أدخل عدد نسخ صحيح"); return; }
+  closeQuickLabelModal();
+  printItemCardLabel(c.id, copies);
+}
 function toggleItemCardActive(id){ const c=findItemCard(id); if(c){ c.active=!c.active; saveState(); renderAll(); } }
 async function writeOffItemCard(id){
   const card = findItemCard(id);
@@ -689,8 +715,13 @@ function renderSaleLine(prefill=null){
     </div>
     <button class="icon-btn" onclick="this.closest('.garment-card').remove(); updateSaleTotal();">حذف الصنف</button>
   `;
+  // the blank form's pre-filled first line is a placeholder until someone touches it — a scanned
+  // item replaces it instead of being sold alongside an item nobody picked
+  if(!prefill) div.dataset.untouched = "1";
   holder.appendChild(div);
   const itemSel = div.querySelector(".sl-item"), priceInp = div.querySelector(".sl-price"), qtyInp = div.querySelector(".sl-qty");
+  [itemSel, priceInp, qtyInp].forEach(el=> el.addEventListener("input", ()=>{ delete div.dataset.untouched; }));
+  itemSel.addEventListener("change", ()=>{ delete div.dataset.untouched; });
   itemSel.addEventListener("change", ()=>{
     const c=findItemCard(itemSel.value);
     priceInp.value = "";
@@ -704,19 +735,108 @@ function renderSaleLine(prefill=null){
 // as (total - network) (full cash-at-sale is the common case), so saving doesn't get silently blocked
 // by the cash+network===total check just because nobody filled the payment fields
 let saleCashTouched = false;
+// ---- sales-invoice discounts: promo code, offer bundle, direct discount on the total ----
+let salePromo = null;     // an active promo code applied to this sale
+let saleOfferId = null;   // one offer bundle at most, as on the tailoring invoice
+function saleFormLines(){
+  return Array.from(document.querySelectorAll("#saleItemsHolder .garment-card")).map(div=>({
+    card: findItemCard(div.querySelector(".sl-item").value),
+    qty: parseFloat(div.querySelector(".sl-qty").value)||0,
+    price: parseFloat(div.querySelector(".sl-price").value)||0,
+  })).filter(l=>l.card && l.qty>0);
+}
+function saleOfferMatchesCard(offer, card){ return offer.matchBy==="origin" ? card.origin===offer.matchValue : card.id===offer.matchValue; }
+// quantity offers count units of the matching item(s) and take their % off the cheapest matching
+// unit; gift offers need a minimum number of units in the sale
+function saleOfferEvaluation(offer, lines){
+  if(offer.type==="quantity_discount"){
+    const matching = lines.filter(l=>saleOfferMatchesCard(offer, l.card));
+    const units = matching.reduce((a,l)=>a+l.qty,0);
+    if(units < offer.requiredQty) return {eligible:false, discount:0};
+    const cheapest = Math.min(...matching.map(l=>l.price));
+    return {eligible:true, discount: cheapest*(offer.discountPercent||0)/100};
+  }
+  const units = lines.reduce((a,l)=>a+l.qty,0);
+  if(units < (offer.minGarments||1)) return {eligible:false, discount:0};
+  const giftCard = findItemCard(offer.giftItemCard);
+  return {eligible:!!giftCard, discount:0, gift: giftCard ? {itemCardId:giftCard.id, name:giftCard.name, qty:offer.giftQty||1} : null};
+}
+function computeSaleDiscounts(){
+  const lines = saleFormLines();
+  const subtotal = lines.reduce((a,l)=>a+l.qty*l.price,0);
+  const offer = saleOfferId ? state.offers.find(o=>o.id===saleOfferId && o.active) : null;
+  const ev = offer ? saleOfferEvaluation(offer, lines) : {eligible:false, discount:0};
+  const offerDisc = ev.eligible ? Math.min(ev.discount, subtotal) : 0;
+  let promoDisc = 0;
+  if(salePromo){
+    const base = subtotal - offerDisc;
+    if(salePromo.type==="percentage") promoDisc = base*(salePromo.value/100);
+    else if(salePromo.type==="fixed_voucher") promoDisc = Math.min(salePromo.value, base);
+  }
+  // direct discount: only for users with discount permission (within their limit) or a VIP customer
+  const vip = isCustomerVip(($("saleCustMobile")?.value||"").trim());
+  const remaining = Math.max(0, subtotal - offerDisc - promoDisc);
+  const maxDirect = vip ? remaining : (userDiscountEnabled(currentUser) ? Math.min(remaining, userMaxDiscountAmount(currentUser, subtotal)) : 0);
+  const inp = $("saleDirectDiscount");
+  let direct = parseFloat(inp.value)||0;
+  if(direct > maxDirect + 0.001){ direct = maxDirect; inp.value = maxDirect ? maxDirect.toFixed(0) : ""; }
+  const discountTotal = offerDisc + promoDisc + direct;
+  return {lines, subtotal, offer: ev.eligible ? offer : null, offerDisc, gift: ev.eligible ? ev.gift||null : null, promoDisc, direct, maxDirect, vip, discountTotal, total: Math.max(0, subtotal - discountTotal)};
+}
+function renderSaleOffers(){
+  const wrap = $("saleOffersWrap");
+  if(!wrap) return;
+  const offers = state.offers.filter(o=>o.active);
+  if(!offers.length){ wrap.innerHTML = ""; return; }
+  const lines = saleFormLines();
+  wrap.innerHTML = `<label style="font-size:12px;color:var(--muted);">باقات العروض (اختر واحدة بحد أقصى)</label>` + offers.map(o=>{
+    const ev = saleOfferEvaluation(o, lines);
+    return `<div class="embro-toggle" style="margin:6px 0;"><input type="radio" name="sale-offer-radio" class="sale-offer-select" data-offer="${o.id}" ${saleOfferId===o.id?"checked":""} ${!ev.eligible?"disabled":""}>
+      <label style="margin:0;font-size:13px;${!ev.eligible?"color:var(--muted);":""}">${esc(o.name)} ${ev.eligible ? (o.type==="quantity_discount" ? `— خصم ${fmtSar(ev.discount)} ﷼` : `— هدية: ${esc(ev.gift.name)} ×${ev.gift.qty}`) : "— ما ينطبق حالياً"}</label></div>`;
+  }).join("") + (saleOfferId ? `<button type="button" class="btn btn-ghost btn-sm" onclick="saleOfferId=null; updateSaleTotal();">إلغاء اختيار العرض</button>` : "");
+  wrap.querySelectorAll(".sale-offer-select").forEach(r=> r.addEventListener("change", ()=>{ if(r.checked){ saleOfferId = r.dataset.offer; updateSaleTotal(); } }));
+}
+function applySalePromo(){
+  const code = $("salePromoInput").value.trim();
+  if(!code){ showToast("أدخل كود الخصم أولاً"); return; }
+  const match = findActivePromoCode(code);
+  if(!match){ showToast("الكود غير صحيح أو منتهي الصلاحية أو غير مفعّل"); return; }
+  salePromo = match;
+  updateSaleTotal();
+  showToast(`تم تطبيق الكود ${match.code}`);
+}
+function removeSalePromo(){ salePromo = null; $("salePromoInput").value = ""; updateSaleTotal(); }
 function updateSaleTotal(){
-  let total = 0;
-  document.querySelectorAll("#saleItemsHolder .garment-card").forEach(div=>{
-    const qty = parseFloat(div.querySelector(".sl-qty").value)||0;
-    const price = parseFloat(div.querySelector(".sl-price").value)||0;
-    total += qty*price;
-  });
-  $("saleLiveTotal").textContent = fmtSar(total)+" ﷼";
+  const d = computeSaleDiscounts();
+  $("saleLiveSubtotal").textContent = fmtSar(d.subtotal)+" ﷼";
+  $("saleLiveDiscount").textContent = fmtSar(d.discountTotal)+" ﷼";
+  $("saleLiveTotal").textContent = fmtSar(d.total)+" ﷼";
+  const banner = $("salePromoBanner");
+  if(banner){
+    banner.style.display = salePromo ? "" : "none";
+    banner.innerHTML = salePromo ? `<div class="item-row" style="border:1px solid var(--gold);border-radius:8px;padding:6px 10px;"><span>الكود <b>${esc(salePromo.code)}</b> — ${salePromo.type==="percentage"?`خصم ${salePromo.value}%`:salePromo.type==="fixed_voucher"?`قسيمة ${fmtSar(salePromo.value)} ﷼`:`هدية: ${esc(salePromo.giftDescription||"")}`}</span><button type="button" class="btn btn-ghost btn-sm" onclick="removeSalePromo()">إزالة</button></div>` : "";
+  }
+  const directInp = $("saleDirectDiscount");
+  if(directInp){
+    const allowed = d.vip || userDiscountEnabled(currentUser);
+    directInp.disabled = !allowed;
+    $("saleDirectDiscountLabel").textContent = allowed
+      ? `خصم مباشر على الإجمالي (ريال) — ${d.vip ? "عميل VIP: أي موظف يقدر يخصم بدون حد (حتى 100%)" : `حدّك الأقصى ${fmtSar(d.maxDirect)} ريال`}`
+      : "خصم مباشر على الإجمالي — ما عندك صلاحية خصم (إلا لعميل VIP)";
+  }
+  const parts = [];
+  if(d.offerDisc>0.001) parts.push(`عرض "${d.offer.name}": ${fmtSar(d.offerDisc)} ﷼`);
+  if(d.gift) parts.push(`هدية: ${d.gift.name} ×${d.gift.qty}`);
+  if(d.promoDisc>0.001) parts.push(`كود ${salePromo.code}: ${fmtSar(d.promoDisc)} ﷼`);
+  if(d.direct>0.001) parts.push(`خصم مباشر: ${fmtSar(d.direct)} ﷼`);
+  $("saleDiscountNote").style.display = parts.length ? "" : "none";
+  $("saleDiscountNote").textContent = parts.join(" — ");
+  renderSaleOffers();
   if(!saleCashTouched){
     const network = parseFloat($("saleNetwork").value)||0;
-    $("saleCash").value = Math.max(total-network, 0) || "";
+    $("saleCash").value = Math.max(d.total-network, 0) || "";
   }
-  return total;
+  return d.total;
 }
 // a scanner types the code and presses Enter: add that item as a line, or +1 on an existing line
 function addSaleLineByBarcode(text){
@@ -724,14 +844,12 @@ function addSaleLineByBarcode(text){
   $("saleScanInput").value = "";
   if(!c){ showToast("ما فيه صنف بهذا الباركود"); return; }
   if(c.type!=="product" && c.type!=="fabric"){ showToast("هذا الصنف ما يُباع بفاتورة المبيعات"); return; }
+  // the untouched placeholder line goes first, so a scan never adds onto an item nobody picked
+  document.querySelectorAll('#saleItemsHolder .garment-card[data-untouched="1"]').forEach(d=>d.remove());
   const lines = Array.from(document.querySelectorAll("#saleItemsHolder .garment-card"));
   const existing = lines.find(d=>d.querySelector(".sl-item").value===c.id);
   if(existing){ const q=existing.querySelector(".sl-qty"); q.value = (parseFloat(q.value)||0) + 1; }
-  else {
-    const blank = lines.length===1 && !(parseFloat(lines[0].querySelector(".sl-price").value)>0) ? lines[0] : null;
-    if(blank) blank.remove();
-    renderSaleLine({itemCardId:c.id, qty:1, price:c.salePrice||0});
-  }
+  else renderSaleLine({itemCardId:c.id, qty:1, price:c.salePrice||0});
   updateSaleTotal();
   showToast(`تمت إضافة ${c.name}`);
 }
@@ -745,6 +863,7 @@ function resetSaleForm(){
   renderSaleLine();
   saleCashTouched = false;
   $("saleCash").value=""; $("saleNetwork").value=""; $("saleReceipt").value="";
+  salePromo = null; saleOfferId = null; $("salePromoInput").value = ""; $("saleDirectDiscount").value = "";
   updateSaleTotal();
 }
 async function saveSaleInvoice(){
@@ -769,6 +888,7 @@ async function saveSaleInvoice(){
     items.push({itemCardId, name:card.name, qty, price, costAtSale: card.currentCost||0});
   }
   const total = updateSaleTotal();
+  const d = computeSaleDiscounts();
   const cash = parseFloat($("saleCash").value)||0;
   const network = parseFloat($("saleNetwork").value)||0;
   const receipt = $("saleReceipt").value.trim();
@@ -778,13 +898,16 @@ async function saveSaleInvoice(){
   const lowStock = items.filter(it=>{ const c=findItemCard(it.itemCardId); return c && cardAvailableQty(c) < it.qty; });
   const snapshot = JSON.parse(JSON.stringify(state));
   items.forEach(it=>{ const c=findItemCard(it.itemCardId); if(c) c.stockQty -= it.qty; });
+  const freeGifts = [];
+  if(d.gift){ const g = findItemCard(d.gift.itemCardId); if(g){ g.stockQty = (g.stockQty||0) - d.gift.qty; freeGifts.push({...d.gift, costAtSale: g.currentCost||0}); } }
+  const discounts = {promoCode: salePromo ? salePromo.code : null, promoDiscount:+d.promoDisc.toFixed(2), offerName: d.offer ? d.offer.name : null, offerDiscount:+d.offerDisc.toFixed(2), direct:+d.direct.toFixed(2), gift: salePromo && salePromo.type==="gift" ? (salePromo.giftDescription||"") : null};
   const payment = {id:newId(), date, cash, network, receipt};
   applyPaymentToBalances(payment);
   ensureCustomerIndividual(custMobile, custName);
-  state.salesInvoices.push({id:newId(), number, date, customerName:custName, customerMobile:custMobile, items, payment, recordedBy:currentUser.username});
+  state.salesInvoices.push({id:newId(), number, date, customerName:custName, customerMobile:custMobile, items, discounts, discountTotal:+d.discountTotal.toFixed(2), freeGifts, payment, recordedBy:currentUser.username});
   state.settings.nextSalesInvoiceNumber++;
   if(!await saveStateWithRollback(snapshot)) return; // form stays filled in so the cashier can just retry
-  logAudit("sale_invoice_recorded", {number, total, cash, network});
+  logAudit("sale_invoice_recorded", {number, total, cash, network, discountTotal:+d.discountTotal.toFixed(2), promoCode:discounts.promoCode, offer:discounts.offerName, direct:discounts.direct});
   resetSaleForm();
   showToast(lowStock.length? "تم الحفظ — تنبيه: بعض الأصناف تجاوزت المخزون المتاح" : "تم حفظ فاتورة المبيعات");
 }
@@ -792,7 +915,7 @@ function renderSalesInvoicesList(){
   const tbody = $("salesInvoicesBody");
   const rows = state.salesInvoices.slice().reverse();
   tbody.innerHTML = rows.length ? rows.map(inv=>{
-    const total = inv.items.reduce((a,it)=>a+it.qty*it.price,0);
+    const total = saleNetTotal(inv);
     return `<tr><td>${esc(inv.number)}</td><td>${inv.date}</td><td>${esc(inv.customerName)}</td><td>${fmtSar(total)} ﷼</td></tr>`;
   }).join("") : `<tr><td colspan="4">${emptyStateHtml("shopping-bag","ما فيه فواتير مبيعات بعد.")}</td></tr>`;
   renderSaleReturnsLog();
@@ -815,7 +938,7 @@ function loadSaleReturnLines(){
   if(!lines.some(l=>l.left>0.0001)){ wrap.innerHTML = `<p class="sub">كل أصناف هذي الفاتورة مرتجعة بالكامل مسبقاً.</p>`; return; }
   wrap.innerHTML = `<p class="sub" style="margin:0 0 8px;">فاتورة ${esc(inv.number)} — ${inv.date} — ${esc(inv.customerName||"—")}</p>` +
     lines.map(({it,i,left})=>`<div class="garment-card"><div class="row-3" style="align-items:flex-end;">
-      <div class="field" style="margin-bottom:0;"><label>${esc(it.name)} — ${fmtSar(it.price)} ﷼ للوحدة</label><p class="sub" style="margin:0;">المباع ${it.qty}${left<it.qty?` — المتبقي القابل للترجيع ${left}`:""}</p></div>
+      <div class="field" style="margin-bottom:0;"><label>${esc(it.name)} — ${fmtSar(it.price*saleNetFactor(inv))} ﷼ للوحدة${inv.discountTotal?" (بعد الخصم)":""}</label><p class="sub" style="margin:0;">المباع ${it.qty}${left<it.qty?` — المتبقي القابل للترجيع ${left}`:""}</p></div>
       <div class="field" style="margin-bottom:0;"><label>الكمية المرتجعة</label><input type="number" class="sr-qty" data-line="${i}" min="0" max="${left}" step="0.1" placeholder="0" ${left<=0.0001?"disabled":""}></div>
     </div></div>`).join("") +
     `<div class="row-2" style="margin-top:8px;">
@@ -825,7 +948,7 @@ function loadSaleReturnLines(){
     <p class="sub" id="saleReturnTotalNote">المبلغ المسترد: 0 ﷼</p>
     <button class="btn btn-gold btn-sm" onclick="submitSaleReturn('${inv.id}')">تسجيل المرتجع</button>`;
   wrap.querySelectorAll(".sr-qty").forEach(inp=> inp.addEventListener("input", ()=>{
-    const total = Array.from(wrap.querySelectorAll(".sr-qty")).reduce((a,x)=>a+(parseFloat(x.value)||0)*inv.items[+x.dataset.line].price,0);
+    const total = Array.from(wrap.querySelectorAll(".sr-qty")).reduce((a,x)=>a+(parseFloat(x.value)||0)*inv.items[+x.dataset.line].price*saleNetFactor(inv),0);
     $("saleReturnTotalNote").textContent = `المبلغ المسترد: ${fmtSar(total)} ﷼`;
   }));
 }
@@ -842,7 +965,8 @@ async function submitSaleReturn(invId){
     const i = +inp.dataset.line, it = inv.items[i];
     const left = it.qty - saleLineReturnedQty(inv, i);
     if(qty - left > 0.0001){ showToast(`كمية "${it.name}" المرتجعة أكبر من المتبقي بالفاتورة (${left})`); return; }
-    lines.push({lineIdx:i, itemCardId:it.itemCardId, name:it.name, qty, price:it.price, costAtSale:it.costAtSale||0});
+    // refunded at what the customer actually paid for it: the list price less its share of the invoice discount
+    lines.push({lineIdx:i, itemCardId:it.itemCardId, name:it.name, qty, price:+(it.price*saleNetFactor(inv)).toFixed(4), costAtSale:it.costAtSale||0});
   }
   if(!lines.length){ showToast("أدخل كمية مرتجعة لصنف واحد على الأقل"); return; }
   const refundAmount = lines.reduce((a,l)=>a+l.qty*l.price,0);
@@ -871,7 +995,7 @@ function computeItemSalesTotals(){
   state.salesInvoices.forEach(inv=> inv.items.forEach(it=>{
     if(!totals[it.itemCardId]) totals[it.itemCardId] = {qty:0, revenue:0};
     totals[it.itemCardId].qty += it.qty||0;
-    totals[it.itemCardId].revenue += (it.qty||0)*(it.price||0);
+    totals[it.itemCardId].revenue += (it.qty||0)*(it.price||0)*saleNetFactor(inv);
   }));
   (state.salesReturns||[]).forEach(r=> r.lines.forEach(l=>{
     if(!totals[l.itemCardId]) totals[l.itemCardId] = {qty:0, revenue:0};
@@ -892,7 +1016,7 @@ function computeVatSummary(from, to){
   });
   state.salesInvoices.forEach(inv=>{
     if(!inDateRange(inv.date, from, to)) return;
-    const total = inv.items.reduce((a,it)=>a+it.qty*it.price,0);
+    const total = saleNetTotal(inv);
     outputVat += outputVatFromTotal(total); salesTotal += total;
   });
   // returned goods reverse their output VAT in the period the return happens

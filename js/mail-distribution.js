@@ -299,7 +299,8 @@ async function saveInvoice(){
     const tailoringOnly = itemCardIdRaw==="__none__";
     const effectiveMinPrice = itemCard ? ((itemCard.minPrices && itemCard.minPrices[garmentCategory]) || 0)
       : tailoringOnly ? (((state.settings.tailoringOnly||{}).minPrices||{})[garmentCategory] || 0) : 0;
-    if((itemCard || tailoringOnly) && effectiveMinPrice>0){
+    // a VIP customer can be given any price by anyone — no minimum, no per-user discount limit
+    if((itemCard || tailoringOnly) && effectiveMinPrice>0 && !isCustomerVip(custMobile)){
       const enteredPrice = parseFloat(priceVal)||0;
       if(enteredPrice < effectiveMinPrice){
         const shortfall = effectiveMinPrice - enteredPrice;
@@ -418,29 +419,32 @@ async function saveInvoice(){
         reverseLoyaltyPoints(custMobile, pointsToRedeem);
         state.loyaltyLedger.push({id:Date.now()+"-r", date, mobile:custMobile, type:"redeem", points:pointsToRedeem, invoiceNumber:number});
       }
-      if(appliedPromoCode){
-        invData.promoCodeUsed = appliedPromoCode.code;
-        if(appliedPromoCode.type!=="gift"){
-          const promoDiscountAmt = currentPromoDiscountAmount(saleTotal);
-          if(promoDiscountAmt>0.01) invData.payments.push({id:Date.now()+"-promo", date, cash:0, network:0, receipt:"", discount:promoDiscountAmt, auto:true, note:`كود خصم: ${appliedPromoCode.code}`});
-        } else {
-          invData.promoGiftDescription = appliedPromoCode.giftDescription;
-        }
-      }
-      let directDiscountVal = parseFloat($("directDiscountInput")?.value)||0;
-      if(directDiscountVal>0.01 && !vip){
-        // re-check the per-user discount cap here too — the live UI clamps it on input, but that
-        // must not be the only guard against a cashier saving more discount than they're allowed
-        const alreadyDiscounted = invData.payments.reduce((a,p)=>a+(p.discount||0),0);
-        const maxAllowed = userMaxDiscountAmount(currentUser, saleTotal);
-        const remainingAllowance = Math.max(0, maxAllowed - alreadyDiscounted);
-        if(directDiscountVal > remainingAllowance) directDiscountVal = remainingAllowance;
-      }
-      if(directDiscountVal>0.01){
-        invData.payments.push({id:Date.now()+"-direct", date, cash:0, network:0, receipt:"", discount:directDiscountVal, auto:true, note:"خصم مباشر", recordedBy:currentUser.username});
-      }
       invData.loyaltyPointsEarned = appliedPromoCode ? 0 : earnLoyaltyPoints(custMobile, saleTotal);
       if(invData.loyaltyPointsEarned>0) state.loyaltyLedger.push({id:Date.now()+"-e", date, mobile:custMobile, type:"earn", points:invData.loyaltyPointsEarned, invoiceNumber:number});
+    }
+    // promo codes and the direct discount apply to every customer — VIPs are only kept out of the
+    // loyalty program (tiers / points) above. This used to sit inside that VIP exclusion, so a VIP's
+    // discount showed on screen and was silently dropped on save.
+    if(appliedPromoCode){
+      invData.promoCodeUsed = appliedPromoCode.code;
+      if(appliedPromoCode.type!=="gift"){
+        const promoDiscountAmt = currentPromoDiscountAmount(saleTotal);
+        if(promoDiscountAmt>0.01) invData.payments.push({id:Date.now()+"-promo", date, cash:0, network:0, receipt:"", discount:promoDiscountAmt, auto:true, note:`كود خصم: ${appliedPromoCode.code}`});
+      } else {
+        invData.promoGiftDescription = appliedPromoCode.giftDescription;
+      }
+    }
+    let directDiscountVal = parseFloat($("directDiscountInput")?.value)||0;
+    if(directDiscountVal>0.01 && !vip){
+      // re-check the per-user discount cap here too — the live UI clamps it on input, but that
+      // must not be the only guard against a cashier saving more discount than they're allowed
+      const alreadyDiscounted = invData.payments.reduce((a,p)=>a+(p.discount||0),0);
+      const maxAllowed = userMaxDiscountAmount(currentUser, saleTotal);
+      const remainingAllowance = Math.max(0, maxAllowed - alreadyDiscounted);
+      if(directDiscountVal > remainingAllowance) directDiscountVal = remainingAllowance;
+    }
+    if(directDiscountVal>0.01){
+      invData.payments.push({id:Date.now()+"-direct", date, cash:0, network:0, receipt:"", discount:directDiscountVal, auto:true, note:"خصم مباشر", recordedBy:currentUser.username});
     }
   }
   if(isNewInvoice && state.settings.einvoiceEnabled){
@@ -573,13 +577,14 @@ function renderDashboardKPIs(){
     + todaysSalesInvoices.reduce((a,inv)=> a + (inv.payment?(inv.payment.cash||0)+(inv.payment.network||0):0), 0)
     - (state.salesReturns||[]).filter(r=>r.date===today).reduce((a,r)=>a+(r.refundAmount||0),0)
     - state.invoiceReturns.filter(r=>r.date===today).reduce((a,r)=>a+(r.refundAmount||0),0)
-    + (state.legacyPayments||[]).filter(l=>l.date===today).reduce((a,l)=>a+l.amount,0);
+    + (state.legacyPayments||[]).filter(l=>l.date===today).reduce((a,l)=>a+l.amount,0)
+    + (state.openingDebtPayments||[]).filter(p=>p.date===today).reduce((a,p)=>a+(p.cash||0)+(p.network||0),0);
   const {cuttingOverdue, deliveryOverdue, dueToday} = computeOverdueLists();
   const overdueCount = cuttingOverdue.length + deliveryOverdue.length;
   const pending = allPendingGarments();
   const readyCount = pending.filter(({g})=> g.status==="جاهز").length;
   const inProgressCount = pending.length - readyCount;
-  const totalDue = state.invoices.reduce((a,inv)=> a + Math.max(0, invoiceRemaining(inv)), 0);
+  const totalDue = state.invoices.reduce((a,inv)=> a + Math.max(0, invoiceRemaining(inv)), 0) + totalOpeningDebtRemaining();
   const kpi = (cls, icon, lbl, val)=> `<div class="kpi-card ${cls}"><div class="kpi-top"><div class="kpi-icon"><i data-lucide="${icon}"></i></div></div><div class="kpi-lbl">${lbl}</div><div class="kpi-val">${val}</div></div>`;
   el.innerHTML =
     kpi("c-sales","banknote","مبيعات اليوم", salesToday.toFixed(0)+" ﷼") +

@@ -215,7 +215,7 @@ let state = {
   transferRequests:[],
   loyaltyLedger:[],
   itemCards:[], suppliers:[], purchases:[], purchaseReturns:[],
-  customers:[], salesInvoices:[], salesReturns:[], addonDefs:[], tailorScans:[], payrollLedger:[], vatPayments:[], legacyPayments:[],
+  customers:[], salesInvoices:[], salesReturns:[], addonDefs:[], tailorScans:[], payrollLedger:[], vatPayments:[], legacyPayments:[], openingDebtPayments:[],
   alterations:[], alterationReasons:[], alterationResponsibles:["الخياط","القصاص","ماخذ المقاسات","الزبون نفسه"],
   fabricOrigins:["ياباني","كوري","تايلاندي","صيني"], offers:[], shiftClosings:[],
   invoiceReturns:[], deletedInvoicesLog:[], vouchers:[], mailRequests:[], decisions:[], seasons:[], broadcastCampaign:{sentMobiles:[]}, writtenOffLosses:[], operationalLosses:[], promoCodes:[],

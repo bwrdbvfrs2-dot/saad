@@ -103,6 +103,7 @@ function collectBoxMovements(){
   state.invoices.forEach(inv=> (inv.payments||[]).forEach(p=> pay(p, `دفعة فاتورة ${inv.number}`, p.date)));
   state.salesInvoices.forEach(s=>{ if(s.payment) pay(s.payment, `فاتورة مبيعات ${s.number}`, s.payment.date||s.date); });
   (state.legacyPayments||[]).forEach(l=> add(l.recordedBy ? mainId(l.recordedBy,"cash") : null, l.amount, l.recordedBy ? "تحصيل قطعة قديمة" : "تحصيل قطعة قديمة (سجل قديم بدون مستخدم)", l.date));
+  (state.openingDebtPayments||[]).forEach(p=> pay(p, `تحصيل دين سابق — عميل ${p.customerCode}`, p.date));
   state.vouchers.forEach(v=> add(v.boxId, v.type==="receipt" ? v.amount : -v.amount, `سند ${v.type==="receipt"?"قبض":"صرف"} ${v.voucherNo}`, v.date));
   state.expenses.forEach(e=> add(e.sourceBoxId, -e.amount, "مصروف", e.date));
   state.invoiceReturns.forEach(r=>{ if(r.refundAmount) add(r.boxId, -r.refundAmount, `استرداد مرتجع فاتورة ${r.invoiceNumber}`, r.date); });
@@ -139,7 +140,7 @@ function computeIntegrityCheck(){
   const bump = (m,id,q)=>{ if(m[id]!==undefined) m[id]+=q; };
   state.purchases.forEach(p=> bump(st, p.itemCardId, p.quantity));
   state.purchaseReturns.forEach(r=> bump(st, r.itemCardId, -r.quantity));
-  state.salesInvoices.forEach(s=> s.items.forEach(it=> bump(st, it.itemCardId, -it.qty)));
+  state.salesInvoices.forEach(s=>{ s.items.forEach(it=> bump(st, it.itemCardId, -it.qty)); (s.freeGifts||[]).forEach(f=> bump(st, f.itemCardId, -f.qty)); });
   (state.salesReturns||[]).forEach(r=> r.lines.forEach(l=> bump(st, l.itemCardId, l.qty)));
   (state.stockWriteOffs||[]).forEach(w=> bump(st, w.itemCardId, -w.qty));
   state.invoices.forEach(inv=>{
@@ -591,12 +592,44 @@ function customerDebtInvoices(){
 function buildDebtReminderMessage(inv){
   return `مرحباً ${esc(inv.customerName||"")} 👋\nتذكير بخصوص فاتورتك رقم ${esc(inv.number)} بمحل ${state.settings.shopName||"محلنا"}.\nالمبلغ المتبقي عليك: ${invoiceRemaining(inv).toFixed(0)} ريال.\nنكون شاكرين لو تفضلت بسداده بأقرب فرصة 🌹`;
 }
+function openingDebtCustomers(){
+  return state.customers.filter(c=>openingDebtRemaining(c)>0.01).sort((a,b)=>openingDebtRemaining(b)-openingDebtRemaining(a));
+}
 function renderCustomerDebts(){
   const el = $("customerDebtsList");
   const debts = customerDebtInvoices();
-  if(!debts.length){ el.innerHTML = emptyStateHtml("wallet","ما فيه مديونيات حالياً."); return; }
-  const totalOwed = debts.reduce((a,inv)=>a+invoiceRemaining(inv),0);
-  el.innerHTML = `<p class="sub" style="margin-bottom:10px;">عدد العملاء: <b>${debts.length}</b> — إجمالي المتبقي: <b style="color:var(--loss);">${totalOwed.toFixed(0)} ﷼</b></p>` +
+  const openings = openingDebtCustomers();
+  const isAdmin = currentUser && currentUser.role==="مدير";
+  if(!debts.length && !openings.length){ el.innerHTML = emptyStateHtml("wallet","ما فيه مديونيات حالياً."); return; }
+  const totalOwed = debts.reduce((a,inv)=>a+invoiceRemaining(inv),0) + openings.reduce((a,c)=>a+openingDebtRemaining(c),0);
+  el.innerHTML = `<p class="sub" style="margin-bottom:10px;">عدد المديونيات: <b>${debts.length+openings.length}</b> — إجمالي المتبقي: <b style="color:var(--loss);">${totalOwed.toFixed(0)} ﷼</b></p>` +
+    openings.map(c=>{
+      const remaining = openingDebtRemaining(c);
+      return `<div class="garment-card">
+        <span class="tag">دين سابق — عميل ${c.code} — ${esc(customerDisplayName(c))}</span>
+        <p class="sub" style="margin:6px 0;">الجوال: ${esc(c.mobile)} — سُجّل بتاريخ ${c.openingDebtDate||"—"} بمبلغ ${(c.openingDebt||0).toFixed(0)} ﷼${c.openingDebtNote?` — ${esc(c.openingDebtNote)}`:""}</p>
+        <p style="font-weight:700;color:var(--loss);margin:6px 0;">المبلغ المتبقي: ${remaining.toFixed(0)} ﷼</p>
+        <div class="row-2">
+          <div class="field" style="margin-bottom:0;"><label>مبلغ السداد (ريال)</label><input type="number" class="od-settle-amount" data-cust="${c.id}" min="0" max="${remaining}" placeholder="${remaining.toFixed(0)}"></div>
+          <div class="field" style="margin-bottom:0;"><label>طريقة السداد</label><select class="od-settle-method" data-cust="${c.id}"><option value="cash">كاش</option><option value="network">شبكة</option></select></div>
+        </div>
+        <div class="actions-row" style="margin-top:8px;">
+          <button class="btn btn-gold btn-sm" onclick="settleOpeningDebt('${c.id}')">سداد</button>
+          <a class="btn btn-ghost btn-sm" target="_blank" href="${waLink(c.mobile, buildOpeningDebtReminderMessage(c))}">تذكير</a>
+        </div>
+        ${isAdmin ? `<div class="stitch"></div>
+        <p class="sub" style="margin:0 0 6px;font-weight:700;">إجراءات المدير</p>
+        <div class="row-2">
+          <div class="field" style="margin-bottom:0;"><label>المبلغ الأصلي الصحيح (ريال)</label><input type="number" class="od-edit-amount" data-cust="${c.id}" min="0" value="${c.openingDebt}"></div>
+          <div class="field" style="margin-bottom:0;"><label>السبب</label><input type="text" class="od-admin-reason" data-cust="${c.id}" placeholder="مثلاً: غلط بالإدخال / العميل متوفى"></div>
+        </div>
+        <div class="actions-row" style="margin-top:8px;">
+          <button class="btn btn-ghost btn-sm" onclick="editOpeningDebt('${c.id}')">تعديل المبلغ</button>
+          <button class="btn btn-ghost btn-sm" onclick="writeOffOpeningDebt('${c.id}')">إتلاف الدين</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteOpeningDebt('${c.id}')">حذف الدين</button>
+        </div>` : ""}
+      </div>`;
+    }).join("") +
     debts.map(inv=>{
       const remaining = invoiceRemaining(inv);
       return `<div class="garment-card">
@@ -616,8 +649,9 @@ function renderCustomerDebts(){
     `<div class="actions-row" style="margin-top:10px;"><button class="btn btn-ghost btn-sm" id="printCustomerDebtsBtn">طباعة / حفظ PDF</button></div>`;
   const printBtn = $("printCustomerDebtsBtn");
   if(printBtn) printBtn.addEventListener("click", ()=>{
-    const html = `<h2>مديونيات العملاء — ${todayStr()}</h2><p>عدد العملاء: ${debts.length} — إجمالي المتبقي: ${totalOwed.toFixed(0)} ريال</p>
+    const html = `<h2>مديونيات العملاء — ${todayStr()}</h2><p>عدد المديونيات: ${debts.length+openings.length} — إجمالي المتبقي: ${totalOwed.toFixed(0)} ريال</p>
       <table style="width:100%;border-collapse:collapse;"><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>الجوال</th><th>التاريخ</th><th>المبلغ المتبقي</th></tr></thead><tbody>` +
+      openings.map(c=>`<tr><td>دين سابق (عميل ${c.code})</td><td>${esc(customerDisplayName(c))}</td><td>${esc(c.mobile)}</td><td>${c.openingDebtDate||"—"}</td><td>${openingDebtRemaining(c).toFixed(0)} ريال</td></tr>`).join("") +
       debts.map(inv=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${inv.date}</td><td>${invoiceRemaining(inv).toFixed(0)} ريال</td></tr>`).join("") +
       `</tbody></table>`;
     printHtml(html);
@@ -641,6 +675,106 @@ async function settleCustomerDebt(invId){
   if(await saveStateWithRollback(snapshot)){
     logAudit("customer_debt_settled", {invoiceNumber:inv.number, amount, method});
     showToast(`تم تسجيل سداد ${amount.toFixed(0)} ريال لفاتورة ${inv.number}`);
+  }
+}
+function buildOpeningDebtReminderMessage(c){
+  const name = (c.individuals[0]||{}).name || "";
+  return `مرحباً ${name} 👋\nتذكير بخصوص المبلغ السابق المسجّل عليك بمحل ${state.settings.shopName||"محلنا"}.\nالمبلغ المتبقي: ${openingDebtRemaining(c).toFixed(0)} ريال.\nنكون شاكرين لو تفضلت بسداده بأقرب فرصة 🌹`;
+}
+async function addOpeningDebtCustomer(){
+  const name = $("odName").value.trim();
+  const mobile = $("odMobile").value.trim();
+  const amount = parseFloat($("odAmount").value)||0;
+  const note = $("odNote").value.trim();
+  if(!name){ showToast("أدخل اسم العميل"); return; }
+  if(!/^[0-9]{10}$/.test(mobile)){ showToast("رقم الجوال لازم يكون 10 أرقام"); return; }
+  if(amount<=0){ showToast("أدخل مبلغ الدين السابق"); return; }
+  const existing = findCustomerByMobile(mobile);
+  // one opening debt per customer — it's the balance carried in from before the system, not a running account
+  if(existing && existing.openingDebt>0){ showToast(`هذا الجوال مسجّل مسبقاً (كود ${existing.code}) وعليه دين سابق ${existing.openingDebt.toFixed(0)} ريال`); return; }
+  if(existing && !await showConfirm(`هذا الجوال مسجّل مسبقاً باسم ${customerDisplayName(existing)} (كود ${existing.code}). تسجّل عليه دين سابق ${amount.toFixed(0)} ريال؟`)) return;
+  const snapshot = JSON.parse(JSON.stringify(state));
+  ensureCustomerIndividual(mobile, name);
+  const cust = findCustomerByMobile(mobile);
+  cust.openingDebt = amount; cust.openingDebtDate = todayStr(); cust.openingDebtBy = currentUser.username; cust.openingDebtNote = note;
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("opening_debt_added", {customerCode:cust.code, mobile, amount});
+    ["odName","odMobile","odAmount","odNote"].forEach(id=> $(id).value="");
+    showToast(`تم حفظ العميل — كوده ${cust.code} — وعليه دين سابق ${amount.toFixed(0)} ريال`);
+  }
+}
+// ---- admin-only corrections of an opening debt. Each one is audited with the old and new figures.
+function openingDebtAdminCheck(custId){
+  if(!currentUser || currentUser.role!=="مدير"){ showToast("هذا الإجراء للمدير فقط"); return null; }
+  const cust = state.customers.find(c=>c.id===custId);
+  if(!cust || !(cust.openingDebt>0)) return null;
+  return cust;
+}
+function openingDebtAdminReason(custId){ return (document.querySelector(`.od-admin-reason[data-cust="${custId}"]`)||{}).value?.trim() || ""; }
+async function editOpeningDebt(custId){
+  const cust = openingDebtAdminCheck(custId); if(!cust) return;
+  const newAmount = parseFloat(document.querySelector(`.od-edit-amount[data-cust="${custId}"]`).value);
+  const paid = openingDebtPaymentsOf(cust).reduce((a,p)=>a+(p.cash||0)+(p.network||0),0);
+  const floor = paid + (cust.openingDebtWrittenOff||0);
+  if(!(newAmount>0)){ showToast("أدخل مبلغ صحيح — ولو تبي تلغيه استخدم الحذف"); return; }
+  if(newAmount - floor < -0.01){ showToast(`المبلغ ما يقل عن المسدد منه (${floor.toFixed(0)} ريال)`); return; }
+  if(Math.abs(newAmount - cust.openingDebt) < 0.01){ showToast("نفس المبلغ الحالي"); return; }
+  const reason = openingDebtAdminReason(custId);
+  if(!reason){ showToast("اكتب سبب التعديل"); return; }
+  const oldAmount = cust.openingDebt;
+  const snapshot = JSON.parse(JSON.stringify(state));
+  cust.openingDebt = newAmount;
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("opening_debt_edited", {customerCode:cust.code, oldAmount, newAmount, reason});
+    showToast(`تم تعديل الدين السابق للعميل ${cust.code} من ${oldAmount.toFixed(0)} إلى ${newAmount.toFixed(0)} ريال`);
+  }
+}
+async function writeOffOpeningDebt(custId){
+  const cust = openingDebtAdminCheck(custId); if(!cust) return;
+  const remaining = openingDebtRemaining(cust);
+  if(remaining<=0.01){ showToast("ما عليه متبقي"); return; }
+  const reason = openingDebtAdminReason(custId);
+  if(!reason){ showToast("اكتب سبب الإتلاف"); return; }
+  if(!await showConfirm(`إتلاف المتبقي من الدين السابق على العميل ${cust.code} (${remaining.toFixed(0)} ريال)؟ يختفي من المديونيات والتنبيهات ويبقى مسجّلاً في سجل التدقيق.`)) return;
+  const snapshot = JSON.parse(JSON.stringify(state));
+  // the debt was never booked as revenue, so writing it off moves no money and touches no P&L figure
+  cust.openingDebtWrittenOff = (cust.openingDebtWrittenOff||0) + remaining;
+  cust.openingDebtWriteOffs = (cust.openingDebtWriteOffs||[]).concat([{date:todayStr(), amount:remaining, reason, by:currentUser.username}]);
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("opening_debt_written_off", {customerCode:cust.code, amount:remaining, reason});
+    showToast(`تم إتلاف ${remaining.toFixed(0)} ريال من الدين السابق للعميل ${cust.code}`);
+  }
+}
+async function deleteOpeningDebt(custId){
+  const cust = openingDebtAdminCheck(custId); if(!cust) return;
+  // collected payments are real money already in the boxes — deleting the debt under them would orphan them
+  if(openingDebtPaymentsOf(cust).length){ showToast("انسدد جزء من هذا الدين — ما ينحذف. عدّل المبلغ أو أتلف المتبقي"); return; }
+  const reason = openingDebtAdminReason(custId);
+  if(!reason){ showToast("اكتب سبب الحذف"); return; }
+  if(!await showConfirm(`حذف الدين السابق (${cust.openingDebt.toFixed(0)} ريال) عن العميل ${cust.code} نهائياً؟ العميل نفسه يبقى مسجّلاً.`)) return;
+  const snapshot = JSON.parse(JSON.stringify(state));
+  const amount = cust.openingDebt;
+  ["openingDebt","openingDebtDate","openingDebtBy","openingDebtNote","openingDebtWrittenOff","openingDebtWriteOffs"].forEach(k=> delete cust[k]);
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("opening_debt_deleted", {customerCode:cust.code, amount, reason});
+    showToast(`تم حذف الدين السابق عن العميل ${cust.code}`);
+  }
+}
+async function settleOpeningDebt(custId){
+  const cust = state.customers.find(c=>c.id===custId);
+  if(!cust) return;
+  const remaining = openingDebtRemaining(cust);
+  const amount = parseFloat(document.querySelector(`.od-settle-amount[data-cust="${custId}"]`).value) || remaining;
+  const method = document.querySelector(`.od-settle-method[data-cust="${custId}"]`).value;
+  if(amount<=0){ showToast("أدخل مبلغ سداد صحيح"); return; }
+  if(amount - remaining > 0.01){ showToast(`المبلغ أكبر من المتبقي (${remaining.toFixed(0)} ريال)`); return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
+  const payment = {id:newId(), customerId:cust.id, customerCode:cust.code, mobile:cust.mobile, date:todayStr(), cash: method==="cash"?amount:0, network: method==="network"?amount:0, recordedBy: currentUser.username};
+  state.openingDebtPayments.push(payment);
+  applyPaymentToBalances(payment);
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("opening_debt_settled", {customerCode:cust.code, amount, method});
+    showToast(`تم تسجيل سداد ${amount.toFixed(0)} ريال من الدين السابق — المتبقي ${openingDebtRemaining(cust).toFixed(0)} ريال`);
   }
 }
 async function payCreditDebt(invId, idx){
@@ -754,6 +888,7 @@ async function closeMonthNow(m){
   const collectedTotal = state.invoices.reduce((a,inv)=> a + (inv.payments||[]).filter(p=>inMonth(p.date)).reduce((s,p)=>s+(p.cash||0)+(p.network||0),0), 0)
     + state.salesInvoices.filter(s=>inMonth(s.date) && s.payment).reduce((a,s)=>a+(s.payment.cash||0)+(s.payment.network||0),0)
     + (state.legacyPayments||[]).filter(l=>inMonth(l.date)).reduce((a,l)=>a+l.amount,0)
+    + (state.openingDebtPayments||[]).filter(p=>inMonth(p.date)).reduce((a,p)=>a+(p.cash||0)+(p.network||0),0)
     - state.invoiceReturns.filter(r=>inMonth(r.date)).reduce((a,r)=>a+(r.refundAmount||0),0)
     - (state.salesReturns||[]).filter(r=>inMonth(r.date)).reduce((a,r)=>a+(r.refundAmount||0),0);
   state.closingReports.push({
