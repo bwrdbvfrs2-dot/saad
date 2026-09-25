@@ -653,6 +653,9 @@ function renderUsers(){
         <div class="field" style="margin-bottom:0;"><label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" class="edit-commission" data-idx="${i}" ${u.commissionEnabled?"checked":""}> تفعيل عمولة</label></div>
         <div class="field" style="margin-bottom:0;"><label>قيمة العمولة لكل ثوب (ريال)</label><input type="number" class="edit-commrate" data-idx="${i}" min="0" value="${u.commissionRate||""}" placeholder="0"></div>
       </div>`}
+      <div class="row-2" style="margin-top:8px;">
+        <div class="field" style="margin-bottom:0;"><label>تاريخ بداية العمل (تُمنع السلف قبل إقفال أول شهر عمل)</label><input type="date" class="edit-joined" data-idx="${i}" value="${u.joinedDate||""}"></div>
+      </div>
       <div class="row-3" style="margin-top:8px;">
         <div class="field" style="margin-bottom:0;"><label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" class="edit-discount-enabled" data-idx="${i}" ${u.discountEnabled?"checked":""}> تفعيل صلاحية الخصم</label></div>
         <div class="field" style="margin-bottom:0;"><label>نوع الحد</label><select class="edit-discount-type" data-idx="${i}"><option value="amount" ${u.discountType==="amount"?"selected":""}>مبلغ ثابت</option><option value="percent" ${u.discountType==="percent"?"selected":""}>نسبة %</option></select></div>
@@ -738,7 +741,9 @@ async function saveUserEdit(i){
   const wageChildSmall = wageChildSmallInp ? (parseFloat(wageChildSmallInp.value)||0) : 0;
   if(newPassword && newPassword.length<6){ showToast("كلمة المرور لازم تكون ٦ أحرف على الأقل"); return; }
   const prevUser = state.users[i];
-  const updatedUser = {...prevUser, username,role,baseSalary,commissionEnabled,commissionRate,discountEnabled,discountType,discountValue,dailyCapacity,productionCapacity,wageMen,wageChild,wageChildSmall};
+  const joinedInp = document.querySelector(`.edit-joined[data-idx="${i}"]`);
+  const joinedDate = joinedInp && joinedInp.value ? joinedInp.value : (prevUser.joinedDate||undefined);
+  const updatedUser = {...prevUser, username,role,joinedDate,baseSalary,commissionEnabled,commissionRate,discountEnabled,discountType,discountValue,dailyCapacity,productionCapacity,wageMen,wageChild,wageChildSmall};
   if(newPassword){
     // client-side Firebase Auth can't set another account's password directly — create a fresh
     // login account carrying the new password and retire the old one
@@ -828,7 +833,7 @@ async function addUser(){
     showToast("تعذّر تسجيل المستخدم الجديد — حاول مرة ثانية");
     return;
   }
-  const newUser = {username,role,authUid:uid,authEmail:email,baseSalary:0,commissionEnabled:false,commissionRate:0,commissionThreshold:0,discountEnabled:false,discountType:"amount",discountValue:0,dailyCapacity:0,productionCapacity:0,wageMen:0,wageChild:0,wageChildSmall:0};
+  const newUser = {username,role,authUid:uid,authEmail:email,joinedDate:todayStr(),baseSalary:0,commissionEnabled:false,commissionRate:0,commissionThreshold:0,discountEnabled:false,discountType:"amount",discountValue:0,dailyCapacity:0,productionCapacity:0,wageMen:0,wageChild:0,wageChildSmall:0};
   state.users.push(newUser); ensureUserBoxes(username);
   // fully normalize before saving so the server copy already has every per-user default field —
   // otherwise the new user's OWN client would backfill a missing field locally on first login,

@@ -513,7 +513,7 @@ async function trySetupFirstAccount(){
     // exist yet, so it must be written before shop/state itself
     await USERNAMES_COL.doc(u).set({authEmail: email});
     await ROLES_COL.doc(uid).set({role:"مدير"});
-    state.users = [{username:u, role:"مدير", authUid:uid, authEmail:email, baseSalary:0, commissionEnabled:false, commissionRate:0, commissionThreshold:0, discountEnabled:false, discountType:"amount", discountValue:0, dailyCapacity:0, productionCapacity:0, wageMen:0, wageChild:0, wageChildSmall:0}];
+    state.users = [{username:u, role:"مدير", authUid:uid, authEmail:email, joinedDate:todayStr(), baseSalary:0, commissionEnabled:false, commissionRate:0, commissionThreshold:0, discountEnabled:false, discountType:"amount", discountValue:0, dailyCapacity:0, productionCapacity:0, wageMen:0, wageChild:0, wageChildSmall:0}];
     normalizeState(); // state.users is already non-empty, so this only fills in everything else
     await STATE_DOC.set(JSON.parse(JSON.stringify(state)));
   }catch(e){

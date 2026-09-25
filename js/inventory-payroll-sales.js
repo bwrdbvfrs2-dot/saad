@@ -534,14 +534,16 @@ function renderPayrollTab(){
     const balance = employeeBalance(u.username);
     const history = state.payrollLedger.filter(e=>e.username===u.username).slice().reverse().slice(0,15);
     const historyHtml = history.length ? history.map(e=>{
-      const lbl = e.type==="entitlement"?"استحقاق":e.type==="payment"?"دفعة":e.type==="advance"?"سلفة":"خصم";
-      const sign = e.type==="entitlement" ? "+" : "-";
-      const color = e.type==="entitlement" ? "var(--profit)" : "var(--loss)";
+      const credit = e.type==="entitlement" || e.type==="bonus";
+      const lbl = e.type==="entitlement"?"استحقاق":e.type==="bonus"?"مكافأة":e.type==="payment"?"دفعة":e.type==="advance"?"سلفة":"خصم";
+      const sign = credit ? "+" : "-";
+      const color = credit ? "var(--profit)" : "var(--loss)";
       return `<div class="payment-row"><span style="color:${color};">${sign}${e.amount.toFixed(0)} ﷼</span><span>${lbl}</span><span style="color:var(--muted);">${e.date}</span>${e.note?`<span style="color:var(--muted);">${e.note}</span>`:""}</div>`;
     }).join("") : `<p class="sub">ما فيه حركات بعد.</p>`;
     return `<div class="garment-card">
       <span class="tag">${u.username} — ${u.role}</span>
       <p style="margin:6px 0;font-weight:700;color:${balance>0?'var(--loss)':'var(--profit)'};">المستحق له: ${balance.toFixed(0)} ريال</p>
+      ${(()=>{ const el = advanceEligibility(u.username); return `<p class="sub" style="margin:0 0 6px;color:${el.ok?"var(--profit)":"var(--muted)"};">${el.ok ? `السلفة متاحة (حتى ${el.balance.toFixed(0)} ريال)` : `السلفة غير متاحة: ${esc(el.msg)}`}${u.joinedDate?` — بداية العمل ${u.joinedDate}`:""}</p>`; })()}
       <div class="row-3">
         <div class="field"><label>نوع الحركة</label><select class="pr-type" data-user="${u.username}"><option value="payment">دفعة راتب</option><option value="advance">سلفة</option><option value="deduction">خصم</option></select></div>
         <div class="field"><label>المبلغ</label><input type="number" class="pr-amount" data-user="${u.username}" min="0" placeholder="0"></div>

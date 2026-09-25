@@ -80,6 +80,9 @@ function submitMailAdvanceRequest(){
   const amount = parseFloat($("mailAdvanceAmount").value)||0;
   const reason = $("mailAdvanceReason").value.trim();
   if(amount<=0){ showToast("أدخل مبلغ صحيح"); return; }
+  const eligibility = advanceEligibility(employeeUsername);
+  if(!eligibility.ok){ showToast(eligibility.msg); return; }
+  if(amount - eligibility.balance > 0.01){ showToast(`المبلغ أكبر من الرصيد المستحق (${eligibility.balance.toFixed(0)} ريال)`); return; }
   state.mailRequests.push({id:newId(), seq:nextMailRequestNo(), type:"advance", employeeUsername, amount, reason, status:"pending", createdBy:currentUser.username, date:todayStr()});
   saveState(); renderAll();
   $("mailAdvanceAmount").value=""; $("mailAdvanceReason").value=""; switchMailComposeForm(null);

@@ -392,14 +392,20 @@ function buildTailorMonthlyReport(username, monthLabel){
   if(!username) return `<p class="sub">اختر خياط.</p>`;
   const rows = [];
   let totalGarments = 0;
+  const cancelled = [];
   state.invoices.forEach(inv=>{
-    const matching = inv.garments.filter(g=> g.tailor===username && g.tailorCompletedDate && g.tailorCompletedDate.slice(0,7)===monthLabel && g.status!=="قص" && g.status!=="جديد");
+    const sewn = inv.garments.filter(g=> g.tailor===username && g.tailorCompletedDate && g.tailorCompletedDate.slice(0,7)===monthLabel && g.status!=="قص" && g.status!=="جديد");
+    // a garment cancelled before the month closes earns no wage, even though it was sewn — listed
+    // apart so the tailor isn't led to expect pay for it
+    const matching = sewn.filter(g=>g.status!=="ملغي");
+    sewn.filter(g=>g.status==="ملغي").forEach(()=> cancelled.push(inv.number));
     if(matching.length){ rows.push({inv, count:matching.length}); totalGarments += matching.length; }
   });
-  if(!rows.length) return `<p class="sub">ما فيه ثياب فصّلها هذا الخياط هذا الشهر.</p>`;
+  const cancelledNote = cancelled.length ? `<p class="sub" style="margin-top:6px;color:var(--loss);">ثياب ملغاة بدون أجر: ${cancelled.length} (فاتورة ${[...new Set(cancelled)].map(n=>"#"+esc(n)).join("، ")}) — أي ثوب يُلغى قبل إقفال الشهر ما يُصرف عليه أجر حتى لو تمت خياطته.</p>` : "";
+  if(!rows.length) return `<p class="sub">ما فيه ثياب فصّلها هذا الخياط هذا الشهر.</p>` + cancelledNote;
   const tableRows = rows.map(({inv,count})=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${inv.date}</td><td>${count}</td></tr>`).join("");
   return `<div class="table-wrap"><table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>التاريخ</th><th>عدد الثياب</th></tr></thead><tbody>${tableRows}</tbody></table></div>
-    <p style="margin-top:8px;font-weight:700;">إجمالي: ${rows.length} فاتورة — ${totalGarments} ثوب هذا الشهر</p>`;
+    <p style="margin-top:8px;font-weight:700;">إجمالي: ${rows.length} فاتورة — ${totalGarments} ثوب هذا الشهر</p>` + cancelledNote;
 }
 function buildInvoiceStatusReport(inv){
   const rows = inv.garments.map((g,idx)=>{
@@ -824,6 +830,8 @@ function computeEmployeeEntitlement(user, monthLabel){
   let garmentCount = 0, commission = 0, base = 0;
   if(user.role==="خياط"){
     state.invoices.forEach(inv=> inv.garments.forEach(g=>{
+      // policy: a garment cancelled before the month is closed earns no wage — even if cutting or
+      // sewing had already started. Payroll runs only at month close, so its status then decides.
       if(g.tailor!==user.username || g.status==="ملغي") return;
       if(!garmentQualifiesForCommission(g) || garmentWagePaidElsewhere(g, monthLabel)) return;
       const qd = commissionQualifyingDate(g);
@@ -876,8 +884,26 @@ function runPayrollForMonth(monthLabel){
 function employeeBalance(username){
   return state.payrollLedger.filter(e=>e.username===username).reduce((sum,e)=> (e.type==="entitlement"||e.type==="bonus") ? sum+e.amount : sum-e.amount, 0);
 }
+// Advance policy: no advance until the employee's first month of work has been fully completed
+// AND closed (payroll run), and only against a balance actually due to them.
+// Employees added before the start date was recorded qualify once any month has been closed with
+// an entitlement for them (their first month is by then necessarily behind them).
+function advanceEligibility(username){
+  const u = state.users.find(x=>x.username===username);
+  if(!u) return {ok:false, msg:"الموظف غير موجود"};
+  if(u.joinedDate){
+    const firstMonth = u.joinedDate.slice(0,7);
+    if(!isMonthClosed(firstMonth)) return {ok:false, msg:`ما يمكن صرف سلفة لـ${username} قبل إتمام وإقفال أول شهر عمل له (${monthDisplay(firstMonth)})`};
+  } else if(!state.payrollLedger.some(e=>e.username===username && e.type==="entitlement")){
+    return {ok:false, msg:`ما يمكن صرف سلفة لـ${username} قبل إقفال أول شهر له وتسجيل استحقاق (حدّد تاريخ بداية عمله من إعدادات المستخدمين)`};
+  }
+  const balance = employeeBalance(username);
+  if(balance <= 0.01) return {ok:false, msg:`ما يمكن صرف سلفة لـ${username} — ما له رصيد مستحق حالياً`};
+  return {ok:true, balance};
+}
 function addPayrollEntry(username, type, amount, boxId, note){
   if(amount<=0) return {ok:false,msg:"أدخل مبلغ صحيح"};
+  if(type==="advance"){ const el = advanceEligibility(username); if(!el.ok) return el; }
   if(type==="deduction" && !note.trim()) return {ok:false,msg:"أدخل ملاحظة توضح سبب الخصم"};
   const balance = employeeBalance(username);
   if((type==="payment"||type==="advance") && amount - balance > 0.01) return {ok:false,msg:`المبلغ أكبر من المستحق (${balance.toFixed(0)} ريال)`};
