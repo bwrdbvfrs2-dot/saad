@@ -674,6 +674,7 @@ function resetSaleForm(){
   $("saleDate").value = todayStr();
   $("saleCustName").value=""; $("saleCustMobile").value="";
   $("salePickerWrap").style.display="none"; $("salePickerWrap").innerHTML="";
+  $("saleCustomerAlertWrap").style.display="none"; $("saleCustomerAlertWrap").innerHTML="";
   $("saleItemsHolder").innerHTML="";
   renderSaleLine();
   saleCashTouched = false;

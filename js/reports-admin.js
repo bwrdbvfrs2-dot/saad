@@ -881,20 +881,7 @@ $("invCount").addEventListener("input", ()=>{
   renderGarmentFields();
   if(!editingId) $("invDeliveryDate").value = formatDateInput(computeExpectedDeliveryDate(parseInt($("invCount").value)||1));
 });
-function renderCustomerAlert(mobile){
-  const wrap = $("customerAlertWrap");
-  if(!wrap) return;
-  if(!/^[0-9]{10}$/.test(mobile)){ wrap.style.display="none"; wrap.innerHTML=""; return; }
-  const alert = getCustomerStandingAlert(mobile);
-  if(!alert){ wrap.style.display="none"; wrap.innerHTML=""; return; }
-  const parts = [];
-  if(alert.totalDebt>0.01) parts.push(`عليه مبلغ متعثر (دين) قدره ${alert.totalDebt.toFixed(0)} ريال`);
-  if(alert.undeliveredCount>0) parts.push(`عليه ${alert.undeliveredCount} ثوب متعثر التسليم`);
-  if(alert.convertedGarments && alert.convertedGarments.length) parts.push(...alert.convertedGarments.map(({inv,g})=>`عليه ثوب سابق (فاتورة #${esc(inv.number)}) تحوّل "متعثر" وانباع لعميل ثاني بتاريخ ${g.saleConversionDate}`));
-  wrap.style.display = "";
-  const jumpBtn = alert.totalDebt>0.01 ? `<button type="button" class="btn btn-ghost btn-sm" onclick="switchTab('customerDebts')" style="margin-right:8px;">الذهاب لتسوية المديونية</button>` : "";
-  wrap.innerHTML = `<div class="item-row" style="background:rgba(224,90,90,0.12);border:1px solid var(--loss);border-radius:8px;padding:8px 12px;"><span style="color:var(--loss);font-weight:700;">تنبيه: ${parts.join(" و")}</span>${jumpBtn}</div>`;
-}
+function renderCustomerAlert(mobile){ renderCustomerStandingAlerts(mobile, "customerAlertWrap"); }
 $("custMobile").addEventListener("input", ()=>{
   renderCustomerPicker("custMobile","custName","custPickerWrap"); renderLoyaltyInfo();
   const mobile = $("custMobile").value.trim();
@@ -932,6 +919,7 @@ $("saleCustMobile").addEventListener("input", ()=>{
   renderCustomerPicker("saleCustMobile","saleCustName","salePickerWrap");
   const mobile = $("saleCustMobile").value.trim();
   $("saleCustNewBadge").style.display = (/^[0-9]{10}$/.test(mobile) && !findCustomerByMobile(mobile)) ? "" : "none";
+  renderCustomerStandingAlerts(mobile, "saleCustomerAlertWrap");
 });
 $("saleCustName").addEventListener("input", ()=>{
   if($("saleCustMobile").value.trim()) return;

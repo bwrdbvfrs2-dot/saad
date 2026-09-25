@@ -412,22 +412,70 @@ function returnFabricForGarment(g){
 
 // ---------------- customer cards (shared phone number, multiple individuals) ----------------
 function findCustomerByMobile(mobile){ return state.customers.find(c=>c.mobile===mobile); }
+// A customer's standing, as two strictly separate things that must never be merged or confused:
+//  - debt: MONEY owed for garments already HANDED OVER and not fully paid for (the garment left
+//    the shop, the money didn't come in). A garment still in the shop is never debt, however
+//    much of it is unpaid — the customer simply pays the rest on pickup.
+//  - stuck garments: FINISHED garments (ready) still sitting in the shop, never picked up. This
+//    is about goods, not money — no amount is attached to it.
+// (Before, "debt" summed the unpaid part of every garment including ones still being cut or
+// sewn, and "stuck" counted every undelivered garment including brand-new orders.)
+function isStuckReadyGarment(g){
+  return g.status==="جاهز" || (g.status==="معلقة" && !!g.readyDate); // معلقة = carried over at month close
+}
+function deliveredGarmentOwed(g, inv){
+  if(g.status!=="تسليم") return 0;
+  // a garment handed over on credit tracks its own balance; any other delivered garment owes
+  // its share of whatever is still unpaid on the invoice
+  if(g.creditDelivered) return Math.max(0, (g.creditAmount||0) - (g.creditPaid||0));
+  return Math.max(0, garmentRemaining(g, inv));
+}
 function getCustomerStandingAlert(mobile){
   const invs = state.invoices.filter(inv=>inv.customerMobile===mobile);
   if(!invs.length) return null;
-  let totalDebt = 0, undeliveredCount = 0;
+  let debtAmount = 0;
+  const debtInvoices = new Set();
+  const stuckGarments = [];
   const convertedGarments = [];
   invs.forEach(inv=>{
     inv.garments.forEach(g=>{
       if(g.convertedToSale){ convertedGarments.push({inv, g}); return; }
       if(g.status==="ملغي") return;
-      const rem = garmentRemaining(g, inv);
-      if(rem > 0.01) totalDebt += rem;
-      if(g.status!=="تسليم") undeliveredCount++;
+      const owed = deliveredGarmentOwed(g, inv);
+      if(owed > 0.01){ debtAmount += owed; debtInvoices.add(inv.number); }
+      if(isStuckReadyGarment(g)) stuckGarments.push({inv, g});
     });
   });
-  if(totalDebt<=0.01 && undeliveredCount===0 && !convertedGarments.length) return null;
-  return {totalDebt, undeliveredCount, convertedGarments};
+  if(debtAmount<=0.01 && !stuckGarments.length && !convertedGarments.length) return null;
+  return {debtAmount: debtAmount>0.01 ? debtAmount : 0, debtInvoices:[...debtInvoices], stuckGarments, convertedGarments};
+}
+// renders the standing as separate, independent alert boxes — one per kind — into wrapId
+function renderCustomerStandingAlerts(mobile, wrapId){
+  const wrap = $(wrapId);
+  if(!wrap) return;
+  const alert = /^[0-9]{10}$/.test(mobile) ? getCustomerStandingAlert(mobile) : null;
+  if(!alert){ wrap.style.display="none"; wrap.innerHTML=""; return; }
+  const box = (color, bg, title, body, action)=> `<div style="background:${bg};border:1px solid ${color};border-radius:8px;padding:10px 12px;margin-bottom:8px;">
+    <div style="color:${color};font-weight:800;margin-bottom:4px;">${title}</div>
+    <div style="font-size:13px;">${body}</div>${action||""}</div>`;
+  let html = "";
+  if(alert.debtAmount>0){
+    html += box("var(--loss)", "rgba(224,90,90,0.12)", `💰 تنبيه دين: على العميل ${alert.debtAmount.toFixed(0)} ريال`,
+      `مبلغ مالي مستحق عن ثياب <b>تم تسليمها له</b> ولم يُسدد كامل قيمتها — فاتورة ${alert.debtInvoices.map(n=>"#"+esc(n)).join("، ")}.`,
+      `<button type="button" class="btn btn-ghost btn-sm" onclick="switchTab('customerDebts')" style="margin-top:6px;">الذهاب لتسوية المديونية</button>`);
+  }
+  if(alert.stuckGarments.length){
+    const byInv = {};
+    alert.stuckGarments.forEach(({inv})=>{ byInv[inv.number] = (byInv[inv.number]||0)+1; });
+    html += box("var(--gold)", "rgba(200,160,80,0.12)", `👔 تنبيه ثياب متعثرة: ${alert.stuckGarments.length} ثوب جاهز بالمحل لم يُستلم`,
+      `ثياب <b>منجزة وجاهزة</b> ما زالت في المحل ولم تُسلَّم للعميل بعد — ${Object.entries(byInv).map(([n,c])=>`فاتورة #${esc(n)} (${c} ثوب)`).join("، ")}. هذا ليس ديناً مالياً.`);
+  }
+  if(alert.convertedGarments.length){
+    html += box("var(--muted)", "rgba(128,128,128,0.10)", `ℹ ثياب سابقة تحوّلت وانباعت`,
+      alert.convertedGarments.map(({inv,g})=>`ثوب سابق (فاتورة #${esc(inv.number)}) تحوّل "متعثر" وانباع لعميل ثاني بتاريخ ${g.saleConversionDate}`).join("<br>"));
+  }
+  wrap.style.display = "";
+  wrap.innerHTML = html;
 }
 function findCustomerByIndividualName(name){
   if(!name) return null;
