@@ -839,12 +839,16 @@ function garmentsCutInMonth(monthLabel){
 }
 // a sales invoice's lines keep their list prices; any promo code / offer / direct discount is stored
 // once on the invoice (discountTotal) — every total, profit, VAT and refund goes through these
+// a free gift leaves stock at its cost with nothing charged for it. Gifts recorded before the cost was
+// stored on them fall back to the item's current cost
+function freeGiftCost(f){ const c = findItemCard(f.itemCardId); return (f.qty||0) * (f.costAtSale!==undefined ? f.costAtSale : (c ? c.currentCost||0 : 0)); }
+function freeGiftsCost(inv){ return (inv.freeGifts||[]).reduce((a,f)=>a+freeGiftCost(f),0); }
 function saleSubtotal(inv){ return inv.items.reduce((a,it)=>a+it.qty*it.price,0); }
 function saleNetTotal(inv){ return Math.max(0, saleSubtotal(inv) - (inv.discountTotal||0)); }
 function saleNetFactor(inv){ const s = saleSubtotal(inv); return s>0 ? saleNetTotal(inv)/s : 1; }
 function salesInvoiceProfit(inv){
   // a free gift leaves stock at its cost with nothing charged for it — that cost comes off the sale's profit
-  const giftCost = (inv.freeGifts||[]).reduce((a,f)=>a+(f.qty||0)*(f.costAtSale||0),0);
+  const giftCost = freeGiftsCost(inv);
   return inv.items.reduce((a,it)=>a+((it.price-(it.costAtSale||0))*it.qty),0) - (inv.discountTotal||0) - giftCost;
 }
 // ---------------- sales returns ----------------
