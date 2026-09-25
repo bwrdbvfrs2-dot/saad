@@ -574,7 +574,7 @@ function renderCustomerPicker(mobileInputId, nameInputId, pickerWrapId){
 function customerTotalSpend(mobile){
   let total = 0;
   state.invoices.forEach(inv=>{ if(inv.customerMobile===mobile) total += invoiceSaleTotal(inv); });
-  state.salesInvoices.forEach(inv=>{ if(inv.customerMobile===mobile) total += inv.items.reduce((a,it)=>a+it.qty*it.price,0) - saleReturnsOf(inv).reduce((a,r)=>a+saleReturnValue(r),0); });
+  state.salesInvoices.forEach(inv=>{ if(inv.customerMobile===mobile) total += saleNetTotal(inv) - saleReturnsOf(inv).reduce((a,r)=>a+saleReturnValue(r),0); });
   return total;
 }
 function customerTier(mobile){
@@ -824,8 +824,13 @@ function garmentsCutInMonth(monthLabel){
   }));
   return n;
 }
+// a sales invoice's lines keep their list prices; any promo code / offer / direct discount is stored
+// once on the invoice (discountTotal) — every total, profit, VAT and refund goes through these
+function saleSubtotal(inv){ return inv.items.reduce((a,it)=>a+it.qty*it.price,0); }
+function saleNetTotal(inv){ return Math.max(0, saleSubtotal(inv) - (inv.discountTotal||0)); }
+function saleNetFactor(inv){ const s = saleSubtotal(inv); return s>0 ? saleNetTotal(inv)/s : 1; }
 function salesInvoiceProfit(inv){
-  return inv.items.reduce((a,it)=>a+((it.price-(it.costAtSale||0))*it.qty),0);
+  return inv.items.reduce((a,it)=>a+((it.price-(it.costAtSale||0))*it.qty),0) - (inv.discountTotal||0);
 }
 // ---------------- sales returns ----------------
 // a return is booked on the day it happens (its own month / VAT period), never back-dated into the

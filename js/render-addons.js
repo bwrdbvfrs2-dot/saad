@@ -370,7 +370,7 @@ function renderOffers(){
   const matchBy = $("offerMatchBy")?.value;
   if($("offerMatchValue")){
     if(matchBy==="origin") $("offerMatchValue").innerHTML = state.fabricOrigins.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("");
-    else $("offerMatchValue").innerHTML = state.itemCards.filter(c=>c.type==="fabric" && c.active).map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("") || `<option value="">-- ما فيه أصناف قماش --</option>`;
+    else $("offerMatchValue").innerHTML = state.itemCards.filter(c=>(c.type==="fabric"||c.type==="product") && c.active).map(c=>`<option value="${c.id}">${esc(c.name)}${c.type==="product"?" (منتج — لفاتورة المبيعات)":""}</option>`).join("") || `<option value="">-- ما فيه أصناف --</option>`;
   }
   if($("offerGiftItem")) $("offerGiftItem").innerHTML = state.itemCards.filter(c=>c.active).map(c=>`<option value="${c.id}">${esc(c.name)} (${c.type==="fabric"?"قماش":c.type==="product"?"منتج":"ملحق"})</option>`).join("") || `<option value="">-- ما فيه أصناف --</option>`;
 }

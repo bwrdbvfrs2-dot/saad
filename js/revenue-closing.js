@@ -139,7 +139,7 @@ function computeIntegrityCheck(){
   const bump = (m,id,q)=>{ if(m[id]!==undefined) m[id]+=q; };
   state.purchases.forEach(p=> bump(st, p.itemCardId, p.quantity));
   state.purchaseReturns.forEach(r=> bump(st, r.itemCardId, -r.quantity));
-  state.salesInvoices.forEach(s=> s.items.forEach(it=> bump(st, it.itemCardId, -it.qty)));
+  state.salesInvoices.forEach(s=>{ s.items.forEach(it=> bump(st, it.itemCardId, -it.qty)); (s.freeGifts||[]).forEach(f=> bump(st, f.itemCardId, -f.qty)); });
   (state.salesReturns||[]).forEach(r=> r.lines.forEach(l=> bump(st, l.itemCardId, l.qty)));
   (state.stockWriteOffs||[]).forEach(w=> bump(st, w.itemCardId, -w.qty));
   state.invoices.forEach(inv=>{

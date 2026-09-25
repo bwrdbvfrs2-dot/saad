@@ -577,6 +577,7 @@ function applyRolePermissions(){
     btn.style.display = allowedTabs.includes(btn.dataset.tab) ? "" : "none";
   });
   $("hamburgerBtn").style.display = (isTailor||isQc) ? "none" : "";
+  $("quickLabelBtn").style.display = (isTailor||isQc) ? "none" : "";
   renderNavDrawer();
   renderSidebar();
   renderBottomNav();
