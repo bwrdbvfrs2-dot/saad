@@ -232,6 +232,11 @@ function normalizeState(){
   Object.values(state.permissions).forEach(p=>{ if(p.tabs && !p.tabs.includes("vouchers")) p.tabs.push("vouchers"); });
   Object.values(state.permissions).forEach(p=>{ if(p.tabs && !p.tabs.includes("production")) p.tabs.push("production"); });
   Object.values(state.permissions).forEach(p=>{ if(p.tabs && !p.tabs.includes("mail")) p.tabs.push("mail"); });
+  if(!state.settings.qcTabGranted){ // one-time: hand the new quality-check tab to every employee role
+    Object.values(state.permissions).forEach(p=>{ if(p.tabs && !p.tabs.includes("qc")) p.tabs.push("qc"); });
+    state.settings.qcTabGranted = true;
+  }
+  if(!state.qcLog) state.qcLog=[];
   if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("sensitiveFinancials")) state.permissions["مدير"].tabs.push("sensitiveFinancials");
   if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("advisoryBalances")) state.permissions["مدير"].tabs.push("advisoryBalances");
   if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("customerDebts")) state.permissions["مدير"].tabs.push("customerDebts");
@@ -539,21 +544,23 @@ async function logout(){
 function applyRolePermissions(){
   const isAdmin = currentUser.role==="مدير";
   const isTailor = currentUser.role==="خياط";
+  const isQc = currentUser.role==="فاحص جودة";
   $("payrollToggleBtn").style.display = isAdmin ? "" : "none";
   SETTINGS_TABS.forEach(t=>{
     const el = $("adminOnly_"+t); if(el) el.style.display = isAdmin?"":"none";
   });
-  const allowedTabs = isTailor ? ["scan","mail"] : (state.permissions[currentUser.role]?.tabs || []);
+  let allowedTabs = isTailor ? ["scan","mail"] : isQc ? ["qc","mail"] : (state.permissions[currentUser.role]?.tabs || []);
+  if(!state.settings.qcEnabled && !isQc) allowedTabs = allowedTabs.filter(t=>t!=="qc");
   document.querySelectorAll(".tab-btn").forEach(btn=>{
     btn.style.display = allowedTabs.includes(btn.dataset.tab) ? "" : "none";
   });
-  $("hamburgerBtn").style.display = isTailor ? "none" : "";
+  $("hamburgerBtn").style.display = (isTailor||isQc) ? "none" : "";
   renderNavDrawer();
   renderSidebar();
   renderBottomNav();
   const activeTab = document.querySelector(".tab-panel.active")?.id?.replace("tab-","");
   if(activeTab && !allowedTabs.includes(activeTab)){
-    switchTab(allowedTabs[0] || (isTailor?"scan":"invoice"));
+    switchTab(allowedTabs[0] || (isTailor?"scan":isQc?"qc":"invoice"));
   }
 }
 const NAV_GROUPS = [
@@ -572,6 +579,7 @@ const NAV_GROUPS = [
     {tab:"production", label:"متابعة الإنتاج"},
     {tab:"scan", label:"مسح الباركود"},
     {tab:"alteration", label:"ثوب معاد للتعديل"},
+    {tab:"qc", label:"فحص الجودة"},
     {tab:"debts", label:"مديونية الثياب"},
     {tab:"report-undelivered", label:"الثياب غير المسلّمة"},
     {tab:"report-garmentInventory", label:"جرد الثياب حسب الحالة"},
@@ -623,7 +631,7 @@ function allNavItemsFlat(){ return NAV_GROUPS.flatMap(g=>g.items); }
 const TAB_ICONS = {
   dashboard:"layout-dashboard", invoice:"file-text", salesInvoice:"shopping-bag", "report-returns":"rotate-ccw",
   "report-missingReceipt":"receipt", invoicesList:"list", distribution:"scissors", production:"shirt",
-  scan:"scan-line", alteration:"refresh-cw", debts:"credit-card", "report-undelivered":"package",
+  scan:"scan-line", alteration:"refresh-cw", qc:"badge-check", debts:"credit-card", "report-undelivered":"package",
   "report-garmentInventory":"clipboard-list", "report-noFabricWage":"scissors", customerDebts:"wallet", "report-customers":"users",
   "report-broadcastCampaign":"megaphone", itemCards:"layers", suppliers:"factory", purchases:"shopping-cart",
   purchaseReturns:"corner-up-left", legacy:"archive", balances:"wallet", expenses:"receipt", vouchers:"file-text",
@@ -687,7 +695,7 @@ function renderBottomNav(){
   const activeTab = document.querySelector(".tab-panel.active")?.id?.replace("tab-","");
   const flat = allNavItemsFlat();
   const isTailor = currentUser.role==="خياط";
-  const candidateTabs = isTailor ? ["scan","mail"] : BOTTOM_NAV_TABS;
+  const candidateTabs = isTailor ? ["scan","mail"] : currentUser.role==="فاحص جودة" ? ["qc","mail"] : BOTTOM_NAV_TABS;
   const items = candidateTabs.map(t=>{
     if(t==="mail") return {tab:"mail", label:"البريد"};
     const src = document.querySelector(`.tab-btn[data-tab="${t}"]`);

@@ -20,6 +20,7 @@ function renderAll(){
   renderExpenseCategories();
   $("setMeasureUnit").value = state.settings.measureUnit;
   $("setCommissionBasis").value = state.settings.commissionBasis||"تسليم";
+  if($("setQcEnabled")) $("setQcEnabled").checked = !!state.settings.qcEnabled;
   if($("setCuttingCardTemplate")) $("setCuttingCardTemplate").value = state.settings.cuttingCardTemplate||"default";
   $("setLoyEarnRate").value = state.settings.loyaltyEarnRate;
   $("setLoyRedeemRate").value = state.settings.loyaltyRedeemRate;
@@ -78,7 +79,7 @@ function renderAll(){
     const tr2=document.createElement("tr"); tr2.innerHTML=`<td colspan="8" style="padding-top:0;padding-bottom:14px;">${badges}</td>`; body.appendChild(tr2);
   });
 
-  renderClosedReports(); renderGrowthReport(); renderSearch(); renderReturnResponsibleSelect(); renderTailorReportSelector(); renderBroadcastList(); renderSensitiveGate(); renderCustomers(); renderPendingList(); updateFixedShareNote(); renderLegacyItems(); renderBalancesTab(); renderDebtsTab(); renderCustomerDebts(); renderInventoryTab(); renderInventoryValuation(); renderSalesInvoicesList(); refreshSaleLineOptions(); renderAddonsList(); refreshAddonForm(); renderScanTab(); renderPayrollTab(); renderEntitlementPreview(); renderAlterationSettings(); renderAlterationsLog(); updateManualCardLabels(); renderCustomShopFields(); renderFabricOrigins(); if($("setPrintOriginOnLabel")) $("setPrintOriginOnLabel").checked = state.settings.printOriginOnLabel; renderOffers(); renderOptionLists(); renderCustomMeasurementFields(); renderOverdueDashboard(); renderOverdueDashboard("dashboardOverdue", true); renderDashboardKPIs(); renderDashboardWorkDistribution(); renderShiftClosingsLog(); renderQuickMenuBar(); renderQuickMenuEditor(); renderReturnsLog(); renderPromoCodesAdmin(); renderAppliedPromoBanner(); renderVouchersTab(); renderTopExpensesReport(); renderVatLedger(); renderProductionTracking(); renderSeasonsList(); renderCustomerNameDatalist("custNameDatalist"); renderCuttingImageEditor(); applyShopBranding(); renderMailTab(); if(currentUser && currentUser.role==="مدير"){ renderUsers(); renderPermissionsEditor(); }
+  renderClosedReports(); renderGrowthReport(); renderSearch(); renderReturnResponsibleSelect(); renderTailorReportSelector(); renderBroadcastList(); renderSensitiveGate(); renderCustomers(); renderPendingList(); updateFixedShareNote(); renderLegacyItems(); renderBalancesTab(); renderDebtsTab(); renderCustomerDebts(); renderInventoryTab(); renderInventoryValuation(); renderSalesInvoicesList(); refreshSaleLineOptions(); renderAddonsList(); refreshAddonForm(); renderScanTab(); renderPayrollTab(); renderEntitlementPreview(); renderAlterationSettings(); renderAlterationsLog(); renderQcTab(); updateManualCardLabels(); renderCustomShopFields(); renderFabricOrigins(); if($("setPrintOriginOnLabel")) $("setPrintOriginOnLabel").checked = state.settings.printOriginOnLabel; renderOffers(); renderOptionLists(); renderCustomMeasurementFields(); renderOverdueDashboard(); renderOverdueDashboard("dashboardOverdue", true); renderDashboardKPIs(); renderDashboardWorkDistribution(); renderShiftClosingsLog(); renderQuickMenuBar(); renderQuickMenuEditor(); renderReturnsLog(); renderPromoCodesAdmin(); renderAppliedPromoBanner(); renderVouchersTab(); renderTopExpensesReport(); renderVatLedger(); renderProductionTracking(); renderSeasonsList(); renderCustomerNameDatalist("custNameDatalist"); renderCuttingImageEditor(); applyShopBranding(); renderMailTab(); if(currentUser && currentUser.role==="مدير"){ renderUsers(); renderPermissionsEditor(); }
   applyRolePermissions();
   refreshLucideIcons();
 }
@@ -555,3 +556,122 @@ function renderLegacyItems(){
   $("legacyEmptyState").style.display = state.legacyItems.length?"none":"block";
 }
 function typeLabel(t){ return t==="cash"?"كاش":"شبكة"; }
+
+// ---------------- quality check (optional, settings → finance) ----------------
+// When enabled, a garment the tailor marked "تم التفصيل" only becomes "جاهز" after passing the check.
+// A failed check sends it back to the SAME tailor (status back to قص) with the reason and who's
+// responsible recorded; the tailor re-scans it as "تم التفصيل" once fixed and it's checked again.
+function qcAwaitingGarments(){
+  const rows = [];
+  state.invoices.forEach(inv=> inv.garments.forEach((g,idx)=>{ if(g.status==="تفصيل") rows.push({inv, g, idx}); }));
+  return rows;
+}
+function loadQcInvoice(num){
+  const wrap = $("qcGarments");
+  if(!num){ showToast("أدخل رقم الفاتورة"); return; }
+  const inv = state.invoices.find(i=>i.number===num);
+  if(!inv){ wrap.innerHTML = ""; showToast("ما فيه فاتورة بهذا الرقم"); return; }
+  const reasons = state.alterationReasons||[];
+  const people = state.users.map(u=>u.username);
+  const rows = inv.garments.map((g,idx)=>{
+    const st = STATUSES.find(s=>s.v===g.status)?.label || g.status;
+    const head = `<span class="tag">ثوب ${idx+1} — ${esc(g.fabricType||"—")} (${esc(g.category||"")}) — الخياط: ${esc(g.tailor||"—")}</span>`;
+    if(g.status!=="تفصيل") return `<div class="garment-card">${head}<p class="sub" style="margin:6px 0 0;">الحالة: ${st}${g.qcReturnedTo?` — راجع للخياط ${esc(g.qcReturnedTo)} للإصلاح`:""}${g.qcPassedDate?` — اجتاز الفحص ${g.qcPassedDate}`:""}</p></div>`;
+    return `<div class="garment-card">${head}
+      <p class="sub" style="margin:6px 0;">ينتظر الفحص${g.qcRejections?` — مرفوض سابقاً ${g.qcRejections} مرة وتم إصلاحه`:""}</p>
+      <div class="actions-row" style="margin-top:0;"><button class="btn btn-gold btn-sm" onclick="qcPass('${inv.id}', ${idx})">✅ اجتاز الفحص — جاهز</button>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('qcRejectForm${idx}').style.display=''">❌ رفض وإرجاع للخياط</button></div>
+      <div id="qcRejectForm${idx}" style="display:none;margin-top:8px;">
+        <div class="row-2">
+          <div class="field"><label>سبب الرفض</label>${reasons.length ? `<select class="qc-reason" data-idx="${idx}"><option value="">-- اختر --</option>${reasons.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join("")}</select>` : `<input type="text" class="qc-reason" data-idx="${idx}" placeholder="مثلاً: خياطة الكم غير مستوية">`}</div>
+          <div class="field"><label>المتسبّب</label><select class="qc-responsible" data-idx="${idx}">${people.map(u=>`<option value="${esc(u)}" ${u===g.tailor?"selected":""}>${esc(u)}</option>`).join("")}</select></div>
+        </div>
+        <div class="field"><label>ملاحظة للخياط (اختياري)</label><input type="text" class="qc-notes" data-idx="${idx}"></div>
+        <button class="btn btn-danger btn-sm" onclick="qcReject('${inv.id}', ${idx})">تأكيد الرفض — يرجع للخياط ${esc(g.tailor||"")}</button>
+      </div></div>`;
+  }).join("");
+  wrap.innerHTML = `<p class="sub" style="margin:0 0 8px;">فاتورة ${esc(inv.number)} — ${esc(inv.customerName||"—")}</p>` + rows;
+}
+async function qcPass(invId, idx){
+  if(!state.settings.qcEnabled){ showToast("فحص الجودة غير مفعّل"); return; }
+  const inv = state.invoices.find(i=>i.id===invId); const g = inv && inv.garments[idx];
+  if(!g || g.status!=="تفصيل"){ showToast("هذا الثوب ما عاد ينتظر الفحص"); loadQcInvoice(inv?inv.number:""); return; }
+  const waPopup = openReadyWaPopup(inv);
+  const snapshot = JSON.parse(JSON.stringify(state));
+  g.status = "جاهز";
+  if(!g.readyDate) g.readyDate = todayStr();
+  if(!g.qcPassedDate) g.qcPassedDate = todayStr(); // first pass only — a garment's wage date never moves again
+  g.qcBy = currentUser.username;
+  state.qcLog.push({id:newId(), date:todayStr(), invoiceId:inv.id, invoiceNumber:inv.number, garmentIndex:idx, tailor:g.tailor||"", result:"pass", by:currentUser.username, afterRepair:!!g.qcRejections});
+  if(!await saveStateWithRollback(snapshot)){ if(waPopup) waPopup.close(); return; }
+  logAudit("qc_passed", {invoiceNumber:inv.number, garmentIdx:idx, tailor:g.tailor||""});
+  showToast(`ثوب ${idx+1} اجتاز الفحص وصار جاهز`);
+  finishReadyWaPopup(waPopup, "qcWaReadyBanner", inv);
+  loadQcInvoice(inv.number);
+}
+async function qcReject(invId, idx){
+  if(!state.settings.qcEnabled){ showToast("فحص الجودة غير مفعّل"); return; }
+  const inv = state.invoices.find(i=>i.id===invId); const g = inv && inv.garments[idx];
+  if(!g || g.status!=="تفصيل"){ showToast("هذا الثوب ما عاد ينتظر الفحص"); loadQcInvoice(inv?inv.number:""); return; }
+  const reason = (document.querySelector(`.qc-reason[data-idx="${idx}"]`)?.value||"").trim();
+  const responsible = document.querySelector(`.qc-responsible[data-idx="${idx}"]`)?.value||"";
+  const notes = (document.querySelector(`.qc-notes[data-idx="${idx}"]`)?.value||"").trim();
+  if(!reason){ showToast("اختر أو اكتب سبب الرفض"); return; }
+  if(!g.tailor){ showToast("هذا الثوب ما عليه خياط مسجّل — ما يمكن إرجاعه"); return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
+  g.status = "قص";                     // back on the tailor's bench
+  g.qcReturnedTo = g.tailor;           // only this tailor can re-scan it as "تم التفصيل"
+  g.qcRejections = (g.qcRejections||0) + 1;
+  if(g.wagePaidOut && !g.wagePaidMonth) g.wagePaidMonth = "سابق"; // already paid before this check existed — never pay again
+  state.qcLog.push({id:newId(), date:todayStr(), invoiceId:inv.id, invoiceNumber:inv.number, garmentIndex:idx, tailor:g.tailor, result:"reject", reason, responsible, notes, by:currentUser.username});
+  if(!await saveStateWithRollback(snapshot)) return;
+  logAudit("qc_rejected", {invoiceNumber:inv.number, garmentIdx:idx, tailor:g.tailor, reason, responsible});
+  showToast(`تم رفض ثوب ${idx+1} وإرجاعه للخياط ${g.tailor}`);
+  loadQcInvoice(inv.number);
+}
+function renderQcTab(){
+  if(!$("qcQueue") || !currentUser) return;
+  const on = !!state.settings.qcEnabled;
+  $("qcDisabledNote").style.display = on ? "none" : "";
+  $("qcWorkArea").style.display = on ? "" : "none";
+  if(!on) return;
+  const waiting = qcAwaitingGarments();
+  $("qcQueue").innerHTML = waiting.length ? `<div class="table-wrap"><table><thead><tr><th>الفاتورة</th><th>الثوب</th><th>الخياط</th><th>تم التفصيل</th><th></th></tr></thead><tbody>${
+    waiting.map(({inv,g,idx})=>`<tr><td>${esc(inv.number)}</td><td>${idx+1} — ${esc(g.fabricType||"")}${g.qcRejections?` <span style="color:var(--gold-soft);">(بعد إصلاح)</span>`:""}</td><td>${esc(g.tailor||"—")}</td><td>${g.tailorCompletedDate||"—"}</td><td><button class="btn btn-ghost btn-sm" onclick="document.getElementById('qcInvNumber').value='${esc(inv.number)}'; loadQcInvoice('${esc(inv.number)}');">فحص</button></td></tr>`).join("")
+  }</tbody></table></div>` : `<p class="sub">ما فيه ثياب تنتظر الفحص.</p>`;
+  // per-tailor quality for the current month: garments checked, passed first time, rejections and top reason
+  const month = todayStr().slice(0,7);
+  const monthLog = state.qcLog.filter(l=>(l.date||"").slice(0,7)===month);
+  const byTailor = {};
+  monthLog.forEach(l=>{
+    const t = byTailor[l.tailor||"—"] || (byTailor[l.tailor||"—"] = {passFirst:0, passAfterRepair:0, rejects:0, reasons:{}});
+    if(l.result==="pass"){ if(l.afterRepair) t.passAfterRepair++; else t.passFirst++; }
+    else { t.rejects++; t.reasons[l.reason] = (t.reasons[l.reason]||0)+1; }
+  });
+  const tailors = Object.entries(byTailor);
+  $("qcTailorStats").innerHTML = tailors.length ? `<div class="table-wrap"><table><thead><tr><th>الخياط</th><th>اجتاز من أول مرة</th><th>اجتاز بعد إصلاح</th><th>مرات الرفض</th><th>نسبة الجودة</th><th>أكثر سبب رفض</th></tr></thead><tbody>${
+    tailors.map(([name,t])=>{
+      const passed = t.passFirst + t.passAfterRepair;
+      const rate = passed ? Math.round(t.passFirst/passed*100) : 0;
+      const top = Object.entries(t.reasons).sort((a,b)=>b[1]-a[1])[0];
+      return `<tr><td>${esc(name)}</td><td>${t.passFirst}</td><td>${t.passAfterRepair}</td><td>${t.rejects}</td><td>${passed?rate+"%":"—"}</td><td>${top?`${esc(top[0])} (${top[1]})`:"—"}</td></tr>`;
+    }).join("")
+  }</tbody></table></div><p class="sub" style="margin:6px 0 0;">نسبة الجودة = الثياب اللي اجتازت من أول مرة ÷ كل الثياب اللي اجتازت هذا الشهر.</p>` : `<p class="sub">ما فيه عمليات فحص هذا الشهر بعد.</p>`;
+  const recent = state.qcLog.slice().reverse().slice(0,20);
+  $("qcLogView").innerHTML = recent.length ? `<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>الفاتورة</th><th>الخياط</th><th>النتيجة</th><th>السبب / المتسبّب</th><th>الفاحص</th></tr></thead><tbody>${
+    recent.map(l=>`<tr><td>${l.date}</td><td>${esc(l.invoiceNumber)} (ثوب ${l.garmentIndex+1})</td><td>${esc(l.tailor||"—")}</td><td>${l.result==="pass"?`<span style="color:var(--profit);font-weight:700;">اجتاز</span>`:`<span style="color:var(--loss);font-weight:700;">مرفوض</span>`}</td><td>${l.result==="reject"?`${esc(l.reason)} — ${esc(l.responsible||"")}${l.notes?` (${esc(l.notes)})`:""}`:"—"}</td><td>${esc(l.by)}</td></tr>`).join("")
+  }</tbody></table></div>` : `<p class="sub">ما فيه عمليات فحص بعد.</p>`;
+}
+// the tailor's own list of garments sent back to them for repair
+function renderTailorQcReturns(){
+  const el = $("tailorQcReturns");
+  if(!el || !currentUser) return;
+  const mine = [];
+  state.invoices.forEach(inv=> inv.garments.forEach((g,idx)=>{ if(g.qcReturnedTo===currentUser.username && g.status!=="ملغي") mine.push({inv,g,idx}); }));
+  if(!mine.length){ el.innerHTML = ""; return; }
+  el.innerHTML = `<div class="remaining-box" style="border-color:var(--loss);flex-direction:column;align-items:stretch;margin-top:10px;">
+    <b style="color:var(--loss);">🔁 ثياب راجعة لك من فحص الجودة للإصلاح (${mine.length})</b>
+    ${mine.map(({inv,g,idx})=>{ const last = state.qcLog.slice().reverse().find(l=>l.invoiceId===inv.id && l.garmentIndex===idx && l.result==="reject");
+      return `<p class="sub" style="margin:6px 0 0;">فاتورة ${esc(inv.number)} — ثوب ${idx+1}${last?`: ${esc(last.reason)}${last.notes?` (${esc(last.notes)})`:""}`:""} — بعد الإصلاح امسحها "تم التفصيل" مرة ثانية</p>`; }).join("")}
+  </div>`;
+}

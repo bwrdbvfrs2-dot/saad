@@ -767,6 +767,7 @@ async function addDistPayment(inv){
     inv.garments.forEach(g=>{
       if(g.status==="ملغي" || g.status==="تسليم" || g.status==="معلقة") return;
       if(g.status==="جديد" || g.status==="قص") return; // ما تفصّل بعد — ما يصير يتسلم تلقائياً حتى لو الفاتورة اتسددت بالكامل
+      if(g.status==="تفصيل" && state.settings.qcEnabled) return; // ينتظر فحص الجودة
       g.status="تسليم"; if(!g.readyDate) g.readyDate=todayStr(); if(!g.deliveredDate) g.deliveredDate=todayStr(); autoDelivered++;
     });
   }
@@ -782,6 +783,7 @@ async function creditDeliverGarment(invId, idx){
   const g = inv.garments[idx]; if(!g) return;
   if(g.status==="تسليم" || g.status==="ملغي"){ showToast("لا يمكن تطبيق هذا على ثوب مُسلَّم أو ملغي"); return; }
   if(g.status==="جديد" || g.status==="قص"){ showToast("ما يصير تسليم الثوب بدين قبل ما يخلص التفصيل — عشان ما يضيع حق القصاص وما تفقد بيانات التكاليف مصداقيتها"); return; }
+  if(g.status==="تفصيل" && state.settings.qcEnabled){ showToast("هذا الثوب ينتظر فحص الجودة — ما يتسلّم قبل ما يجتازه"); return; }
   const amount = garmentSalePrice(g);
   if(!await showConfirm(`تأكيد: بيتم تسليم هذا الثوب الآن رغم وجود دين عليه بقيمة ${amount.toFixed(0)} ريال. الثوب بينتقل لقائمة "مديونية الثياب" حتى يُسدد المبلغ. متابعة؟`)) return;
   const snapshot = JSON.parse(JSON.stringify(state));
@@ -802,6 +804,7 @@ function renderScanTab(){
   $("scanPanelGeneral").style.display = isTailor ? "none" : "";
   if(isTailor){
     renderTailorScanHistory();
+    renderTailorQcReturns();
     $("myTailorMonthlyReport").innerHTML = buildTailorMonthlyReport(currentUser.username, todayStr().slice(0,7));
   }
 }
@@ -820,6 +823,7 @@ function handleTailorScan(){
   const eligible = [];
   inv.garments.forEach((g,idx)=>{
     if(g.status==="تسليم" || g.status==="ملغي") return;
+    if(g.qcReturnedTo && g.qcReturnedTo!==currentUser.username){ conflicts.push(g.qcReturnedTo); return; } // sent back to its own tailor for repair
     if(g.status==="تفصيل" || g.status==="جاهز"){
       if(g.tailor && g.tailor!==currentUser.username) conflicts.push(g.tailor);
       return; // already claimed (by this tailor or another) or progressed further
@@ -858,7 +862,11 @@ function resolvePendingAlterationsForTailor(inv){
 function claimSingleTailorGarment(inv, idx, number, conflicts){
   const g = inv.garments[idx];
   if(!g || g.status==="تسليم" || g.status==="ملغي" || g.status==="تفصيل" || g.status==="جاهز"){ showToast("هذا الثوب ما عاد متاح للتسجيل — يمكن سجّله خياط ثاني قبلك"); $("tailorScanPicker").innerHTML=""; return; }
+  if(g.qcReturnedTo && g.qcReturnedTo!==currentUser.username){ showToast(`هذا الثوب راجع للخياط ${g.qcReturnedTo} لإصلاحه`); $("tailorScanPicker").innerHTML=""; return; }
+  const wasRepair = !!g.qcReturnedTo;
   g.tailor = currentUser.username; g.status = "تفصيل"; g.tailorCompletedDate = todayStr();
+  delete g.qcReturnedTo;
+  if(wasRepair) g.qcRepairedDate = todayStr();
   const alterationsCompleted = resolvePendingAlterationsForTailor(inv);
   state.tailorScans.push({id:newId(), tailorUsername:currentUser.username, invoiceNumber:number, date:todayStr(), claimedCount:1});
   saveState(); renderAll();

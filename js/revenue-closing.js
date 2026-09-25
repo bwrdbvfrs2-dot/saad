@@ -393,7 +393,7 @@ function buildTailorMonthlyReport(username, monthLabel){
   const rows = [];
   let totalGarments = 0;
   state.invoices.forEach(inv=>{
-    const matching = inv.garments.filter(g=> g.tailor===username && g.tailorCompletedDate && g.tailorCompletedDate.slice(0,7)===monthLabel);
+    const matching = inv.garments.filter(g=> g.tailor===username && g.tailorCompletedDate && g.tailorCompletedDate.slice(0,7)===monthLabel && g.status!=="قص" && g.status!=="جديد");
     if(matching.length){ rows.push({inv, count:matching.length}); totalGarments += matching.length; }
   });
   if(!rows.length) return `<p class="sub">ما فيه ثياب فصّلها هذا الخياط هذا الشهر.</p>`;
@@ -437,6 +437,7 @@ async function advanceGarmentStatus(inv, idx){
   const next = nextStatusOf(g.status);
   if(!next){ showToast("هذا الثوب وصل آخر مرحلة أصلاً"); return; }
   if(next==="تفصيل"){ showToast("هذي الخطوة تخص حساب الخياط بس — يمسحها من شاشته الخاصة"); return; }
+  if(next==="جاهز" && state.settings.qcEnabled){ showToast("هذا الثوب ينتظر فحص الجودة — يصير \"جاهز\" من شاشة فحص الجودة بعد اجتيازه"); return; }
   if(next==="تسليم"){
     const remaining = invoiceRemaining(inv);
     if(Math.abs(remaining)>0.01){ showQuickDeliveryPayment(inv, idx, remaining); return; }
@@ -661,6 +662,7 @@ async function saveDistribution(inv){
     if(intent.newStatus==="ملغي" && !isAdmin){ showToast("إلغاء الثوب متاح للمدير فقط"); return; }
     if(intent.newStatus==="تفصيل"){ showToast("الانتقال لـ\"تم التفصيل\" يخص حساب الخياط بس — يمسحها من شاشته الخاصة"); return; }
     if(intent.newStatus==="جاهز" && g.status!=="جاهز"){ showToast(`لا يمكن تحويل ثوب ${i+1} إلى "جاهز" مباشرة — لازم يخلص "تم التفصيل" من شاشة الخياط أولاً`); return; }
+    if(intent.newStatus==="جاهز" && state.settings.qcEnabled && !g.qcPassedDate){ showToast(`ثوب ${i+1} لازم يجتاز فحص الجودة (من شاشة فحص الجودة) قبل ما يصير "جاهز"`); return; }
     if(intent.newStatus==="تسليم"){
       if(g.status!=="جاهز"){ showToast(`لا يمكن تسليم ثوب ${i+1} قبل اكتمال التفصيل فعلياً ووصوله لمرحلة "جاهز"`); return; }
       if(Math.abs(remaining)>0.01){ showToast(`لا يمكن التسليم قبل سداد كامل الفاتورة (المتبقي ${remaining.toFixed(0)} ريال)`); return; }
@@ -718,7 +720,10 @@ async function closeMonthNow(m){
       if(g.status==="ملغي") return;
       garmentCount++;
       if(g.hasEmbroidery){ embroCount++; embroRevenue += (g.embroideryPrice||0); }
-      if(g.status!=="تسليم") g.status="معلقة";
+      // only a garment that was READY and not picked up is "معلقة" (stuck) — that's what every screen
+      // reads it as. One still being cut/sewn/checked keeps its real stage so it can carry on normally
+      // (turning it into معلقة froze it: no next step, and it showed as ready when it wasn't)
+      if(g.status==="جاهز") g.status="معلقة";
     });
   });
   const pendingCustodyCarried = totalPendingCustody();
@@ -748,7 +753,7 @@ async function performCloseMonth(){
     const lastDayOfMonth = new Date(y, mo, 0);
     if(serverDate() <= lastDayOfMonth){ showToast("ما يمكن إقفال الشهر قبل انتهائه فعلياً — هذا متاح للمدير بس قبل نهاية الشهر"); return; }
   }
-  if(!await confirmWithPassword(`بيتم إقفال شهر ${monthDisplay(m)}:\n- يتجمّد تقرير أرباح/خسائر نهائي لهذا الشهر.\n- أي ثوب ما انسلّم يتحول لحالة "معلقة" وينتقل لقائمة المتعثرة.\nأدخل كلمة مرورك للتأكيد.`)) return;
+  if(!await confirmWithPassword(`بيتم إقفال شهر ${monthDisplay(m)}:\n- يتجمّد تقرير أرباح/خسائر نهائي لهذا الشهر.\n- أي ثوب جاهز ما انسلّم يتحول لحالة "معلقة" وينتقل لقائمة المتعثرة (الثياب اللي لسا بالإنتاج تكمل مرحلتها).\nأدخل كلمة مرورك للتأكيد.`)) return;
   // guard against a double-click (or a retry after a silent save failure) re-closing the same
   // month and re-running payroll a second time while the first close is still in flight
   const btn = $("closeMonthBtn");
@@ -793,20 +798,34 @@ async function checkAutoCloseMonth(){
     autoCloseInFlight = false;
   }
 }
+// when the sewing counts as done: the quality-check pass when there is one; a garment sent back
+// for repair (back at قص) or still waiting for its check doesn't count yet
+function garmentSewnDate(g){
+  if(g.qcPassedDate) return g.qcPassedDate;
+  if(!g.tailorCompletedDate) return null;
+  if(g.status==="جديد" || g.status==="قص") return null;
+  if(state.settings.qcEnabled && g.status==="تفصيل") return null;
+  return g.tailorCompletedDate;
+}
 function garmentQualifiesForCommission(g){
   const basis = state.settings.commissionBasis||"تسليم";
-  return basis==="تفصيل" ? !!g.tailorCompletedDate : g.status==="تسليم";
+  return basis==="تفصيل" ? !!garmentSewnDate(g) : g.status==="تسليم";
 }
 function commissionQualifyingDate(g){
   const basis = state.settings.commissionBasis||"تسليم";
-  return basis==="تفصيل" ? g.tailorCompletedDate : g.deliveredDate;
+  return basis==="تفصيل" ? garmentSewnDate(g) : g.deliveredDate;
+}
+// a garment's wage is paid in exactly one month: once payroll has run for it, a later date change
+// (re-sewn after a failed check, then passed in a later month) must not pay it a second time
+function garmentWagePaidElsewhere(g, monthLabel){
+  return !!(g.wagePaidOut && g.wagePaidMonth && g.wagePaidMonth!==monthLabel);
 }
 function computeEmployeeEntitlement(user, monthLabel){
   let garmentCount = 0, commission = 0, base = 0;
   if(user.role==="خياط"){
     state.invoices.forEach(inv=> inv.garments.forEach(g=>{
       if(g.tailor!==user.username || g.status==="ملغي") return;
-      if(!garmentQualifiesForCommission(g)) return;
+      if(!garmentQualifiesForCommission(g) || garmentWagePaidElsewhere(g, monthLabel)) return;
       const qd = commissionQualifyingDate(g);
       if(qd && qd.slice(0,7)===monthLabel){
         garmentCount++;
@@ -847,7 +866,7 @@ function runPayrollForMonth(monthLabel){
         state.invoices.forEach(inv=> inv.garments.forEach(g=>{
           if(g.tailor===u.username && garmentQualifiesForCommission(g)){
             const qd = commissionQualifyingDate(g);
-            if(qd && qd.slice(0,7)===monthLabel) g.wagePaidOut = true;
+            if(qd && qd.slice(0,7)===monthLabel && !garmentWagePaidElsewhere(g, monthLabel)){ g.wagePaidOut = true; g.wagePaidMonth = monthLabel; }
           }
         }));
       }

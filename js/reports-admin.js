@@ -636,7 +636,7 @@ function renderUsers(){
     return `<div class="user-row"><div class="row-3" style="margin-bottom:0;align-items:end;">
         <div class="field" style="margin-bottom:0;"><label>اسم المستخدم</label><input type="text" class="edit-username" data-idx="${i}" value="${u.username}"></div>
         <div class="field" style="margin-bottom:0;"><label>كلمة مرور جديدة</label><input type="text" class="edit-password" data-idx="${i}" value="" placeholder="اتركه فارغاً لعدم تغيير كلمة المرور"></div>
-        <div class="field" style="margin-bottom:0;"><label>الدور</label><select class="edit-role" data-idx="${i}"><option value="محاسب" ${u.role==="محاسب"?"selected":""}>محاسب</option><option value="كاشير" ${u.role==="كاشير"?"selected":""}>كاشير</option><option value="خياط" ${u.role==="خياط"?"selected":""}>خياط</option><option value="مدير" ${u.role==="مدير"?"selected":""}>مدير</option></select></div>
+        <div class="field" style="margin-bottom:0;"><label>الدور</label><select class="edit-role" data-idx="${i}"><option value="محاسب" ${u.role==="محاسب"?"selected":""}>محاسب</option><option value="كاشير" ${u.role==="كاشير"?"selected":""}>كاشير</option><option value="خياط" ${u.role==="خياط"?"selected":""}>خياط</option><option value="فاحص جودة" ${u.role==="فاحص جودة"?"selected":""}>فاحص جودة</option><option value="مدير" ${u.role==="مدير"?"selected":""}>مدير</option></select></div>
       </div>
       ${u.role==="خياط" ? `<div class="row-2" style="margin-top:8px;">
         <div class="field" style="margin-bottom:0;"><label>القدرة الإنتاجية اليومية (ثوب/يوم)</label><input type="number" class="edit-capacity" data-idx="${i}" min="0" value="${u.dailyCapacity||""}" placeholder="مثلاً: 5"></div>
@@ -980,7 +980,8 @@ async function handleUnsavedInvoiceGuard(targetTab){
 }
 function switchTab(name){
   if(currentUser && currentUser.role==="خياط" && name!=="scan" && name!=="mail"){ showToast("حساب الخياط يقدر يدخل شاشة المسح والبريد بس"); return; }
-  if(currentUser && currentUser.role!=="خياط" && !(state.permissions[currentUser.role]?.tabs||[]).includes(name)){ showToast("هذا القسم غير متاح لدورك — راجع المدير"); return; }
+  if(currentUser && currentUser.role==="فاحص جودة" && name!=="qc" && name!=="mail"){ showToast("حساب فاحص الجودة يقدر يدخل شاشة الفحص والبريد بس"); return; }
+  if(currentUser && currentUser.role!=="خياط" && currentUser.role!=="فاحص جودة" && !(state.permissions[currentUser.role]?.tabs||[]).includes(name)){ showToast("هذا القسم غير متاح لدورك — راجع المدير"); return; }
   const invoiceTabActive = $("tab-invoice").classList.contains("active");
   if(invoiceTabActive && name!=="invoice" && isInvoiceFormDirty()){
     handleUnsavedInvoiceGuard(name);
@@ -1216,6 +1217,13 @@ $("setMinDepositType").addEventListener("change", ()=>{
   state.settings.minDepositType = $("setMinDepositType").value;
   saveState(); renderAll();
 });
+$("setQcEnabled").addEventListener("change", ()=>{
+  state.settings.qcEnabled = $("setQcEnabled").checked;
+  saveState(); applyRolePermissions(); renderAll();
+  logAudit("qc_setting_changed", {enabled: state.settings.qcEnabled});
+});
+$("qcLoadBtn").addEventListener("click", ()=> loadQcInvoice($("qcInvNumber").value.trim()));
+$("qcInvNumber").addEventListener("keydown", e=>{ if(e.key==="Enter") loadQcInvoice($("qcInvNumber").value.trim()); });
 $("setCommissionBasis").addEventListener("change", ()=>{
   state.settings.commissionBasis = $("setCommissionBasis").value;
   saveState(); renderAll();
