@@ -237,6 +237,9 @@ function normalizeState(){
     state.settings.qcTabGranted = true;
   }
   if(!state.qcLog) state.qcLog=[];
+  // the "أجرة تفصيل (بدون قماش)" line (customer brings their own fabric) has its own price card:
+  // a default sale price and a minimum price per body category, like a fabric card
+  if(!state.settings.tailoringOnly) state.settings.tailoringOnly = {prices:{"رجال":0,"ولادي":0,"طفل":0}, minPrices:{"رجال":0,"ولادي":0,"طفل":0}};
   if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("sensitiveFinancials")) state.permissions["مدير"].tabs.push("sensitiveFinancials");
   if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("advisoryBalances")) state.permissions["مدير"].tabs.push("advisoryBalances");
   if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("customerDebts")) state.permissions["مدير"].tabs.push("customerDebts");

@@ -66,7 +66,37 @@ function toggleItemCardExpand(cardId){
   itemCardExpandOverrides[cardId] = !isItemCardExpanded(findItemCard(cardId));
   renderItemCards();
 }
+// price card for "أجرة تفصيل (بدون قماش)": sale price + minimum price per category (no stock — the
+// customer brings the fabric). The invoice form fills the price from here and enforces the minimum
+// exactly like a fabric's, so a cashier can't go below it without discount permission.
+function renderTailoringOnlyCard(){
+  const el = $("tailoringOnlyCard");
+  if(!el) return;
+  const t = state.settings.tailoringOnly;
+  el.innerHTML = `<div class="garment-card" style="border-color:var(--gold);">
+    <span class="tag">كرت صنف: أجرة تفصيل (بدون قماش)</span>
+    <p class="sub" style="margin:6px 0;">للثوب اللي يجيب العميل قماشه — سعر البيع يتعبّى تلقائياً بالفاتورة حسب الفئة، والحد الأدنى يمنع البيع بأقل منه إلا لمن عنده صلاحية خصم (وضمن حدّه). تعديل سعر الرجال يحسب الولادي والطفل تلقائياً.</p>
+    <div class="row-3">${BODY_CATEGORIES.map(cat=>`<div class="field"><label>سعر ${cat} (ريال)</label><input type="number" class="to-price" data-cat="${cat}" min="0" value="${t.prices[cat]||""}" placeholder="0"></div>`).join("")}</div>
+    <div class="row-3">${BODY_CATEGORIES.map(cat=>`<div class="field"><label>الحد الأدنى ${cat} (ريال)</label><input type="number" class="to-minprice" data-cat="${cat}" min="0" step="5" value="${t.minPrices[cat]||""}" placeholder="0"></div>`).join("")}</div>
+  </div>`;
+  const bind = (cls, field)=> el.querySelectorAll(cls).forEach(inp=> inp.addEventListener("change", ()=>{
+    // read it fresh: any save reloads `state`, so an object captured at render time goes stale and
+    // a second edit would be written to a copy that's no longer saved
+    const t = state.settings.tailoringOnly;
+    const old = t[field][inp.dataset.cat];
+    t[field][inp.dataset.cat] = parseFloat(inp.value)||0;
+    if(inp.dataset.cat==="رجال"){
+      autoCalcCategoryPricing(t, field, true);
+      el.querySelectorAll(cls).forEach(sib=>{ if(sib!==inp) sib.value = t[field][sib.dataset.cat]||""; });
+    }
+    saveState();
+    logAudit("price_changed", {cardName:"أجرة تفصيل (بدون قماش)", field, category:inp.dataset.cat, oldPrice:old, newPrice:t[field][inp.dataset.cat]});
+  }));
+  bind(".to-price", "prices");
+  bind(".to-minprice", "minPrices");
+}
 function renderItemCards(){
+  renderTailoringOnlyCard();
   checkOpeningBalanceGrants();
   if(currentUser && currentUser.role==="مدير") renderOpeningBalanceRequestsPanel();
   const el = $("itemCardsList");

@@ -427,21 +427,27 @@ function searchInvoiceForAlteration(){
       return `<div class="garment-card">
         <span class="tag">ثوب ${i+1} — ${esc(g.fabricType)}</span>
         <p class="sub" style="margin:6px 0;">الخياط: ${esc(g.tailor||"—")} — الحالة: ${STATUSES.find(s=>s.v===g.status)?.label||g.status}</p>
-        ${notDelivered ? `<p class="locked-note">هذا الثوب لسا ما انسلّم للعميل — التعديل يخص الثياب المُسلَّمة بس.</p>` : pending ? `<p style="color:var(--gold-soft);font-weight:700;">معاد للتعديل حالياً — بانتظار الخياط (${esc(pending.reason)}) — رقم التعديل: ${pending.alterationNumber}</p><button class="btn btn-ghost btn-sm" onclick="printCuttingCard('${inv.id}', ${i})">عرض كرت المقاسات</button>` : `
+        ${notDelivered ? `<p class="locked-note">هذا الثوب لسا ما انسلّم للعميل — التعديل يخص الثياب المُسلَّمة بس.</p>` : pending ? `<p style="color:var(--gold-soft);font-weight:700;">معاد للتعديل حالياً — بانتظار الخياط (${esc(pending.reason)}) — رقم التعديل: ${pending.alterationNumber}</p>
+          <div class="actions-row" style="margin-top:0;"><button class="btn btn-gold btn-sm" onclick="printAlterationInvoice('${pending.id}')">طباعة فاتورة التعديل #${pending.alterationNumber}</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('altMeas_p${i}').style.display=''">تعديل المقاسات</button>
+          <button class="btn btn-ghost btn-sm" onclick="printCuttingCard('${inv.id}', ${i})">عرض كرت المقاسات</button></div>
+          <div id="altMeas_p${i}" style="display:none;">${altMeasEditorHtml(g, "p"+i)}<button class="btn btn-gold btn-sm" onclick="saveAlterationMeasurements('${pending.id}', 'p${i}')">حفظ تعديل المقاسات</button></div>` : `
         <button class="btn btn-ghost btn-sm" onclick="printCuttingCard('${inv.id}', ${i})" style="margin-bottom:8px;">عرض كرت المقاسات الأصلي</button>
         <div class="row-2">
           <div class="field"><label>سبب التعديل</label><select class="alter-reason" data-idx="${i}">${state.alterationReasons.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join("")||`<option value="">-- أضف أسباب من الإعدادات --</option>`}</select></div>
           <div class="field"><label>المتسبب</label><select class="alter-responsible" data-idx="${i}">${state.alterationResponsibles.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join("")}</select></div>
         </div>
         <div class="field"><label>ملاحظات التعديل / المقاسات المطلوب تغييرها</label><input type="text" class="alter-notes" data-idx="${i}" placeholder="مثلاً: تقصير الطول 2 سم"></div>
-        <button class="btn btn-gold btn-sm" onclick="submitAlteration('${inv.id}', ${i})">تسجيل الاستلام للتعديل</button>`}
+        <div id="altMeas_n${i}">${altMeasEditorHtml(g, "n"+i)}</div>
+        <button class="btn btn-gold btn-sm" onclick="submitAlteration('${inv.id}', ${i})">تسجيل الاستلام للتعديل وطباعة فاتورته</button>`}
       </div>`;
     }).join("");
 }
-function submitAlteration(invId, idx){
+async function submitAlteration(invId, idx){
   const inv = state.invoices.find(i=>i.id===invId); if(!inv) return;
   const g = inv.garments[idx];
   if(!g || g.status!=="تسليم"){ showToast("هذا الثوب لسا ما انسلّم — التعديل يخص الثياب المُسلَّمة بس"); return; }
+  if(state.alterations.some(a=>a.invoiceId===invId && a.garmentIndex===idx && a.status==="pending")){ showToast("هذا الثوب معاد للتعديل حالياً — ما يمكن تسجيله مرة ثانية قبل ما يخلص"); return; }
   const reasonSel = document.querySelector(`.alter-reason[data-idx="${idx}"]`);
   const respSel = document.querySelector(`.alter-responsible[data-idx="${idx}"]`);
   const notesInp = document.querySelector(`.alter-notes[data-idx="${idx}"]`);
@@ -449,15 +455,104 @@ function submitAlteration(invId, idx){
   const responsible = respSel ? respSel.value : "";
   if(!reason){ showToast("اختر سبب التعديل (أضف أسباب من الإعدادات لو القائمة فاضية)"); return; }
   if(!responsible){ showToast("اختر المتسبب"); return; }
-  state.alterations.push({
+  const snapshot = JSON.parse(JSON.stringify(state));
+  const changes = applyAltMeasEditor(g, "n"+idx);
+  const alt = {
     id: newId(), alterationNumber: state.settings.nextAlterationNumber, invoiceId: invId, invoiceNumber: inv.number, garmentIndex: idx,
-    reason, responsible, notes: notesInp?notesInp.value.trim():"",
+    reason, responsible, notes: notesInp?notesInp.value.trim():"", measurementChanges: changes,
     status:"pending", dateReceived: todayStr(), recordedBy: currentUser.username, dateCompleted: null,
-  });
+  };
+  state.alterations.push(alt);
   state.settings.nextAlterationNumber++;
-  saveState(); renderAll();
-  showToast("تم تسجيل استلام الثوب للتعديل");
+  if(!await saveStateWithRollback(snapshot)) return;
+  logAudit("alteration_received", {alterationNumber:alt.alterationNumber, invoiceNumber:inv.number, garmentIdx:idx, reason, responsible, measurementChanges:changes.length});
+  showToast(`تم تسجيل التعديل رقم ${alt.alterationNumber}${changes.length?` — وتحديث ${changes.length} مقاس بكرت الثوب`:""}`);
   searchInvoiceForAlteration();
+  printAlterationInvoice(alt.id);
+}
+// ---- the garment's measurement card, editable right inside the alteration flow ----
+// Saving writes the new values onto the garment itself (so its cutting card, and the customer's
+// measurements offered on their next order, are the corrected ones) and keeps old → new on the
+// alteration record for its printed invoice.
+function altMeasEditorHtml(g, key){
+  const m = g.measurements || {};
+  const val = k=> (m[k]!==undefined && m[k]!==null) ? m[k] : "";
+  return `<div class="alt-meas" data-key="${key}" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px;margin:8px 0;">
+    <b style="font-size:13px;">كرت المقاسات — عدّل المقاس المطلوب مباشرة</b>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;margin-top:8px;">
+      ${MEASUREMENT_FIELDS.map(f=>`<div class="field" style="margin-bottom:0;"><label style="font-size:11px;">${esc(f.label)}</label><input type="number" step="0.01" class="am-field" data-key="${f.key}" value="${val(f.key)}" placeholder="—"></div>`).join("")}
+      ${MEASUREMENT_CHOICE_FIELDS.map(f=>{ const list = state[f.listKey]||[]; const cur = m[f.key]||"";
+        return `<div class="field" style="margin-bottom:0;"><label style="font-size:11px;">${esc(f.label)}</label><select class="am-choice" data-key="${f.key}"><option value="">—</option>${list.map(o=>`<option value="${esc(o.code)}" ${o.code===cur?"selected":""}>${esc(o.code)} - ${esc(o.label)}</option>`).join("")}</select></div>`; }).join("")}
+    </div>
+    <div class="field" style="margin:8px 0 0;"><label style="font-size:11px;">ملاحظات المقاس</label><input type="text" class="am-notes" value="${esc(g.measurementNotes||"")}"></div>
+  </div>`;
+}
+function applyAltMeasEditor(g, key){
+  const box = document.querySelector(`.alt-meas[data-key="${key}"]`);
+  if(!box) return [];
+  const m = Object.assign({}, g.measurements||{});
+  const changes = [];
+  const labelOf = k=> (MEASUREMENT_FIELDS.find(f=>f.key===k)||MEASUREMENT_CHOICE_FIELDS.find(f=>f.key===k)||{label:k}).label;
+  box.querySelectorAll(".am-field").forEach(inp=>{
+    const k = inp.dataset.key, oldV = (m[k]!==undefined && m[k]!==null && m[k]!=="") ? +m[k] : null;
+    const newV = inp.value==="" ? null : (parseFloat(inp.value)||0);
+    if(oldV!==newV){ changes.push({key:k, label:labelOf(k), from:oldV, to:newV}); if(newV===null) delete m[k]; else m[k]=newV; }
+  });
+  box.querySelectorAll(".am-choice").forEach(sel=>{
+    const k = sel.dataset.key, oldV = m[k]||"", newV = sel.value;
+    if(oldV!==newV){ changes.push({key:k, label:labelOf(k), from:oldV||null, to:newV||null}); if(newV) m[k]=newV; else delete m[k]; }
+  });
+  const notesInp = box.querySelector(".am-notes");
+  if(notesInp && notesInp.value.trim()!==(g.measurementNotes||"")){ changes.push({key:"measurementNotes", label:"ملاحظات المقاس", from:g.measurementNotes||null, to:notesInp.value.trim()||null}); g.measurementNotes = notesInp.value.trim(); }
+  g.measurements = m;
+  return changes;
+}
+async function saveAlterationMeasurements(altId, key){
+  const a = state.alterations.find(x=>x.id===altId); if(!a || a.status!=="pending"){ showToast("هذا التعديل ما عاد مفتوح"); return; }
+  const inv = state.invoices.find(i=>i.id===a.invoiceId); const g = inv && inv.garments[a.garmentIndex];
+  if(!g) return;
+  const snapshot = JSON.parse(JSON.stringify(state));
+  const changes = applyAltMeasEditor(g, key);
+  if(!changes.length){ showToast("ما فيه أي تغيير بالمقاسات"); return; }
+  a.measurementChanges = (a.measurementChanges||[]).concat(changes);
+  if(!await saveStateWithRollback(snapshot)) return;
+  logAudit("alteration_measurements_changed", {alterationNumber:a.alterationNumber, invoiceNumber:a.invoiceNumber, changes:changes.length});
+  showToast(`تم تحديث ${changes.length} مقاس — اطبع فاتورة التعديل من جديد لو تبيها بالمقاسات الجديدة`);
+  searchInvoiceForAlteration();
+}
+// ---- alteration invoice: its own sequential number, printed for the tailor with what to change ----
+async function printAlterationInvoice(altId){
+  const a = state.alterations.find(x=>x.id===altId); if(!a) return;
+  const inv = state.invoices.find(i=>i.id===a.invoiceId); const g = inv && inv.garments[a.garmentIndex];
+  const s = state.settings;
+  const fmt = v=> v===null || v===undefined || v==="" ? "—" : esc(String(v));
+  const changes = a.measurementChanges||[];
+  const m = (g && g.measurements) || {};
+  const allMeas = MEASUREMENT_FIELDS.filter(f=>m[f.key]!==undefined && m[f.key]!==null && m[f.key]!=="");
+  const html = `<div style="font-family:inherit;direction:rtl;padding:6px;max-width:190mm;margin:auto;">
+    <div style="text-align:center;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:8px;">
+      <h3 style="margin:0;">${esc(s.shopName||"—")}</h3>
+      <h2 style="margin:4px 0;">فاتورة تعديل رقم ${a.alterationNumber}</h2>
+      <div style="font-size:12px;">مرتبطة بفاتورة التفصيل رقم ${esc(a.invoiceNumber)} — تاريخ الاستلام ${a.dateReceived}</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:8px;">
+      <tr><td style="padding:3px;"><b>العميل:</b> ${fmt(inv&&inv.customerName)}</td><td style="padding:3px;"><b>الجوال:</b> ${fmt(inv&&inv.customerMobile)}</td></tr>
+      <tr><td style="padding:3px;"><b>الثوب:</b> ${a.garmentIndex+1} — ${fmt(g&&g.fabricType)} (${fmt(g&&g.category)})</td><td style="padding:3px;"><b>الخياط الأصلي:</b> ${fmt(g&&g.tailor)}</td></tr>
+      <tr><td style="padding:3px;"><b>سبب التعديل:</b> ${fmt(a.reason)}</td><td style="padding:3px;"><b>المتسبب:</b> ${fmt(a.responsible)}</td></tr>
+      <tr><td colspan="2" style="padding:3px;"><b>ملاحظات:</b> ${fmt(a.notes)}</td></tr>
+    </table>
+    <h4 style="margin:8px 0 4px;">المقاسات المطلوب تعديلها</h4>
+    ${changes.length ? `<table style="width:100%;border-collapse:collapse;font-size:13px;" border="1"><thead><tr><th style="padding:3px;">المقاس</th><th style="padding:3px;">كان</th><th style="padding:3px;">يصير</th></tr></thead><tbody>
+      ${changes.map(c=>`<tr><td style="padding:3px;">${esc(c.label)}</td><td style="padding:3px;text-align:center;">${fmt(c.from)}</td><td style="padding:3px;text-align:center;font-weight:800;">${fmt(c.to)}</td></tr>`).join("")}</tbody></table>`
+      : `<p style="font-size:12px;">ما فيه تغيير بالمقاسات — راجع الملاحظات أعلاه.</p>`}
+    ${allMeas.length ? `<h4 style="margin:10px 0 4px;">كرت المقاسات الحالي</h4><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:2px 10px;font-size:11px;">${allMeas.map(f=>`<div>${esc(f.label)}: <b>${esc(String(m[f.key]))}</b></div>`).join("")}</div>` : ""}
+    <div style="text-align:center;margin-top:12px;"><svg id="alterationBarcodeHolder"></svg><div style="font-size:10px;">امسح رقم الفاتورة بعد إنهاء التعديل</div></div>
+    <div style="display:flex;justify-content:space-between;margin-top:14px;font-size:12px;"><span>استلم: ${fmt(a.recordedBy)}</span><span>توقيع الخياط: ..................</span></div>
+  </div>`;
+  $("dynamicPageSize").textContent = "@media print{ @page{ size:A4; margin:10mm; } }";
+  $("printArea").innerHTML = html;
+  try{ await loadBarcodeLib(); if(window.JsBarcode) window.JsBarcode("#alterationBarcodeHolder", a.invoiceNumber, {format:"CODE128", width:1.6, height:36, fontSize:11, margin:2}); }catch(e){ console.error(e); }
+  setTimeout(()=> safePrint(), 250);
 }
 function renderAlterationsLog(){
   const el = $("alterationsLog");
@@ -480,7 +575,9 @@ function renderAlterationsLog(){
       <p class="sub" style="margin:6px 0;">السبب: ${esc(a.reason)} — المتسبب: ${esc(a.responsible)} — الخياط الأصلي: ${esc(garmentTailor)} — استُلم بتاريخ ${a.dateReceived}</p>
       ${a.notes?`<p class="sub">ملاحظات: ${esc(a.notes)}</p>`:""}
       <p>${statusTxt}</p>
-      ${inv ? `<button class="btn btn-ghost btn-sm" onclick="printCuttingCard('${inv.id}', ${a.garmentIndex})">عرض كرت المقاسات</button>` : ""}
+      ${(a.measurementChanges||[]).length ? `<p class="sub">تعديل المقاسات: ${a.measurementChanges.map(c=>`${esc(c.label)} ${c.from??"—"} ← ${c.to??"—"}`).join("، ")}</p>` : ""}
+      <div class="actions-row" style="margin-top:4px;"><button class="btn btn-ghost btn-sm" onclick="printAlterationInvoice('${a.id}')">طباعة فاتورة التعديل</button>
+      ${inv ? `<button class="btn btn-ghost btn-sm" onclick="printCuttingCard('${inv.id}', ${a.garmentIndex})">عرض كرت المقاسات</button>` : ""}</div>
     </div>`;
   }).join("");
 }

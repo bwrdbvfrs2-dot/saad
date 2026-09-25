@@ -527,8 +527,12 @@ function renderGarmentFields(prefill=null){
           availNote.textContent = `الرصيد المتاح من "${c.name}": ${avail.toFixed(2)} ${unitLabel()}`;
           availNote.style.color = avail>0 ? "var(--profit)" : "var(--loss)";
         }
-      } else if(availNote){
-        availNote.style.display = "none";
+      } else {
+        if(itemSel.value==="__none__"){
+          const t = state.settings.tailoringOnly;
+          if(t && (!priceInp.value || forceUpdate) && t.prices[catSel.value]) priceInp.value = t.prices[catSel.value];
+        }
+        if(availNote) availNote.style.display = "none";
       }
       renderInvoiceOffersSelector();
     }
@@ -547,7 +551,7 @@ function renderGarmentFields(prefill=null){
     const searchInp = div.querySelector(".g-itemCard-search");
     searchInp.addEventListener("input", ()=>{
       const val = searchInp.value.trim();
-      if(val===NO_FABRIC_LABEL){ itemSel.value="__none__"; applyDefaults(); return; }
+      if(val===NO_FABRIC_LABEL){ itemSel.value="__none__"; applyDefaults(true); return; }
       const match = activeFabricCards().find(c=>c.name===val);
       itemSel.value = match ? match.id : "";
       if(match) applyDefaults();

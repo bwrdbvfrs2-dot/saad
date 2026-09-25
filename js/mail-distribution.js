@@ -296,8 +296,10 @@ async function saveInvoice(){
     const itemCardIdRaw = card.querySelector(".g-itemCard").value;
     const itemCard = itemCardIdRaw!=="__none__" ? findItemCard(itemCardIdRaw) : null;
     const garmentCategory = card.querySelector(".g-category").value;
-    const effectiveMinPrice = itemCard ? ((itemCard.minPrices && itemCard.minPrices[garmentCategory]) || 0) : 0;
-    if(itemCard && effectiveMinPrice>0){
+    const tailoringOnly = itemCardIdRaw==="__none__";
+    const effectiveMinPrice = itemCard ? ((itemCard.minPrices && itemCard.minPrices[garmentCategory]) || 0)
+      : tailoringOnly ? (((state.settings.tailoringOnly||{}).minPrices||{})[garmentCategory] || 0) : 0;
+    if((itemCard || tailoringOnly) && effectiveMinPrice>0){
       const enteredPrice = parseFloat(priceVal)||0;
       if(enteredPrice < effectiveMinPrice){
         const shortfall = effectiveMinPrice - enteredPrice;
