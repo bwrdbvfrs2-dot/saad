@@ -950,6 +950,7 @@ $("saleCustMobile").addEventListener("input", ()=>{
   updateSaleTotal();
 });
 $("saleApplyPromoBtn").addEventListener("click", applySalePromo);
+$("odSaveBtn").addEventListener("click", addOpeningDebtCustomer);
 $("saleDirectDiscount").addEventListener("input", updateSaleTotal);
 $("saleCustName").addEventListener("input", ()=>{
   if($("saleCustMobile").value.trim()) return;

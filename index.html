@@ -769,7 +769,20 @@
 <div class="tab-panel" id="tab-customerDebts">
 <div class="panel">
   <h2>مديونيات العملاء</h2>
-  <p class="sub">العملاء اللي استلموا كل ثيابهم فعلياً ولسا عليهم مبلغ متبقٍ غير مسدّد. العملاء اللي لسا ما استلموا ثيابهم ما يظهرون هنا.</p>
+  <p class="sub">العملاء اللي استلموا كل ثيابهم فعلياً ولسا عليهم مبلغ متبقٍ غير مسدّد، والعملاء المسجّل عليهم دين سابق. العملاء اللي لسا ما استلموا ثيابهم ما يظهرون هنا.</p>
+  <details class="garment-card" id="openingDebtFormWrap" style="margin-bottom:12px;">
+    <summary style="cursor:pointer;font-weight:700;">➕ إضافة عميل جديد بدين سابق</summary>
+    <p class="sub" style="margin:8px 0;">للعملاء اللي عليهم مبالغ من قبل النظام (دفتر قديم مثلاً). العميل ياخذ كود تلقائياً، ودينه يظهر هنا مع الديون، ويطلع عليه تنبيه أول ما ينكتب جواله في أي فاتورة.</p>
+    <div class="row-2">
+      <div class="field"><label>اسم العميل</label><input type="text" id="odName"></div>
+      <div class="field"><label>رقم الجوال</label><input type="text" id="odMobile" inputmode="numeric" maxlength="10" placeholder="05xxxxxxxx"></div>
+    </div>
+    <div class="row-2">
+      <div class="field"><label>الدين السابق (ريال)</label><input type="number" id="odAmount" min="0" placeholder="0"></div>
+      <div class="field"><label>ملاحظة (اختياري)</label><input type="text" id="odNote" placeholder="مثلاً: من الدفتر القديم"></div>
+    </div>
+    <button class="btn btn-gold btn-sm" id="odSaveBtn">حفظ العميل والدين</button>
+  </details>
   <div id="customerDebtsList"><p class="sub">ما فيه مديونيات حالياً.</p></div>
 </div>
 </div>

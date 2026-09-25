@@ -577,13 +577,14 @@ function renderDashboardKPIs(){
     + todaysSalesInvoices.reduce((a,inv)=> a + (inv.payment?(inv.payment.cash||0)+(inv.payment.network||0):0), 0)
     - (state.salesReturns||[]).filter(r=>r.date===today).reduce((a,r)=>a+(r.refundAmount||0),0)
     - state.invoiceReturns.filter(r=>r.date===today).reduce((a,r)=>a+(r.refundAmount||0),0)
-    + (state.legacyPayments||[]).filter(l=>l.date===today).reduce((a,l)=>a+l.amount,0);
+    + (state.legacyPayments||[]).filter(l=>l.date===today).reduce((a,l)=>a+l.amount,0)
+    + (state.openingDebtPayments||[]).filter(p=>p.date===today).reduce((a,p)=>a+(p.cash||0)+(p.network||0),0);
   const {cuttingOverdue, deliveryOverdue, dueToday} = computeOverdueLists();
   const overdueCount = cuttingOverdue.length + deliveryOverdue.length;
   const pending = allPendingGarments();
   const readyCount = pending.filter(({g})=> g.status==="جاهز").length;
   const inProgressCount = pending.length - readyCount;
-  const totalDue = state.invoices.reduce((a,inv)=> a + Math.max(0, invoiceRemaining(inv)), 0);
+  const totalDue = state.invoices.reduce((a,inv)=> a + Math.max(0, invoiceRemaining(inv)), 0) + totalOpeningDebtRemaining();
   const kpi = (cls, icon, lbl, val)=> `<div class="kpi-card ${cls}"><div class="kpi-top"><div class="kpi-icon"><i data-lucide="${icon}"></i></div></div><div class="kpi-lbl">${lbl}</div><div class="kpi-val">${val}</div></div>`;
   el.innerHTML =
     kpi("c-sales","banknote","مبيعات اليوم", salesToday.toFixed(0)+" ﷼") +

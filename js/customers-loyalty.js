@@ -441,9 +441,19 @@ function deliveredGarmentOwed(g, inv){
   if(g.creditDelivered) return creditGarmentOwed(g, inv);
   return Math.max(0, garmentRemaining(g, inv));
 }
+// ---- opening (pre-system) debt: what a customer already owed before being entered into the system.
+// It isn't revenue (no VAT, no profit) — only collecting it moves money into the boxes.
+function openingDebtPaymentsOf(cust){ return (state.openingDebtPayments||[]).filter(p=>p.customerId===cust.id); }
+function openingDebtRemaining(cust){
+  if(!cust || !(cust.openingDebt>0)) return 0;
+  const paid = openingDebtPaymentsOf(cust).reduce((a,p)=>a+(p.cash||0)+(p.network||0),0);
+  return Math.max(0, cust.openingDebt - paid);
+}
+function totalOpeningDebtRemaining(){ return state.customers.reduce((a,c)=>a+openingDebtRemaining(c),0); }
 function getCustomerStandingAlert(mobile){
   const invs = state.invoices.filter(inv=>inv.customerMobile===mobile);
-  if(!invs.length) return null;
+  const openingDebt = openingDebtRemaining(findCustomerByMobile(mobile));
+  if(!invs.length && openingDebt<=0.01) return null;
   let debtAmount = 0;
   const debtInvoices = new Set();
   const stuckGarments = [];
@@ -457,8 +467,8 @@ function getCustomerStandingAlert(mobile){
       if(isStuckReadyGarment(g)) stuckGarments.push({inv, g});
     });
   });
-  if(debtAmount<=0.01 && !stuckGarments.length && !convertedGarments.length) return null;
-  return {debtAmount: debtAmount>0.01 ? debtAmount : 0, debtInvoices:[...debtInvoices], stuckGarments, convertedGarments};
+  if(debtAmount<=0.01 && openingDebt<=0.01 && !stuckGarments.length && !convertedGarments.length) return null;
+  return {debtAmount: debtAmount>0.01 ? debtAmount : 0, openingDebt: openingDebt>0.01 ? openingDebt : 0, debtInvoices:[...debtInvoices], stuckGarments, convertedGarments};
 }
 // renders the standing as separate, independent alert boxes — one per kind — into wrapId
 function renderCustomerStandingAlerts(mobile, wrapId){
@@ -470,9 +480,12 @@ function renderCustomerStandingAlerts(mobile, wrapId){
     <div style="color:${color};font-weight:800;margin-bottom:4px;">${title}</div>
     <div style="font-size:13px;">${body}</div>${action||""}</div>`;
   let html = "";
-  if(alert.debtAmount>0){
-    html += box("var(--loss)", "rgba(224,90,90,0.12)", `💰 تنبيه دين: على العميل ${alert.debtAmount.toFixed(0)} ريال`,
-      `مبلغ مالي مستحق عن ثياب <b>تم تسليمها له</b> ولم يُسدد كامل قيمتها — فاتورة ${alert.debtInvoices.map(n=>"#"+esc(n)).join("، ")}.`,
+  if(alert.debtAmount>0 || alert.openingDebt>0){
+    const parts = [];
+    if(alert.openingDebt>0) parts.push(`دين سابق (مسجّل قبل النظام): <b>${alert.openingDebt.toFixed(0)} ريال</b>`);
+    if(alert.debtAmount>0) parts.push(`مبلغ مستحق عن ثياب <b>تم تسليمها له</b> ولم يُسدد كامل قيمتها: <b>${alert.debtAmount.toFixed(0)} ريال</b> — فاتورة ${alert.debtInvoices.map(n=>"#"+esc(n)).join("، ")}`);
+    html += box("var(--loss)", "rgba(224,90,90,0.12)", `💰 تنبيه دين: على العميل ${(alert.debtAmount+alert.openingDebt).toFixed(0)} ريال`,
+      parts.join("<br>"),
       `<button type="button" class="btn btn-ghost btn-sm" onclick="switchTab('customerDebts')" style="margin-top:6px;">الذهاب لتسوية المديونية</button>`);
   }
   if(alert.stuckGarments.length){

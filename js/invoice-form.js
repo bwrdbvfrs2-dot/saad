@@ -161,6 +161,12 @@ function computeShiftExpected(username, date){
       payRefs.push({source:"فاتورة مبيعات", invNumber:inv.number, cash:inv.payment.cash||0, network:inv.payment.network||0, cashReceiptNo:null, networkReceiptNo:inv.payment.receipt});
     }
   });
+  (state.openingDebtPayments||[]).forEach(p=>{
+    if(p.recordedBy===username && p.date===date){
+      sysCash += p.cash||0; sysNetwork += p.network||0;
+      payRefs.push({source:"دين سابق", invNumber:"عميل "+p.customerCode, cash:p.cash||0, network:p.network||0, cashReceiptNo:null, networkReceiptNo:p.receipt||null});
+    }
+  });
   const sysTransfers = state.transferRequests.filter(r=>r.status==="accepted" && r.toOwner===username && r.resolvedAt===date).reduce((a,r)=>a+r.amount,0);
   // a cross-user transfer this user SENT is deducted from their box the instant it's sent (see
   // transferFunds()), not when it's accepted/rejected — so it must reduce today's expected cash too,
