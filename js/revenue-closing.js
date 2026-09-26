@@ -453,8 +453,41 @@ function handleQuickScan(){
     $("quickScanInput").value="";
     return;
   }
-  $("quickScanPicker").innerHTML = report + `<p class="sub" style="margin-bottom:8px;">هذي الفاتورة فيها أكثر من ثوب — اختر أي وحد ترحّله:</p>` +
+  $("quickScanPicker").innerHTML = report + bulkAdvanceButtonsHtml(inv) + `<p class="sub" style="margin-bottom:8px;">أو اختر ثوب واحد ترحّله:</p>` +
     eligible.map(({g,idx})=>`<button class="btn btn-ghost btn-sm" style="margin:4px;" onclick="advanceGarmentStatus(state.invoices.find(i=>i.number==='${number}'), ${idx});">ثوب ${idx+1} — ${esc(g.fabricType)} (${STATUSES.find(s=>s.v===g.status)?.label})</button>`).join("");
+}
+// ---- move every garment of an invoice that sits at the same stage in one go (e.g. 3 thobes sewn → ready,
+// or 3 ready thobes → delivered, collecting the invoice's remaining once). Same rules as one-by-one:
+// "تم التفصيل" stays the tailor's own scan, and with quality check on, "جاهز" comes from the QC screen.
+function bulkAdvanceGroups(inv){
+  const groups = {};
+  inv.garments.forEach((g,idx)=>{
+    if(g.status==="تسليم" || g.status==="ملغي") return;
+    const next = nextStatusOf(g.status);
+    if(!next || next==="تفصيل") return;
+    if(next==="جاهز" && state.settings.qcEnabled) return;
+    (groups[g.status] = groups[g.status] || []).push(idx);
+  });
+  return Object.entries(groups).filter(([,idxs])=>idxs.length>1).map(([from,idxs])=>({from, to:nextStatusOf(from), idxs}));
+}
+function bulkAdvanceButtonsHtml(inv, targetId){
+  const groups = bulkAdvanceGroups(inv);
+  if(!groups.length) return "";
+  const lbl = v=> STATUSES.find(s=>s.v===v)?.label || v;
+  return `<div style="margin:8px 0;">` + groups.map(gr=>`<button class="btn btn-gold btn-sm" style="margin:4px;" onclick="bulkAdvanceGarments('${inv.id}', '${gr.from}', '${targetId||"quickScanPicker"}')">${gr.to==="تسليم"?`تسليم كل الثياب الجاهزة (${gr.idxs.length})`:`ترحيل كل الثياب (${gr.idxs.length}) من "${lbl(gr.from)}" إلى "${lbl(gr.to)}"`}</button>`).join("") + `</div>`;
+}
+async function bulkAdvanceGarments(invId, from, targetId){
+  const inv = state.invoices.find(i=>i.id===invId);
+  if(!inv) return;
+  const group = bulkAdvanceGroups(inv).find(gr=>gr.from===from);
+  if(!group){ showToast("ما فيه ثياب بهذي المرحلة للترحيل"); return; }
+  const lbl = v=> STATUSES.find(s=>s.v===v)?.label || v;
+  if(group.to==="تسليم"){
+    const remaining = invoiceRemaining(inv);
+    if(Math.abs(remaining)>0.01){ showQuickDeliveryPayment(inv, group.idxs, remaining, targetId); return; }
+    if(!await showConfirm(`تأكيد تسليم ${group.idxs.length} ثياب — فاتورة رقم ${esc(inv.number)} (الفاتورة مسددة بالكامل). متابعة؟`)) return;
+  } else if(!await showConfirm(`ترحيل ${group.idxs.length} ثياب من "${lbl(group.from)}" إلى "${lbl(group.to)}" — فاتورة رقم ${esc(inv.number)}؟`)) return;
+  await completeGarmentAdvance(inv, group.idxs, group.to);
 }
 async function advanceGarmentStatus(inv, idx){
   const g = inv.garments[idx];
@@ -473,33 +506,40 @@ async function advanceGarmentStatus(inv, idx){
   completeGarmentAdvance(inv, idx, next);
 }
 async function completeGarmentAdvance(inv, idx, next, snapshot){
-  const g = inv.garments[idx];
-  const old = g.status;
+  const idxs = Array.isArray(idx) ? idx : [idx];
+  const old = inv.garments[idxs[0]].status;
   // open now, still inside the synchronous click/keydown chain that led here, before any await below
   const waPopup = (next==="جاهز") ? openReadyWaPopup(inv) : null;
   if(!snapshot) snapshot = JSON.parse(JSON.stringify(state)); // no snapshot passed in => nothing prior to protect, snapshot fresh here
-  if(next==="قص" && g.itemCardId && g.stockApplied==="reserved") consumeFabricForGarment(g, g.qtyUsed||0);
-  g.status = next;
-  if(g.status==="قص" && !g.cutDate) g.cutDate = todayStr();
-  if(g.status==="جاهز" && !g.readyDate) g.readyDate = todayStr();
-  if(g.status==="تسليم" && !g.deliveredDate) g.deliveredDate = todayStr();
+  idxs.forEach(i=>{
+    const g = inv.garments[i];
+    if(next==="قص" && g.itemCardId && g.stockApplied==="reserved") consumeFabricForGarment(g, g.qtyUsed||0);
+    g.status = next;
+    if(g.status==="قص" && !g.cutDate) g.cutDate = todayStr();
+    if(g.status==="جاهز" && !g.readyDate) g.readyDate = todayStr();
+    if(g.status==="تسليم" && !g.deliveredDate) g.deliveredDate = todayStr();
+  });
   if(!await saveStateWithRollback(snapshot)){ if(waPopup) waPopup.close(); return false; }
   $("quickScanInput").value=""; $("quickScanPicker").innerHTML="";
-  showToast(`تم التحويل من "${STATUSES.find(s=>s.v===old)?.label}" إلى "${STATUSES.find(s=>s.v===next)?.label}"`);
+  showToast(`تم تحويل ${idxs.length>1?idxs.length+" ثياب ":""}من "${STATUSES.find(s=>s.v===old)?.label}" إلى "${STATUSES.find(s=>s.v===next)?.label}"`);
+  // the distribution screen shows this invoice's stages — refresh it if that's where this came from
+  if($("tab-distribution") && $("tab-distribution").classList.contains("active") && $("distArea") && $("distArea").innerHTML) renderDistributionArea(inv);
   if(next==="جاهز") finishReadyWaPopup(waPopup, "quickScanWaReadyBanner", inv);
   else if($("quickScanWaReadyBanner")) $("quickScanWaReadyBanner").style.display = "none";
   return true;
 }
-function showQuickDeliveryPayment(inv, idx, remaining){
-  $("quickScanPicker").innerHTML = `<div class="garment-card">
+function showQuickDeliveryPayment(inv, idx, remaining, targetId){
+  const target = targetId || "quickScanPicker";
+  const idxArg = Array.isArray(idx) ? `[${idx.join(",")}]` : idx;
+  $(target).innerHTML = `<div class="garment-card">
     <p style="margin:0 0 10px;color:var(--loss);font-weight:700;">متبقي على الفاتورة ${remaining.toFixed(0)} ريال — حصّل المبلغ عشان تكمل التسليم</p>
     <div class="row-2">
       <div class="field"><label>كاش (ريال)</label><input type="number" id="quickPayCash" min="0" value="${remaining.toFixed(0)}"></div>
       <div class="field"><label>شبكة (ريال)</label><input type="number" id="quickPayNetwork" min="0" value="0"></div>
     </div>
     <div class="field"><label>رقم سند الشبكة (إلزامي لو فيه شبكة)</label><input type="text" id="quickPayReceipt"></div>
-    <button class="btn btn-gold btn-sm" onclick="confirmQuickDeliveryPayment('${inv.id}', ${idx})">تحصيل وتسليم</button>
-    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('quickScanPicker').innerHTML='';">إلغاء</button>
+    <button class="btn btn-gold btn-sm" onclick="confirmQuickDeliveryPayment('${inv.id}', ${idxArg})">تحصيل وتسليم${Array.isArray(idx)?` (${idx.length} ثياب)`:""}</button>
+    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('${target}').innerHTML='';">إلغاء</button>
   </div>`;
 }
 function confirmQuickDeliveryPayment(invId, idx){

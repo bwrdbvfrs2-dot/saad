@@ -702,6 +702,7 @@ function renderDistributionArea(inv){
     </div>
   </div>`;
   area.innerHTML = summaryHtml + `${inv.notes?`<p class="sub" style="margin:10px 0;">ملاحظات الفاتورة: ${esc(inv.notes)}</p>`:""}${(inv.appliedOffers&&inv.appliedOffers.length)?`<p class="sub" style="margin-bottom:10px;color:var(--gold-soft);">عروض مطبّقة: ${inv.appliedOffers.join("، ")}</p>`:""}` +
+    `<div id="distBulkArea">${bulkAdvanceButtonsHtml(inv, "distBulkArea")}</div>` +
     inv.garments.map((g,i)=>{
       const locked = (g.status==="تسليم"||g.status==="ملغي") && !isAdmin;
       const tailorLocked = g.status==="تفصيل"; // "تم التفصيل" is exclusively set via the tailor's own scan screen — no one edits it here, admin included
