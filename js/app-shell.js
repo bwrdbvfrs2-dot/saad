@@ -470,6 +470,7 @@ async function pruneOldBackups(){
 // menus) so a shop that trained on fake data starts clean. A full backup is taken first.
 async function resetForGoLive(){
   if(!currentUser || currentUser.role!=="مدير"){ showToast("هذا الإجراء للمدير فقط"); return; }
+  if(state.goLive){ showToast("تم تجهيز البرنامج للتشغيل الفعلي من قبل — هذا الإجراء يُستخدم مرة وحدة فقط"); return; }
   const keepSettings = !!($("resetKeepSettings")||{}).checked;
   if(!await showConfirm(`تأكيد: بيتم مسح كل بيانات المحل${keepSettings?" ما عدا الإعدادات":""} — الفواتير والعملاء والأصناف والصناديق وكل الحركات. يبقى المستخدمين وصلاحياتهم فقط. متأكد؟`)) return;
   if(!await confirmWithPassword("هذا إجراء نهائي على بيانات المحل (تنحفظ نسخة احتياطية قبله). أدخل كلمة مرورك للتأكيد.")) return;
@@ -492,6 +493,8 @@ async function resetForGoLive(){
     ["fabricOrigins","expenseCategories","alterationReasons","alterationResponsibles","customMeasurementFields", ...Object.keys(defaultTypeLibraries())]
       .forEach(k=>{ if(state[k]!==undefined) fresh[k] = state[k]; });
   }
+  // one-time only: once live, the wipe is gone for good (a restored pre-reset backup predates this mark)
+  fresh.goLive = {at:new Date().toISOString(), by:currentUser.username};
   fresh._rev = state._rev;          // saved through the normal conflict-checked path
   const previous = state;
   state = fresh;

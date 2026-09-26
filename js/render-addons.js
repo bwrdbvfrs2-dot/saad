@@ -1,5 +1,10 @@
 // ---------------- render ----------------
 function renderAll(){
+  if($("goLiveResetWrap")){
+    $("goLiveResetWrap").style.display = state.goLive ? "none" : "";
+    $("goLiveDoneNote").style.display = state.goLive ? "" : "none";
+    if(state.goLive) $("goLiveDoneNote").textContent = `بدأ التشغيل الفعلي بتاريخ ${state.goLive.at.slice(0,10)} (مسح بيانات التجربة بواسطة ${state.goLive.by}).`;
+  }
   $("curMonthLbl").textContent = monthDisplay(state.settings.currentMonth);
   if($("auditFilterUser")){
     const curAuditUserFilter = $("auditFilterUser").value;
