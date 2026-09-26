@@ -569,6 +569,7 @@ function applyRolePermissions(){
   const isTailor = currentUser.role==="خياط";
   const isQc = currentUser.role==="فاحص جودة";
   $("payrollToggleBtn").style.display = isAdmin ? "" : "none";
+  $("itemImportWrap").style.display = isAdmin ? "" : "none";
   SETTINGS_TABS.forEach(t=>{
     const el = $("adminOnly_"+t); if(el) el.style.display = isAdmin?"":"none";
   });

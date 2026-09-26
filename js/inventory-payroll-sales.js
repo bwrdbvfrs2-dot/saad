@@ -460,6 +460,128 @@ function addManualItemCard(){
   saveState(); renderAll();
   showToast("تم إضافة الصنف");
 }
+// ---- bulk item import from an Excel/CSV file (admin only): template → preview with a verdict per row → confirm ----
+const ITEM_IMPORT_COLS = ["النوع","اسم الصنف","الكمية","تكلفة الوحدة","سعر البيع","سعر رجال","سعر ولادي","سعر طفل","الصناعة","الموسم"];
+const ITEM_IMPORT_MAX_ROWS = 2000;
+let itemImportPending = null;
+// SheetJS is only fetched when someone actually imports — nobody else pays for its size
+function loadXlsxLib(){
+  if(window.XLSX) return Promise.resolve();
+  return new Promise((resolve, reject)=>{
+    const s = document.createElement("script");
+    s.src = "js/vendor/xlsx.mini.min.js"; s.onload = resolve; s.onerror = ()=> reject(new Error("xlsx"));
+    document.head.appendChild(s);
+  });
+}
+async function downloadItemImportTemplate(){
+  try{ await loadXlsxLib(); } catch(e){ showToast("تعذّر تحميل مكتبة الإكسل — تأكد من الاتصال"); return; }
+  const ws = XLSX.utils.aoa_to_sheet([
+    ITEM_IMPORT_COLS,
+    ["قماش","قماش ياباني أبيض",120,18,"",90,70,55,state.fabricOrigins[0]||"ياباني","صيفي"],
+    ["منتج","شماغ أحمر",30,45,95,"","","","",""],
+    ["ملحق","أزرار صدف",500,0.3,"","","","","",""],
+  ]);
+  ws["!cols"] = ITEM_IMPORT_COLS.map(()=>({wch:16}));
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "الأصناف");
+  const blob = new Blob([XLSX.write(wb, {type:"array", bookType:"xlsx"})], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "items-import-template.xlsx";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=> URL.revokeObjectURL(a.href), 1000);
+}
+function importNum(v){
+  if(v===null || v===undefined || v==="") return 0;
+  if(typeof v==="number") return v;
+  const s = String(v).trim().replace(/[٠-٩]/g, d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/٫/g,".").replace(/[,،\s]/g,"");
+  return s==="" ? 0 : (isFinite(+s) ? +s : NaN);
+}
+function importType(v){
+  const t = String(v||"").trim();
+  if(["قماش","قماش (تفصيل)","fabric"].includes(t)) return "fabric";
+  if(["منتج","منتج جاهز","منتج جاهز (بيع)","product"].includes(t)) return "product";
+  if(["ملحق","ملحق فعلي","addon"].includes(t)) return "addon";
+  return null;
+}
+// turns the sheet into rows with a verdict each; nothing touches state here
+function buildItemImportRows(aoa){
+  const header = (aoa[0]||[]).map(h=>String(h||"").trim());
+  const col = {}; ITEM_IMPORT_COLS.forEach(c=>{ col[c] = header.indexOf(c); });
+  if(col["النوع"]<0 || col["اسم الصنف"]<0) return {error:"الملف ما فيه عمودي \"النوع\" و\"اسم الصنف\" — استخدم القالب"};
+  const get = (r,c)=> col[c]>=0 ? r[col[c]] : "";
+  const dataRows = aoa.slice(1).map((r,i)=>({r, line:i+2})).filter(({r})=> r.some(v=>String(v??"").trim()!==""));
+  if(dataRows.length > ITEM_IMPORT_MAX_ROWS) return {error:`الملف فيه ${dataRows.length} سطر — الحد ${ITEM_IMPORT_MAX_ROWS} في المرة الواحدة`};
+  const seen = new Set();
+  const rows = dataRows.map(({r,line})=>{
+    const type = importType(get(r,"النوع"));
+    const name = String(get(r,"اسم الصنف")||"").trim();
+    const qty = importNum(get(r,"الكمية")), cost = importNum(get(r,"تكلفة الوحدة")), salePrice = importNum(get(r,"سعر البيع"));
+    const prices = {"رجال":importNum(get(r,"سعر رجال")),"ولادي":importNum(get(r,"سعر ولادي")),"طفل":importNum(get(r,"سعر طفل"))};
+    const origin = String(get(r,"الصناعة")||"").trim(), season = String(get(r,"الموسم")||"").trim();
+    let error = null;
+    if(!name) error = "اسم الصنف فاضي";
+    else if(!type) error = `النوع "${get(r,"النوع")}" غير معروف (قماش / منتج / ملحق)`;
+    else if([qty,cost,salePrice,...Object.values(prices)].some(n=>isNaN(n))) error = "فيه رقم مكتوب غلط";
+    else if([qty,cost,salePrice,...Object.values(prices)].some(n=>n<0)) error = "فيه رقم بالسالب";
+    else if(type==="fabric" && !state.fabricOrigins.includes(origin)) error = origin ? `الصناعة "${origin}" غير معرّفة في الإعدادات` : "القماش لازم له صناعة";
+    else if(type==="fabric" && !["صيفي","شتوي"].includes(season)) error = "القماش لازم له موسم (صيفي / شتوي)";
+    else if(state.itemCards.some(c=>c.type===type && c.name===name)) error = "فيه صنف بنفس الاسم والنوع موجود مسبقاً";
+    else if(seen.has(type+"|"+name)) error = "مكرر داخل الملف";
+    if(!error) seen.add(type+"|"+name);
+    return {line, type, name, qty, cost, salePrice, prices, origin, season, error};
+  });
+  return {rows};
+}
+async function previewItemImport(file){
+  const wrap = $("itemImportPreview");
+  if(!currentUser || currentUser.role!=="مدير"){ showToast("الاستيراد للمدير فقط"); return; }
+  if(file.size > 5*1024*1024){ showToast("حجم الملف أكبر من 5 ميجا"); return; }
+  try{ await loadXlsxLib(); } catch(e){ showToast("تعذّر تحميل مكتبة الإكسل — تأكد من الاتصال"); return; }
+  let aoa;
+  try{
+    const wb = XLSX.read(await file.arrayBuffer(), {type:"array"});
+    aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, defval:"", raw:true});
+  } catch(e){ showToast("تعذّرت قراءة الملف — تأكد إنه ملف إكسل أو CSV"); return; }
+  const res = buildItemImportRows(aoa);
+  if(res.error){ itemImportPending = null; wrap.innerHTML = `<p class="locked-note" style="color:var(--loss);">${esc(res.error)}</p>`; return; }
+  const ok = res.rows.filter(r=>!r.error), bad = res.rows.filter(r=>r.error);
+  itemImportPending = {fileName:file.name, rows:res.rows};
+  const typeTxt = t=> t==="fabric"?"قماش":t==="product"?"منتج":t==="addon"?"ملحق":"—";
+  wrap.innerHTML = `<p class="sub" style="margin:8px 0;">الملف: <b>${esc(file.name)}</b> — سليم: <b style="color:var(--profit);">${ok.length}</b> — مرفوض: <b style="color:var(--loss);">${bad.length}</b></p>
+    <div style="max-height:320px;overflow:auto;"><table><thead><tr><th>سطر</th><th>النوع</th><th>الاسم</th><th>الكمية</th><th>التكلفة</th><th>الحالة</th></tr></thead><tbody>` +
+    res.rows.map(r=>`<tr><td>${r.line}</td><td>${typeTxt(r.type)}</td><td>${esc(r.name)}</td><td>${isNaN(r.qty)?"—":r.qty}</td><td>${isNaN(r.cost)?"—":r.cost}</td><td style="color:${r.error?"var(--loss)":"var(--profit)"};">${r.error?esc(r.error):"✓ جاهز"}</td></tr>`).join("") +
+    `</tbody></table></div>
+    <div class="actions-row" style="margin-top:10px;">
+      <button class="btn btn-gold btn-sm" id="itemImportConfirmBtn" ${ok.length?"":"disabled"}>استيراد ${ok.length} صنف</button>
+      <button class="btn btn-ghost btn-sm" id="itemImportCancelBtn">إلغاء</button>
+    </div>`;
+  $("itemImportConfirmBtn").addEventListener("click", confirmItemImport);
+  $("itemImportCancelBtn").addEventListener("click", cancelItemImport);
+}
+function cancelItemImport(){ itemImportPending = null; $("itemImportPreview").innerHTML = ""; $("itemImportFile").value = ""; }
+async function confirmItemImport(){
+  if(!currentUser || currentUser.role!=="مدير"){ showToast("الاستيراد للمدير فقط"); return; }
+  if(!itemImportPending) return;
+  // re-checked against the state as it is now — someone may have added one of these names since the preview
+  const rows = itemImportPending.rows.filter(r=>!r.error && !state.itemCards.some(c=>c.type===r.type && c.name===r.name));
+  if(!rows.length){ showToast("ما فيه أصناف جديدة للاستيراد"); return; }
+  if(!await showConfirm(`استيراد ${rows.length} صنف من الملف "${itemImportPending.fileName}"؟`)) return;
+  const snapshot = JSON.parse(JSON.stringify(state));
+  const batchId = newId(), createdAt = new Date().toISOString();
+  rows.forEach(r=>{
+    state.itemCards.push({id:newId(), code:nextItemCode(), name:r.name, type:r.type, unit: r.type==="fabric"?state.settings.measureUnit:"piece",
+      currentCost:r.cost, openingBalance:r.qty, stockQty:0, reservedQty:0, active:true, minSalePrice:0, minPrices: r.type==="fabric"?{"رجال":0,"ولادي":0,"طفل":0}:{},
+      origin: r.type==="fabric" ? r.origin : undefined, season: r.type==="fabric" ? r.season : undefined,
+      prices: r.type==="fabric" ? r.prices : undefined,
+      qty: r.type==="fabric" ? {"رجال":0,"ولادي":0,"طفل":0} : undefined,
+      salePrice: r.type==="product" ? r.salePrice : (r.type==="fabric" ? 0 : undefined),
+      createdAt, createdBy:currentUser.username, importBatchId:batchId});
+  });
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("items_imported", {batchId, fileName:itemImportPending.fileName, count:rows.length, items:rows.slice(0,100).map(r=>`${r.name} (${r.qty})`)});
+    cancelItemImport(); renderAll();
+    showToast(`تم استيراد ${rows.length} صنف`);
+  }
+}
 async function addPurchase(){
   const supplierId = $("purchSupplier").value;
   if(!supplierId){ showToast("اختر مورد حقيقي من القائمة (اكتب اسمه واختره من الاقتراحات) — أو أضف مورد جديد أول من شاشة الموردين"); return; }
