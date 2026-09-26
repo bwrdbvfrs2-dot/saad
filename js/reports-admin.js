@@ -1035,6 +1035,7 @@ function performTabSwitch(name){
   renderSidebar();
   renderBottomNav();
   if(name==="sensitiveFinancials") renderSensitiveGate();
+  if(name==="bot") renderBotTab();
   if(name==="invoice" && !editingId){
     // refresh dropdowns (e.g. newly-added measurement options) without discarding data already entered
     renderGarmentFields(readGarmentFields());
