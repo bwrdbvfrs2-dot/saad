@@ -238,6 +238,8 @@ function normalizeState(){
     state.settings.qcTabGranted = true;
   }
   if(!state.qcLog) state.qcLog=[];
+  // وطني بوت: the manager's alone for now — staff get their handed-off conversations in a later phase
+  if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("bot")) state.permissions["مدير"].tabs.push("bot");
   // the "أجرة تفصيل (بدون قماش)" line (customer brings their own fabric) has its own price card:
   // a default sale price and a minimum price per body category, like a fabric card
   if(!state.settings.tailoringOnly) state.settings.tailoringOnly = {prices:{"رجال":0,"ولادي":0,"طفل":0}, minPrices:{"رجال":0,"ولادي":0,"طفل":0}};
@@ -614,6 +616,7 @@ const NAV_GROUPS = [
     {tab:"customerDebts", label:"مديونيات العملاء"},
     {tab:"report-customers", label:"تقرير العملاء"},
     {tab:"report-broadcastCampaign", label:"قوائم البث والعروض الخاصة"},
+    {tab:"bot", label:"وطني بوت"},
   ]},
   {title:"المخزون", color:"#8a6d3b", items:[
     {tab:"itemCards", label:"كروت الأصناف"},
@@ -665,7 +668,7 @@ const TAB_ICONS = {
   "report-fullLog":"scroll-text", "report-search":"search", "report-salesRanking":"trophy",
   "report-daily":"calendar", "report-tailorMonthly":"hard-hat", "report-auditLog":"history", growth:"trending-up",
   settingsShop:"store", settingsFinance:"circle-dollar-sign", settingsUsers:"user-cog",
-  settingsProducts:"shirt", settingsMarketing:"gift", mail:"mail-open",
+  settingsProducts:"shirt", settingsMarketing:"gift", mail:"mail-open", bot:"bot",
 };
 const GROUP_ICONS = { "الرئيسية":"home", "المبيعات":"shopping-bag", "الخياطة":"scissors", "العملاء":"users",
   "المخزون":"warehouse", "الحسابات":"wallet", "التقارير":"bar-chart-3", "الإعدادات":"settings" };

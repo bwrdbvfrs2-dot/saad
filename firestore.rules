@@ -64,6 +64,20 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // وطني بوت — kept out of shop/state. Leads and the bot settings are the manager's; bot_contacts is the
+    // outreach record (contacted / opted out) and is written only by the server (Cloud Functions use the
+    // Admin SDK, which these rules don't apply to), so no client — not even the manager — can forge it.
+    match /leads/{mobile} {
+      allow read, write: if isAdmin();
+    }
+    match /bot/{doc} {
+      allow read, write: if isAdmin();
+    }
+    match /bot_contacts/{mobile} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // daily state snapshots for disaster recovery. Same protection level as the state document
     // itself: any signed-in user can create today's backup, nobody can delete one via the client
     // (pruning old ones happens through this same rule set, from the app, so it stays consistent
