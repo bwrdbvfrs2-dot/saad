@@ -1172,6 +1172,8 @@ $("addSupplierBtn").addEventListener("click", addSupplier);
 $("addManualCardBtn").addEventListener("click", addManualItemCard);
 $("showStockReportBtn").addEventListener("click", showStockReport);
 $("manualCardType").addEventListener("change", updateManualCardLabels);
+$("itemImportTemplateBtn").addEventListener("click", downloadItemImportTemplate);
+$("itemImportFile").addEventListener("change", ()=>{ const f=$("itemImportFile").files[0]; if(f) previewItemImport(f); });
 $("purchType").addEventListener("change", refreshPurchaseForm);
 $("purchItemName").addEventListener("input", updatePurchItemStatus);
 $("purchSupplierSearch").addEventListener("input", ()=>{
