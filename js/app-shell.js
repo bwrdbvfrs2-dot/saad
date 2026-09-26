@@ -347,6 +347,15 @@ async function commitStatePayload(payload){
       const cur = await tx.get(STATE_DOC);
       const curRev = (cur.exists && cur.data()._rev) || 0;
       if(curRev !== baseRev){ const err = new Error("shop/state changed since it was loaded"); err.code = "state-conflict"; throw err; }
+      // only a manager may change users/permissions (the rules enforce it). Anyone else's copy can still
+      // differ from the server's — a new app version tops up a role's tab list or a user's defaults the
+      // moment it loads — and that difference alone got every save of theirs refused. They never edit
+      // these legitimately, so their saves carry the server's current values untouched.
+      if(cur.exists && !(currentUser && currentUser.role==="مدير")){
+        const server = cur.data();
+        payload.users = server.users;
+        payload.permissions = server.permissions;
+      }
       tx.set(STATE_DOC, payload);
     });
     ownCommittedRevs.set(baseRev, payload._rev);
