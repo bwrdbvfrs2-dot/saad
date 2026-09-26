@@ -285,8 +285,13 @@ function renderOptionLists(){
   if(!el) return;
   el.innerHTML = OPTION_LISTS.map(ol=>{
     const items = state[ol.key]||[];
+    // every option's picture can be replaced in place; a thobe type also has the back view the
+    // mannequin and the printed cutting card use
+    const imgSlot = (it, i, field, title)=> `<label title="${title}" style="cursor:pointer;display:inline-flex;flex-direction:column;align-items:center;margin-left:6px;font-size:9px;color:var(--muted);">
+        ${it[field]?`<img src="${it[field]}" style="width:32px;height:40px;object-fit:contain;border-radius:6px;border:1px solid var(--border);background:#fff;">`:`<span style="width:32px;height:40px;border:1px dashed var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;">+</span>`}
+        ${title}<input type="file" accept="image/*" style="display:none;" onchange="replaceOptionImage('${ol.key}', ${i}, '${field}', this)"></label>`;
     const itemsHtml = items.map((it,i)=>`<div class="item-row">
-        ${it.image?`<img src="${it.image}" style="width:32px;height:32px;object-fit:cover;border-radius:6px;margin-left:8px;">`:""}
+        ${ol.key==="garmentTypes" ? imgSlot(it,i,"image","أمام")+imgSlot(it,i,"imageBack","خلف") : imgSlot(it,i,"image","الصورة")}
         <span style="flex-shrink:0;">${esc(it.code)} -</span>
         <input type="text" class="opt-rename-input" data-list="${ol.key}" data-idx="${i}" value="${esc(it.label)}" style="flex:1;min-width:0;">
         <button class="icon-btn" onclick="removeOptionListItem('${ol.key}', ${i})">حذف</button>
@@ -334,6 +339,47 @@ function addOptionListItem(listKey){
     reader.onload = ()=> finish(reader.result);
     reader.readAsDataURL(file);
   } else finish(null);
+}
+// images live inside the shop document, so an upload is scaled down first (longest side 900px) to keep
+// that document well under its size limit; line drawings stay sharp at that size
+function shrinkImageFile(file, maxSide){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onerror = ()=> reject(new Error("read"));
+    reader.onload = ()=>{
+      const img = new Image();
+      img.onerror = ()=> reject(new Error("decode"));
+      img.onload = ()=>{
+        const scale = Math.min(1, maxSide/Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width*scale); c.height = Math.round(img.height*scale);
+        const ctx = c.getContext("2d");
+        ctx.fillStyle = "#fff"; ctx.fillRect(0,0,c.width,c.height);   // transparent PNGs print as white, not black
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL("image/jpeg", 0.85));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+async function replaceOptionImage(listKey, idx, field, input){
+  const file = input.files && input.files[0];
+  const item = (state[listKey]||[])[idx];
+  if(!file || !item) return;
+  if(!currentUser || currentUser.role!=="مدير"){ showToast("تغيير الصور للمدير فقط"); input.value=""; return; }
+  if(file.size > 8*1024*1024){ showToast("حجم الصورة أكبر من 8 ميجا"); input.value=""; return; }
+  let dataUrl;
+  try{ dataUrl = await shrinkImageFile(file, 900); }
+  catch(e){ showToast("تعذّرت قراءة الصورة — جرّب صورة ثانية"); input.value=""; return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
+  item[field] = dataUrl;
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("option_image_changed", {list:listKey, code:item.code, label:item.label, view: field==="imageBack"?"back":"front"});
+    showToast(`تم تحديث ${field==="imageBack"?"صورة الخلف":"الصورة"} — ${item.label}`);
+    renderAll();
+  }
+  input.value = "";
 }
 function removeOptionListItem(listKey, i){ state[listKey].splice(i,1); saveState(); renderAll(); }
 
