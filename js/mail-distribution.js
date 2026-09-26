@@ -331,6 +331,7 @@ async function saveInvoice(){
   const stateSnapshotBeforeSave = JSON.parse(JSON.stringify(state));
   const oldInv = editingId ? state.invoices.find(i=>i.id===editingId) : null;
   const garments = readGarmentFields(oldInv? oldInv.garments : null);
+  inheritEmptyMeasurements(garments);
   // freeze cost snapshot for garments that don't yet have one, or recompute since still open
   const extraCount = garments.filter(g=>g.status!=="ملغي").length - (oldInv? oldInv.garments.filter(g=>g.status!=="ملغي").length:0);
   const fixedShare = currentFixedShare(Math.max(extraCount,0), originMonth);

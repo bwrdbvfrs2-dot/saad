@@ -475,6 +475,7 @@ function renderGarmentFields(prefill=null){
       <div class="embro-toggle"><input type="checkbox" class="g-hasEmbro" ${g.hasEmbroidery?"checked":""}><label style="margin:0;">فيه تطريز</label></div>
       <div class="field g-embro-wrap" style="${g.hasEmbroidery?"":"display:none;"}"><label>سعر التطريز (ريال)</label><input type="number" class="g-embroPrice" min="0" placeholder="0" value="${g.embroideryPrice?g.embroideryPrice:""}"></div>
       <button type="button" class="btn btn-ghost btn-sm meas-toggle-btn" data-idx="${i}">كرت المقاس (اضغط للفتح)</button>
+      ${i>0 ? `<p class="sub" style="font-size:11px;margin:4px 0 0;">نفس مقاس الثوب اللي قبله؟ اترك كرته فاضي — ينسخ تلقائياً عند الحفظ (من نفس الفئة فقط)</p>` : ""}
       ${renderMeasurementPanelHtml(g, i)}
       ${addonsHtml ? `<div class="stitch" style="margin:10px 0;"></div><label style="font-size:12px;color:var(--muted);">ملحقات وخدمات إضافية</label>${addonsHtml}` : ""}
     `;
@@ -566,6 +567,24 @@ function renderGarmentFields(prefill=null){
   }
   updateFixedShareNote(); updateLiveTotals(); updatePriceFieldsLockState();
   refreshLucideIcons();
+}
+// several thobes for the same person: fill one measurement card and the rest follow. A garment whose
+// card was left empty takes the card (and its notes) of the nearest garment before it in the same
+// category — a child's thobe never inherits an adult's measurements
+function inheritEmptyMeasurements(garments){
+  const filled = g=> g.measurements && Object.keys(g.measurements).length>0;
+  garments.forEach((g,i)=>{
+    if(filled(g)) return;
+    for(let j=i-1;j>=0;j--){
+      const src = garments[j];
+      if(src.category===g.category && filled(src)){
+        g.measurements = JSON.parse(JSON.stringify(src.measurements));
+        if(!g.measurementNotes) g.measurementNotes = src.measurementNotes||"";
+        g.measurementsCopiedFrom = j+1;
+        return;
+      }
+    }
+  });
 }
 function readGarmentFields(existing){
   return Array.from($("garmentsHolder").children).map((card,i)=>{
