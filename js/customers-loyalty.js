@@ -78,6 +78,9 @@ function applyShopBranding(){
   document.title = name ? `${name} — مسار` : "مسار";
 }
 function globalSearchMatches(q){
+  // a single character only matches an invoice number exactly — so invoices 1–9 can be found without
+  // every invoice/mobile that merely contains that digit flooding the list
+  if(q.length===1) return state.invoices.filter(inv=> inv.number===q);
   const qLower = q.toLowerCase();
   return state.invoices.filter(inv=> inv.number.includes(q) || (inv.customerName||"").toLowerCase().includes(qLower) || (inv.customerMobile||"").includes(q))
     .slice().reverse().slice(0,8);
@@ -86,7 +89,7 @@ function renderGlobalSearchResults(){
   const box = $("globalSearchResults");
   const q = ($("globalSearchInput").value||"").trim();
   if(!box) return;
-  if(q.length<2){ box.classList.remove("show"); box.innerHTML=""; return; }
+  if(!q){ box.classList.remove("show"); box.innerHTML=""; return; }
   const matches = globalSearchMatches(q);
   box.innerHTML = matches.length ? matches.map(inv=>`<button type="button" class="gs-item" data-number="${esc(inv.number)}">
       <div class="gs-title">${esc(inv.number)} — ${esc(inv.customerName||"عميل بدون اسم")}</div>
