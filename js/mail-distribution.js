@@ -552,11 +552,10 @@ function renderOverdueDashboard(targetId, withOpenBtn){
     }
     return html+`</div>`;
   };
-  el.innerHTML = `<div class="row-2">
+  // one list under the other, full width — side by side, the second column got squeezed and cut its rows off
+  el.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;">
     ${panel("متأخرة على القص", cuttingOverdue, "ما فيه ثياب متأخرة على القص", ()=>"تجاوز الموعد المحدد لبدء القص")}
     ${panel("متأخرة عن التسليم", deliveryOverdue, "ما فيه ثياب متأخرة عن التسليم", ({inv})=>`تجاوز تاريخ التسليم المتوقع (${inv.expectedDeliveryDate})`)}
-  </div>
-  <div class="row-2" style="margin-top:10px;">
     ${panel("تسليم اليوم", dueToday, "ما فيه ثياب تسليمها اليوم")}
     ${panel("تسليم غداً", dueTomorrow, "ما فيه ثياب تسليمها غداً")}
   </div>`;
