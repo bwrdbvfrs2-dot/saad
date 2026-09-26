@@ -224,6 +224,9 @@ let state = {
   stockWriteOffs:[],
   permissions: null,
 };
+// the untouched starting state, captured before any server data replaces `state` — the go-live reset
+// rebuilds from this so a wiped shop looks exactly like a brand-new one
+const PRISTINE_STATE_JSON = JSON.stringify(state);
 let editingId=null, currentUser=null;
 const STATUSES = [
   {v:"جديد", label:"تحت القيد الجديد", cls:"b-new"},

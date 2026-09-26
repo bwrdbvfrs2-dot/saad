@@ -466,6 +466,46 @@ async function pruneOldBackups(){
     await Promise.all(deletions);
   }catch(e){ console.error("backup pruning failed", e); }
 }
+// wipes every piece of shop data except the people who log in (users, their permissions, the role
+// menus) so a shop that trained on fake data starts clean. A full backup is taken first.
+async function resetForGoLive(){
+  if(!currentUser || currentUser.role!=="مدير"){ showToast("هذا الإجراء للمدير فقط"); return; }
+  const keepSettings = !!($("resetKeepSettings")||{}).checked;
+  if(!await showConfirm(`تأكيد: بيتم مسح كل بيانات المحل${keepSettings?" ما عدا الإعدادات":""} — الفواتير والعملاء والأصناف والصناديق وكل الحركات. يبقى المستخدمين وصلاحياتهم فقط. متأكد؟`)) return;
+  if(!await confirmWithPassword("هذا إجراء نهائي على بيانات المحل (تنحفظ نسخة احتياطية قبله). أدخل كلمة مرورك للتأكيد.")) return;
+  const backupId = "before-reset-" + new Date().toISOString().replace(/[:.]/g,"-");
+  try{
+    await BACKUPS_COL.doc(backupId).set({snapshot: JSON.parse(JSON.stringify(state)), backedUpAt: firebase.firestore.FieldValue.serverTimestamp()});
+  }catch(e){ console.error("pre-reset backup failed", e); showToast("تعذّر حفظ النسخة الاحتياطية — ما تم المسح"); return; }
+  const fresh = JSON.parse(PRISTINE_STATE_JSON);
+  fresh.users = state.users;
+  fresh.permissions = state.permissions;
+  fresh.quickMenus = state.quickMenus;
+  fresh.cashBoxes = [];            // normalizeState gives every user fresh main boxes at zero
+  if(keepSettings){
+    const s = {...state.settings};
+    // every document counter restarts at 1: drop them all, then take the starting values back from the pristine state
+    Object.keys(s).forEach(k=>{ if(/^next[A-Z]/.test(k)) delete s[k]; });
+    Object.keys(fresh.settings).forEach(k=>{ if(/^next[A-Z]/.test(k)) s[k] = fresh.settings[k]; });
+    s.currentMonth = fresh.settings.currentMonth;
+    fresh.settings = s;
+    ["fabricOrigins","expenseCategories","alterationReasons","alterationResponsibles","customMeasurementFields", ...Object.keys(defaultTypeLibraries())]
+      .forEach(k=>{ if(state[k]!==undefined) fresh[k] = state[k]; });
+  }
+  fresh._rev = state._rev;          // saved through the normal conflict-checked path
+  const previous = state;
+  state = fresh;
+  normalizeState();
+  if(!await saveState()){ state = previous; showToast("تعذّر المسح — ما تغيّر شي"); return; }
+  // the bot's lead list is shop data too (it may not be reachable yet if its rules aren't published)
+  try{
+    const leads = await db.collection("leads").get();
+    for(let i=0;i<leads.docs.length;i+=400){ const b=db.batch(); leads.docs.slice(i,i+400).forEach(d=>b.delete(d.ref)); await b.commit(); }
+  }catch(e){ /* bot collections not in use yet */ }
+  logAudit("shop_reset_for_go_live", {keepSettings, backupId});
+  showToast("تم مسح بيانات التجربة — البرنامج جاهز للتشغيل الفعلي");
+  setTimeout(()=> location.reload(), 1500);
+}
 async function restoreBackup(dateId){
   if(!currentUser || currentUser.role!=="مدير"){ showToast("استرجاع نسخة احتياطية متاح للمدير فقط"); return; }
   if(!await confirmWithPassword(`متأكد تبي تسترجع نسخة يوم ${dateId}؟ بيتم استبدال كل البيانات الحالية (الفواتير، العملاء، الإعدادات...) ببيانات تلك النسخة. المستخدمين وصلاحياتهم يبقون كما هم الحين. أدخل كلمة مرورك للتأكيد.`)) return;
