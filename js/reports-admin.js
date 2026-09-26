@@ -890,6 +890,7 @@ $("loginPass").addEventListener("keydown", e=>{ if(e.key==="Enter") tryLogin(); 
 $("firstSetupBtn").addEventListener("click", trySetupFirstAccount);
 $("setupPassConfirm").addEventListener("keydown", e=>{ if(e.key==="Enter") trySetupFirstAccount(); });
 $("logoutBtn").addEventListener("click", logout);
+$("resetForGoLiveBtn").addEventListener("click", resetForGoLive);
 $("hamburgerBtn").addEventListener("click", openNavDrawer);
 $("globalSearchInput").addEventListener("input", renderGlobalSearchResults);
 $("globalSearchInput").addEventListener("focus", renderGlobalSearchResults);

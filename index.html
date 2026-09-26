@@ -428,6 +428,15 @@
       <p class="sub" style="margin-bottom:10px;">يحتفظ النظام تلقائياً بنسخة يومية من بيانات المحل (آخر ١٤ يوم). لو صار أي خطأ أو فقدان بيانات، تقدر ترجع لأي نسخة من هنا — يستبدل كل البيانات الحالية ببيانات تلك النسخة (المستخدمين وصلاحياتهم يبقون كما هم الحين).</p>
       <button class="btn btn-ghost btn-sm" id="refreshBackupsBtn">تحديث قائمة النسخ</button>
       <div id="backupsList" style="margin-top:10px;"></div>
+      <p class="sub" id="goLiveDoneNote" style="display:none;margin-top:10px;"></p>
+      <div id="goLiveResetWrap">
+      <div class="stitch"></div>
+      <h3 style="margin:0 0 8px;font-size:14px;color:var(--loss);">تجهيز للتشغيل الفعلي (مسح بيانات التجربة)</h3>
+      <p class="sub" style="margin-bottom:10px;">يمسح <b>كل البيانات</b> — الفواتير، العملاء، الأصناف والمخزون، الصناديق والأرصدة، السندات، المصروفات، الرواتب، الموردين، المشتريات، العروض، الإعدادات — ويرجّع العدادات لرقم 1. <b>يبقى فقط: المستخدمين وكلمات مرورهم وصلاحياتهم.</b> قبل المسح تنحفظ نسخة احتياطية كاملة تقدر ترجع لها من قائمة النسخ أعلاه. سجل التدقيق لا يُمسح أبداً.</p>
+      <div class="embro-toggle" style="margin-bottom:10px;"><input type="checkbox" id="resetKeepSettings"><label style="margin:0;">الاحتفاظ بإعدادات المحل (الاسم، الشعار، الضريبة، نص الفاتورة، الصناعات، بنود المصروفات…)</label></div>
+      <button class="btn btn-danger btn-sm" id="resetForGoLiveBtn">مسح بيانات التجربة والبدء من جديد</button>
+      <p class="sub" style="margin-top:6px;">يُستخدم مرة وحدة فقط — بعد المسح يختفي هذا القسم نهائياً.</p>
+      </div>
   </div>
 </div>
 </div>

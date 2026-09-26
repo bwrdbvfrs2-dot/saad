@@ -347,6 +347,15 @@ async function commitStatePayload(payload){
       const cur = await tx.get(STATE_DOC);
       const curRev = (cur.exists && cur.data()._rev) || 0;
       if(curRev !== baseRev){ const err = new Error("shop/state changed since it was loaded"); err.code = "state-conflict"; throw err; }
+      // only a manager may change users/permissions (the rules enforce it). Anyone else's copy can still
+      // differ from the server's — a new app version tops up a role's tab list or a user's defaults the
+      // moment it loads — and that difference alone got every save of theirs refused. They never edit
+      // these legitimately, so their saves carry the server's current values untouched.
+      if(cur.exists && !(currentUser && currentUser.role==="مدير")){
+        const server = cur.data();
+        payload.users = server.users;
+        payload.permissions = server.permissions;
+      }
       tx.set(STATE_DOC, payload);
     });
     ownCommittedRevs.set(baseRev, payload._rev);
@@ -465,6 +474,49 @@ async function pruneOldBackups(){
     snap.forEach(doc=>{ if(doc.id < cutoffStr) deletions.push(doc.ref.delete()); });
     await Promise.all(deletions);
   }catch(e){ console.error("backup pruning failed", e); }
+}
+// wipes every piece of shop data except the people who log in (users, their permissions, the role
+// menus) so a shop that trained on fake data starts clean. A full backup is taken first.
+async function resetForGoLive(){
+  if(!currentUser || currentUser.role!=="مدير"){ showToast("هذا الإجراء للمدير فقط"); return; }
+  if(state.goLive){ showToast("تم تجهيز البرنامج للتشغيل الفعلي من قبل — هذا الإجراء يُستخدم مرة وحدة فقط"); return; }
+  const keepSettings = !!($("resetKeepSettings")||{}).checked;
+  if(!await showConfirm(`تأكيد: بيتم مسح كل بيانات المحل${keepSettings?" ما عدا الإعدادات":""} — الفواتير والعملاء والأصناف والصناديق وكل الحركات. يبقى المستخدمين وصلاحياتهم فقط. متأكد؟`)) return;
+  if(!await confirmWithPassword("هذا إجراء نهائي على بيانات المحل (تنحفظ نسخة احتياطية قبله). أدخل كلمة مرورك للتأكيد.")) return;
+  const backupId = "before-reset-" + new Date().toISOString().replace(/[:.]/g,"-");
+  try{
+    await BACKUPS_COL.doc(backupId).set({snapshot: JSON.parse(JSON.stringify(state)), backedUpAt: firebase.firestore.FieldValue.serverTimestamp()});
+  }catch(e){ console.error("pre-reset backup failed", e); showToast("تعذّر حفظ النسخة الاحتياطية — ما تم المسح"); return; }
+  const fresh = JSON.parse(PRISTINE_STATE_JSON);
+  fresh.users = state.users;
+  fresh.permissions = state.permissions;
+  fresh.quickMenus = state.quickMenus;
+  fresh.cashBoxes = [];            // normalizeState gives every user fresh main boxes at zero
+  if(keepSettings){
+    const s = {...state.settings};
+    // every document counter restarts at 1: drop them all, then take the starting values back from the pristine state
+    Object.keys(s).forEach(k=>{ if(/^next[A-Z]/.test(k)) delete s[k]; });
+    Object.keys(fresh.settings).forEach(k=>{ if(/^next[A-Z]/.test(k)) s[k] = fresh.settings[k]; });
+    s.currentMonth = fresh.settings.currentMonth;
+    fresh.settings = s;
+    ["fabricOrigins","expenseCategories","alterationReasons","alterationResponsibles","customMeasurementFields", ...Object.keys(defaultTypeLibraries())]
+      .forEach(k=>{ if(state[k]!==undefined) fresh[k] = state[k]; });
+  }
+  // one-time only: once live, the wipe is gone for good (a restored pre-reset backup predates this mark)
+  fresh.goLive = {at:new Date().toISOString(), by:currentUser.username};
+  fresh._rev = state._rev;          // saved through the normal conflict-checked path
+  const previous = state;
+  state = fresh;
+  normalizeState();
+  if(!await saveState()){ state = previous; showToast("تعذّر المسح — ما تغيّر شي"); return; }
+  // the bot's lead list is shop data too (it may not be reachable yet if its rules aren't published)
+  try{
+    const leads = await db.collection("leads").get();
+    for(let i=0;i<leads.docs.length;i+=400){ const b=db.batch(); leads.docs.slice(i,i+400).forEach(d=>b.delete(d.ref)); await b.commit(); }
+  }catch(e){ /* bot collections not in use yet */ }
+  logAudit("shop_reset_for_go_live", {keepSettings, backupId});
+  showToast("تم مسح بيانات التجربة — البرنامج جاهز للتشغيل الفعلي");
+  setTimeout(()=> location.reload(), 1500);
 }
 async function restoreBackup(dateId){
   if(!currentUser || currentUser.role!=="مدير"){ showToast("استرجاع نسخة احتياطية متاح للمدير فقط"); return; }
