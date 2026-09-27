@@ -780,7 +780,7 @@ async function addDistPayment(inv){
     const locked = (g.status==="تسليم"||g.status==="ملغي") && !isAdmin;
     if(locked) return;
     const tInp=document.querySelector(`.dist-tailor[data-idx="${i}"]`);
-    if(tInp) g.tailor = tInp.value.trim();
+    if(tInp){ g.tailor = tInp.value.trim(); syncGarmentWageAdvisory(g); }
   });
   inv.payments = inv.payments || [];
   const cashReceiptNo = cash>0 ? nextVoucherNo() : null;
@@ -890,6 +890,7 @@ function claimSingleTailorGarment(inv, idx, number, conflicts){
   if(g.qcReturnedTo && g.qcReturnedTo!==currentUser.username){ showToast(`هذا الثوب راجع للخياط ${g.qcReturnedTo} لإصلاحه`); $("tailorScanPicker").innerHTML=""; return; }
   const wasRepair = !!g.qcReturnedTo;
   g.tailor = currentUser.username; g.status = "تفصيل"; g.tailorCompletedDate = todayStr();
+  syncGarmentWageAdvisory(g);
   delete g.qcReturnedTo;
   if(wasRepair) g.qcRepairedDate = todayStr();
   const alterationsCompleted = resolvePendingAlterationsForTailor(inv);

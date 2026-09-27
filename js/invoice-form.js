@@ -8,9 +8,9 @@ function applyGarmentAdvisory(g){
   const s=state.settings;
   const credit = {
     fabric: garmentFabricCost(g),
-    padding: s.padding,
-    wages: s.wage,
-    embroidery: g.hasEmbroidery ? s.embroideryWage : 0,
+    padding: s.padding||0,
+    wages: tailorWageFor(g),   // the sewing tailor's own rate once known, the default wage until then
+    embroidery: g.hasEmbroidery ? (s.embroideryWage||0) : 0,
   };
   state.advisory.fabric += credit.fabric;
   state.advisory.padding += credit.padding;
@@ -18,6 +18,16 @@ function applyGarmentAdvisory(g){
   state.advisory.embroidery += credit.embroidery;
   g.advisoryCredit = credit;
   g.advisoryApplied = true;
+}
+// the wages guideline was credited with the default wage when the invoice was saved, but the tailor is
+// paid his own rate for the category — so once the tailor is known the credit is trued up to that rate,
+// otherwise the balance drifted negative by the difference on every thobe. A wage already paid stays as it was.
+function syncGarmentWageAdvisory(g){
+  if(!g.advisoryApplied || !g.advisoryCredit || g.wagePaidOut || g.status==="ملغي") return;
+  const wage = tailorWageFor(g), diff = wage - (g.advisoryCredit.wages||0);
+  if(Math.abs(diff) < 0.001) return;
+  state.advisory.wages += diff;
+  g.advisoryCredit.wages = wage;
 }
 function reverseGarmentAdvisory(g){
   if(!g.advisoryApplied || !g.advisoryCredit) return;
