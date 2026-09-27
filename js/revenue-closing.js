@@ -1004,22 +1004,31 @@ async function checkAutoCloseMonth(){
     autoCloseInFlight = false;
   }
 }
-// when the sewing counts as done: the quality-check pass when there is one; a garment sent back
-// for repair (back at قص) or still waiting for its check doesn't count yet
+// when the sewing counts as done: the moment the tailor scans "تم التفصيل" — even while it waits for
+// the quality check. A garment sent back for repair (back at قص) doesn't count until it's re-sewn.
 function garmentSewnDate(g){
-  if(g.qcPassedDate) return g.qcPassedDate;
-  if(!g.tailorCompletedDate) return null;
   if(g.status==="جديد" || g.status==="قص") return null;
-  if(state.settings.qcEnabled && g.status==="تفصيل") return null;
-  return g.tailorCompletedDate;
+  return g.tailorCompletedDate || g.qcPassedDate || null;
 }
-function garmentQualifiesForCommission(g){
-  const basis = state.settings.commissionBasis||"تسليم";
+// the "commission basis" setting is for the other staff's commission only — a tailor's wage is
+// earned by the sewing itself, so it always counts from "تم التفصيل", never waits for delivery
+function garmentQualifiesForCommission(g, forTailor){
+  const basis = forTailor ? "تفصيل" : (state.settings.commissionBasis||"تسليم");
   return basis==="تفصيل" ? !!garmentSewnDate(g) : g.status==="تسليم";
 }
-function commissionQualifyingDate(g){
-  const basis = state.settings.commissionBasis||"تسليم";
+function commissionQualifyingDate(g, forTailor){
+  const basis = forTailor ? "تفصيل" : (state.settings.commissionBasis||"تسليم");
   return basis==="تفصيل" ? garmentSewnDate(g) : g.deliveredDate;
+}
+// the month a tailor's wage for this garment is paid in: the month it was sewn — or, if that month
+// was already closed without paying it (sewn under the old "after delivery" rule), the month now being paid
+function tailorWageCountsIn(g, monthLabel){
+  const qd = commissionQualifyingDate(g, true);
+  if(!qd) return false;
+  const m = qd.slice(0,7);
+  if(m===monthLabel) return true;
+  if(g.wagePaidOut) return g.wagePaidMonth===monthLabel;   // carried over and already paid in this month
+  return m < monthLabel && isMonthClosed(m);
 }
 // a garment's wage is paid in exactly one month: once payroll has run for it, a later date change
 // (re-sewn after a failed check, then passed in a later month) must not pay it a second time
@@ -1033,9 +1042,8 @@ function computeEmployeeEntitlement(user, monthLabel){
       // policy: a garment cancelled before the month is closed earns no wage — even if cutting or
       // sewing had already started. Payroll runs only at month close, so its status then decides.
       if(g.tailor!==user.username || g.status==="ملغي") return;
-      if(!garmentQualifiesForCommission(g) || garmentWagePaidElsewhere(g, monthLabel)) return;
-      const qd = commissionQualifyingDate(g);
-      if(qd && qd.slice(0,7)===monthLabel){
+      if(!garmentQualifiesForCommission(g, true) || garmentWagePaidElsewhere(g, monthLabel)) return;
+      if(tailorWageCountsIn(g, monthLabel)){
         garmentCount++;
         commission += tailorWageFor(g);
       }
@@ -1072,9 +1080,8 @@ function runPayrollForMonth(monthLabel){
       state.payrollLedger.push({id:Date.now()+"-"+u.username, username:u.username, type:"entitlement", amount:ent.total, date:todayStr(), monthLabel, garmentCount:ent.garmentCount, note:`استحقاق ${monthDisplay(monthLabel)}${detail}`});
       if(u.role==="خياط"){
         state.invoices.forEach(inv=> inv.garments.forEach(g=>{
-          if(g.tailor===u.username && garmentQualifiesForCommission(g)){
-            const qd = commissionQualifyingDate(g);
-            if(qd && qd.slice(0,7)===monthLabel && !garmentWagePaidElsewhere(g, monthLabel)){ g.wagePaidOut = true; g.wagePaidMonth = monthLabel; }
+          if(g.tailor===u.username && g.status!=="ملغي" && garmentQualifiesForCommission(g, true)){
+            if(tailorWageCountsIn(g, monthLabel) && !garmentWagePaidElsewhere(g, monthLabel)){ g.wagePaidOut = true; g.wagePaidMonth = monthLabel; }
           }
         }));
       }
