@@ -718,24 +718,28 @@ function currentPromoDiscountAmount(invoiceTotal){
   if(appliedPromoCode.type==="fixed_voucher") return Math.min(appliedPromoCode.value, invoiceTotal);
   return 0; // gift type has no price impact
 }
+// the full sale price of a thobe line — its fabric card's price for the category, or the
+// "tailoring only" price card's when the customer brings his own fabric
+function garmentBaseSalePrice(itemCardId, category){
+  if(itemCardId==="__none__") return parseFloat((((state.settings.tailoringOnly||{}).prices)||{})[category])||0;
+  const c = findItemCard(itemCardId);
+  if(!c || c.type!=="fabric") return 0;
+  return parseFloat((c.prices||{})[category])||0;
+}
 function resetGarmentPricesToBase(){
   Array.from($("garmentsHolder").children).forEach(card=>{
     const itemCardId = card.querySelector(".g-itemCard").value;
-    if(!itemCardId || itemCardId==="__none__") return; // no fabric card — nothing to reset to
-    const c = findItemCard(itemCardId);
-    if(!c || c.type!=="fabric") return;
-    const category = card.querySelector(".g-category").value;
-    const basePrice = c.prices[category];
-    if(basePrice===undefined || basePrice===null) return;
-    const priceInp = card.querySelector(".g-price");
-    priceInp.value = basePrice;
+    if(!itemCardId) return;
+    const basePrice = garmentBaseSalePrice(itemCardId, card.querySelector(".g-category").value);
+    if(basePrice>0) card.querySelector(".g-price").value = basePrice;
   });
 }
+// a promo code or ANY offer bundle (discount or gift) is the shop's own deal — it comes on top of the
+// full sale price, never on top of a price the employee already lowered
 function hasActiveDiscountOffer(){
   if(appliedPromoCode) return true;
   if(!selectedOfferIds.length) return false;
-  const offer = state.offers.find(o=>o.id===selectedOfferIds[0]);
-  return !!offer && offer.type==="quantity_discount";
+  return !!state.offers.find(o=>o.id===selectedOfferIds[0]);
 }
 function updatePriceFieldsLockState(){
   const locked = hasActiveDiscountOffer();

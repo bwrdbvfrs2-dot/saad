@@ -299,6 +299,17 @@ async function saveInvoice(){
     const tailoringOnly = itemCardIdRaw==="__none__";
     const effectiveMinPrice = itemCard ? ((itemCard.minPrices && itemCard.minPrices[garmentCategory]) || 0)
       : tailoringOnly ? (((state.settings.tailoringOnly||{}).minPrices||{})[garmentCategory] || 0) : 0;
+    // with a promo code or an offer bundle the thobe is sold at its full sale price — the deal is the
+    // only discount; a price lowered by hand is put back and the save stops so the new total is seen
+    if(isNewInvoice && hasActiveDiscountOffer() && !isCustomerVip(custMobile)){
+      const basePrice = garmentBaseSalePrice(itemCardIdRaw, garmentCategory);
+      if(basePrice>0 && (parseFloat(priceVal)||0) < basePrice - 0.001){
+        card.querySelector(".g-price").value = basePrice;
+        if(typeof updateLiveTotals==="function") updateLiveTotals();
+        showToast(`ثوب ${gi+1}: مع كود الخصم أو باقة العرض يكون السعر سعر البيع الكامل (${basePrice} ريال) — رجّعته، راجع الإجمالي واحفظ مرة ثانية`);
+        return;
+      }
+    }
     // a VIP customer can be given any price by anyone — no minimum, no per-user discount limit
     if((itemCard || tailoringOnly) && effectiveMinPrice>0 && !isCustomerVip(custMobile)){
       const enteredPrice = parseFloat(priceVal)||0;

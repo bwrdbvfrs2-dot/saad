@@ -916,7 +916,14 @@ function renderSaleOffers(){
     return `<div class="embro-toggle" style="margin:6px 0;"><input type="radio" name="sale-offer-radio" class="sale-offer-select" data-offer="${o.id}" ${saleOfferId===o.id?"checked":""} ${!ev.eligible?"disabled":""}>
       <label style="margin:0;font-size:13px;${!ev.eligible?"color:var(--muted);":""}">${esc(o.name)} ${ev.eligible ? (o.type==="quantity_discount" ? `— خصم ${fmtSar(ev.discount)} ﷼` : `— هدية: ${esc(ev.gift.name)} ×${ev.gift.qty}`) : "— ما ينطبق حالياً"}</label></div>`;
   }).join("") + (saleOfferId ? `<button type="button" class="btn btn-ghost btn-sm" onclick="saleOfferId=null; updateSaleTotal();">إلغاء اختيار العرض</button>` : "");
-  wrap.querySelectorAll(".sale-offer-select").forEach(r=> r.addEventListener("change", ()=>{ if(r.checked){ saleOfferId = r.dataset.offer; updateSaleTotal(); } }));
+  wrap.querySelectorAll(".sale-offer-select").forEach(r=> r.addEventListener("change", ()=>{ if(r.checked){ saleOfferId = r.dataset.offer; resetSaleLinePricesToBase(); updateSaleTotal(); } }));
+}
+function saleDealActive(){ return !!salePromo || !!(saleOfferId && state.offers.find(o=>o.id===saleOfferId && o.active)); }
+function resetSaleLinePricesToBase(){
+  document.querySelectorAll("#saleItemsHolder .garment-card").forEach(div=>{
+    const c = findItemCard(div.querySelector(".sl-item").value);
+    if(c && (c.salePrice||0)>0) div.querySelector(".sl-price").value = c.salePrice;
+  });
 }
 function applySalePromo(){
   const code = $("salePromoInput").value.trim();
@@ -924,6 +931,7 @@ function applySalePromo(){
   const match = findActivePromoCode(code);
   if(!match){ showToast("الكود غير صحيح أو منتهي الصلاحية أو غير مفعّل"); return; }
   salePromo = match;
+  resetSaleLinePricesToBase();
   updateSaleTotal();
   showToast(`تم تطبيق الكود ${match.code}`);
 }
@@ -1007,6 +1015,13 @@ async function saveSaleInvoice(){
     const card = findItemCard(itemCardId);
     if(!card){ showToast("اختر صنف صحيح لكل سطر"); return; }
     if(qty<=0){ showToast("أدخل كمية صحيحة"); return; }
+    // same rule as the tailoring invoice: a promo code or offer bundle comes on top of the full sale price
+    if(saleDealActive() && !isCustomerVip(custMobile) && (card.salePrice||0)>0 && price < card.salePrice - 0.001){
+      div.querySelector(".sl-price").value = card.salePrice;
+      updateSaleTotal();
+      showToast(`${card.name}: مع كود الخصم أو باقة العرض يكون السعر سعر البيع الكامل (${card.salePrice} ريال) — رجّعته، راجع الإجمالي واحفظ مرة ثانية`);
+      return;
+    }
     items.push({itemCardId, name:card.name, qty, price, costAtSale: card.currentCost||0});
   }
   const total = updateSaleTotal();
