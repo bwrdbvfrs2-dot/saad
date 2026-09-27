@@ -392,8 +392,8 @@ function renderStuckInvoicesReportInto(targetId){
   const table = (rows, emptyMsg)=>{
     if(!rows.length) return `<p class="sub">${emptyMsg}</p>`;
     const total = rows.reduce((a,r)=>a+r.remaining,0);
-    return `<div class="table-wrap"><table><thead><tr><th>فاتورة</th><th>العميل</th><th>تاريخ الجاهزية</th><th>أيام التعثر</th><th>المتبقي</th><th></th></tr></thead><tbody>
-      ${rows.map(({inv,g,daysOverdue,remaining})=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")} ${inv.customerMobile?`<a href="${waLink(inv.customerMobile)}" target="_blank" class="icon-btn" title="فتح واتساب"><i data-lucide="message-circle"></i></a>`:""}</td><td>${g.readyDate}</td><td style="color:var(--loss);font-weight:700;">${daysOverdue} يوم</td><td>${remaining.toFixed(0)} ﷼</td><td><button class="btn btn-ghost btn-sm" onclick="switchTab('distribution'); setTimeout(()=>openDistributionInvoiceByNumber('${inv.number.replace(/'/g,"\\'")}'),150);">↩ فتح للتسوية</button></td></tr>`).join("")}
+    return `<div class="table-wrap"><table><thead><tr><th>فاتورة</th><th>العميل</th><th>تاريخ الجاهزية</th><th>أيام التعثر</th><th>يتحوّل للبيع بعد</th><th>المتبقي</th><th></th></tr></thead><tbody>
+      ${rows.map(({inv,g,daysOverdue,remaining})=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")} ${inv.customerMobile?`<a href="${waLink(inv.customerMobile)}" target="_blank" class="icon-btn" title="فتح واتساب"><i data-lucide="message-circle"></i></a>`:""}</td><td>${g.readyDate}</td><td style="color:var(--loss);font-weight:700;">${daysOverdue} يوم</td><td>${Math.max(0, readyToSaleDays()-daysSinceDate(g.readyDate))} يوم</td><td>${remaining.toFixed(0)} ﷼</td><td><button class="btn btn-ghost btn-sm" onclick="switchTab('distribution'); setTimeout(()=>openDistributionInvoiceByNumber('${inv.number.replace(/'/g,"\\'")}'),150);">↩ فتح للتسوية</button></td></tr>`).join("")}
     </tbody></table></div>
     <p style="margin-top:8px;font-weight:700;">إجمالي: ${rows.length} ثوب متعثر — ${total.toFixed(0)} ﷼ متبقي</p>`;
   };
@@ -429,7 +429,7 @@ function buildInvoiceStatusReport(inv){
   const rows = inv.garments.map((g,idx)=>{
     const statusLabel = STATUSES.find(s=>s.v===g.status)?.label || g.status;
     const tailorNote = (g.status==="تفصيل"||g.status==="جاهز"||g.status==="تسليم") && g.tailor ? ` — الخياط: ${esc(g.tailor)}` : "";
-    return `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);"><span>ثوب ${idx+1} — ${esc(g.fabricType||"—")}</span><span><b>${statusLabel}</b>${tailorNote}</span></div>`;
+    return `<div style="padding:4px 0;border-bottom:1px solid var(--border);"><div style="display:flex;justify-content:space-between;"><span>ثوب ${idx+1} — ${esc(g.fabricType||"—")}</span><span><b>${statusLabel}</b>${tailorNote}</span></div>${readyCounterHtml(g)}</div>`;
   }).join("");
   const remaining = invoiceRemaining(inv);
   return `<div class="garment-card" style="margin-bottom:10px;">

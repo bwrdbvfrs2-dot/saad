@@ -48,6 +48,7 @@ function renderAll(){
   $("setSaveReminderMinutes").value = state.settings.invoiceSaveReminderMinutes;
   $("setDefaultDeliveryDays").value = state.settings.defaultDeliveryDays;
   $("setCuttingOverdueDays").value = state.settings.cuttingOverdueDays;
+  $("setReadyToSaleDays").value = readyToSaleDays();
   $("setReceiptTerms").value = state.settings.receiptTerms;
   $("setVatEnabled").checked = !!state.settings.vatEnabled;
   $("setEinvoiceEnabled").checked = !!state.settings.einvoiceEnabled;

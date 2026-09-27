@@ -918,7 +918,7 @@ function renderSaleOffers(){
   }).join("") + (saleOfferId ? `<button type="button" class="btn btn-ghost btn-sm" onclick="saleOfferId=null; updateSaleTotal();">إلغاء اختيار العرض</button>` : "");
   wrap.querySelectorAll(".sale-offer-select").forEach(r=> r.addEventListener("change", ()=>{ if(r.checked){ saleOfferId = r.dataset.offer; resetSaleLinePricesToBase(); updateSaleTotal(); } }));
 }
-function saleDealActive(){ return !!salePromo || !!(saleOfferId && state.offers.find(o=>o.id===saleOfferId && o.active)); }
+function saleDealActive(){ return !!salePromo || !!(saleOfferId && state.offers.find(o=>o.id===saleOfferId && o.active)) || (parseFloat(($("saleDirectDiscount")||{}).value)||0) > 0; }
 function resetSaleLinePricesToBase(){
   document.querySelectorAll("#saleItemsHolder .garment-card").forEach(div=>{
     const c = findItemCard(div.querySelector(".sl-item").value);
@@ -1019,7 +1019,7 @@ async function saveSaleInvoice(){
     if(saleDealActive() && !isCustomerVip(custMobile) && (card.salePrice||0)>0 && price < card.salePrice - 0.001){
       div.querySelector(".sl-price").value = card.salePrice;
       updateSaleTotal();
-      showToast(`${card.name}: مع كود الخصم أو باقة العرض يكون السعر سعر البيع الكامل (${card.salePrice} ريال) — رجّعته، راجع الإجمالي واحفظ مرة ثانية`);
+      showToast(`${card.name}: مع كود الخصم أو باقة العرض أو الخصم المباشر يكون السعر سعر البيع الكامل (${card.salePrice} ريال) — رجّعته، راجع الإجمالي واحفظ مرة ثانية`);
       return;
     }
     items.push({itemCardId, name:card.name, qty, price, costAtSale: card.currentCost||0});

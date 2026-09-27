@@ -427,6 +427,19 @@ function findCustomerByMobile(mobile){ return state.customers.find(c=>c.mobile==
 //    is about goods, not money — no amount is attached to it.
 // (Before, "debt" summed the unpaid part of every garment including ones still being cut or
 // sewn, and "stuck" counted every undelivered garment including brand-new orders.)
+// ---- ready thobes waiting for pickup: a day counter, and the day they turn into a ready-made thobe for sale
+function readyToSaleDays(){ return state.settings.readyToSaleDays || 67; }
+function daysSinceDate(dateStr){
+  const a = Date.parse(dateStr), b = Date.parse(todayStr());
+  return (isNaN(a)||isNaN(b)) ? 0 : Math.max(0, Math.round((b-a)/86400000));
+}
+function readyCounterHtml(g){
+  if(!g.readyDate || !(g.status==="جاهز" || g.status==="معلقة")) return "";
+  if(g.convertedToSale) return `<p class="locked-note" style="color:var(--muted);margin:4px 0;">تحوّل لثوب جاهز للبيع بتاريخ ${g.saleConversionDate||"—"}</p>`;
+  const d = daysSinceDate(g.readyDate), left = readyToSaleDays() - d;
+  const color = left<=7 ? "var(--loss)" : d>=7 ? "var(--gold)" : "var(--profit)";
+  return `<p style="margin:4px 0;font-size:12px;font-weight:700;color:${color};">⏱ جاهز للتسليم منذ ${d} يوم — ${left>0 ? `يتحوّل لثوب جاهز للبيع بعد ${left} يوم` : "يتحوّل لثوب جاهز للبيع اليوم"}</p>`;
+}
 function isStuckReadyGarment(g){
   return g.status==="جاهز" || (g.status==="معلقة" && !!g.readyDate); // معلقة = carried over at month close
 }
@@ -738,6 +751,7 @@ function resetGarmentPricesToBase(){
 // full sale price, never on top of a price the employee already lowered
 function hasActiveDiscountOffer(){
   if(appliedPromoCode) return true;
+  if((parseFloat(($("directDiscountInput")||{}).value)||0) > 0) return true;   // a direct discount too
   if(!selectedOfferIds.length) return false;
   return !!state.offers.find(o=>o.id===selectedOfferIds[0]);
 }
@@ -747,7 +761,7 @@ function updatePriceFieldsLockState(){
     const priceInp = card.querySelector(".g-price");
     const catSel = card.querySelector(".g-category");
     const fabricSearch = card.querySelector(".g-itemCard-search");
-    if(priceInp){ priceInp.disabled = locked; priceInp.title = locked ? "السعر مقفل — لا يمكن التعديل عند وجود كود خصم أو باقة عرض مفعّلة" : ""; }
+    if(priceInp){ priceInp.disabled = locked; priceInp.title = locked ? "السعر مقفل — لا يمكن التعديل عند وجود كود خصم أو باقة عرض أو خصم مباشر" : ""; }
     if(catSel){ catSel.disabled = locked; }
     if(fabricSearch){ fabricSearch.disabled = locked; }
   });
