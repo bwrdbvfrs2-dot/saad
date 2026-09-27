@@ -503,7 +503,7 @@ async function resetForGoLive(){
       .forEach(k=>{ if(state[k]!==undefined) fresh[k] = state[k]; });
   }
   // one-time only: once live, the wipe is gone for good (a restored pre-reset backup predates this mark)
-  fresh.goLive = {at:new Date().toISOString(), by:currentUser.username};
+  fresh.goLive = {at:serverNowIso(), by:currentUser.username};
   fresh._rev = state._rev;          // saved through the normal conflict-checked path
   const previous = state;
   state = fresh;

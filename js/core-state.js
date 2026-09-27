@@ -67,24 +67,74 @@ async function checkShopExists(){
 }
 
 // ---------------- server time (anti-tampering: never trust the device clock for records) ----------------
+// The time comes from the server this app is loaded from (its HTTP Date header — same origin, so whenever
+// the app itself loaded, this is reachable), falling back to a public time service. Calendar dates are
+// always Riyadh's, whatever time zone the device is set to. If both sources fail, a banner says so.
+const RIYADH_UTC_OFFSET_MIN = 180;          // UTC+3, no daylight saving
+const CLOCK_WARN_MS = 5*60*1000;            // a device clock this far off gets a banner
 let serverTimeOffsetMs = 0;
 let serverTimeSynced = false;
+let serverTimeSource = "";
+async function fetchWithTimeout(url, opts, ms){
+  const controller = new AbortController();
+  const timeoutId = setTimeout(()=>controller.abort(), ms);
+  try{ return await fetch(url, {...opts, signal:controller.signal}); }
+  finally{ clearTimeout(timeoutId); }
+}
 async function syncServerTime(){
   try{
-    const controller = new AbortController();
-    const timeoutId = setTimeout(()=>controller.abort(), 4000);
-    const res = await fetch("https://worldtimeapi.org/api/timezone/Asia/Riyadh", {cache:"no-store", signal:controller.signal});
-    clearTimeout(timeoutId);
+    const t0 = Date.now();
+    const res = await fetchWithTimeout(location.origin + "/?__time=" + t0, {method:"HEAD", cache:"no-store"}, 4000);
+    const t1 = Date.now();
+    const serverMs = Date.parse(res.headers.get("date")||"");
+    if(!isNaN(serverMs)){
+      // the header has whole seconds: +500ms is its expected midpoint; compare with the request's midpoint
+      serverTimeOffsetMs = serverMs + 500 - (t0+t1)/2;
+      serverTimeSynced = true; serverTimeSource = "host";
+      updateClockBanner(); return true;
+    }
+  }catch(e){ /* fall through to the public service */ }
+  try{
+    const res = await fetchWithTimeout("https://worldtimeapi.org/api/timezone/Asia/Riyadh", {cache:"no-store"}, 4000);
     if(!res.ok) throw new Error("bad response");
     const data = await res.json();
-    const serverMs = new Date(data.utc_datetime).getTime();
-    serverTimeOffsetMs = serverMs - Date.now();
-    serverTimeSynced = true;
+    serverTimeOffsetMs = new Date(data.utc_datetime).getTime() - Date.now();
+    serverTimeSynced = true; serverTimeSource = "worldtime";
   }catch(e){
-    serverTimeSynced = false; // fall back silently to device clock if offline/unreachable/slow (4s timeout)
+    serverTimeSynced = false; serverTimeSource = "";
   }
+  updateClockBanner();
+  return serverTimeSynced;
 }
-function serverDate(){ return new Date(Date.now() + serverTimeOffsetMs); }
+// the true current instant (for timestamps)
+function serverNowMs(){ return Date.now() + serverTimeOffsetMs; }
+function serverNowIso(){ return new Date(serverNowMs()).toISOString(); }
+// a Date whose local fields (getFullYear/getMonth/getDate/getHours) read Riyadh wall-clock time on any
+// device — every calendar date in the app is built from it
+function serverDate(){ return new Date(serverNowMs() + (RIYADH_UTC_OFFSET_MIN + new Date().getTimezoneOffset())*60000); }
+function updateClockBanner(){
+  if(typeof document==="undefined" || !document.body) return;
+  let bar = document.getElementById("clockBanner");
+  let msg = "", color = "";
+  if(!serverTimeSynced){
+    msg = "تعذّر ضبط الوقت من السيرفر — البرنامج يستخدم ساعة هذا الجهاز الآن. تأكد من الاتصال بالإنترنت وإن ساعة الجهاز وتاريخه صحيحة.";
+    color = "#c0392b";
+  } else if(Math.abs(serverTimeOffsetMs) > CLOCK_WARN_MS){
+    const mins = Math.round(Math.abs(serverTimeOffsetMs)/60000);
+    msg = `ساعة هذا الجهاز غير مضبوطة (مختلفة ${mins>=1440?Math.round(mins/1440)+" يوم":mins>=60?Math.round(mins/60)+" ساعة":mins+" دقيقة"}) — البرنامج يستخدم الوقت الصحيح تلقائياً، لكن يُفضّل ضبط ساعة الجهاز.`;
+    color = "#b7791f";
+  }
+  if(!msg){ if(bar) bar.remove(); return; }
+  if(!bar){
+    bar = document.createElement("div"); bar.id = "clockBanner"; bar.className = "no-print";
+    bar.style.cssText = "position:sticky;top:0;z-index:9999;color:#fff;font-size:13px;padding:6px 12px;text-align:center;";
+    document.body.insertBefore(bar, document.body.firstChild);
+  }
+  bar.style.background = color;
+  bar.textContent = msg;
+}
+// long sessions: re-check every 30 minutes (a device clock can be changed, or the first sync failed)
+setInterval(()=>{ syncServerTime(); }, 30*60*1000);
 function currentMonthLabel(){const d=serverDate();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");}
 function defaultTypeLibraries(){
   return {

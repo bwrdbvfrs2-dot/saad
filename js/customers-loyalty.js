@@ -615,7 +615,7 @@ function expireOldPointsForCustomer(mobile){
   const cust = findCustomerByMobile(mobile);
   if(!cust) return false;
   const cutoffMs = 365*24*60*60*1000;
-  const now = Date.now();
+  const now = serverNowMs();
   const earnEntries = state.loyaltyLedger.filter(l=>l.mobile===mobile && l.type==="earn" && !l.expiredProcessed).sort((a,b)=>a.date.localeCompare(b.date));
   let changed = false;
   earnEntries.forEach(entry=>{

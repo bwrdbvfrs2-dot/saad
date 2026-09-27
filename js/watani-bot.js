@@ -41,7 +41,7 @@ async function markConvertedLeads(){
   const customerMobiles = new Set(state.customers.map(c=>c.mobile));
   const newlyConverted = botData.leads.filter(l=>l.status!=="converted" && customerMobiles.has(l.mobile));
   if(!newlyConverted.length) return;
-  const at = new Date().toISOString();
+  const at = serverNowIso();
   for(let i=0;i<newlyConverted.length;i+=400){
     const batch = db.batch();
     newlyConverted.slice(i,i+400).forEach(l=>{ batch.update(LEADS_COL.doc(l.mobile), {status:"converted", convertedAt:at}); l.status="converted"; l.convertedAt=at; });
@@ -96,7 +96,7 @@ async function saveBotSettings(){
   if(!(dormantMonths>=1 && dormantMonths<=36)){ showToast("مدة الخمول بين 1 و36 شهر"); return; }
   if(!(attributionDays>=1 && attributionDays<=180)){ showToast("مدة الاحتساب بين 1 و180 يوم"); return; }
   const old = {...botData.settings};
-  try{ await BOT_SETTINGS_DOC.set({dailyCap, dormantMonths, attributionDays, updatedAt:new Date().toISOString(), updatedBy:currentUser.username}, {merge:true}); }
+  try{ await BOT_SETTINGS_DOC.set({dailyCap, dormantMonths, attributionDays, updatedAt:serverNowIso(), updatedBy:currentUser.username}, {merge:true}); }
   catch(e){ showToast("تعذّر الحفظ — تأكد من الاتصال وقواعد الحماية"); return; }
   logAudit("bot_settings_changed", {from:{dailyCap:old.dailyCap, dormantMonths:old.dormantMonths, attributionDays:old.attributionDays}, to:{dailyCap, dormantMonths, attributionDays}});
   showToast("تم حفظ إعدادات البوت");
@@ -233,7 +233,7 @@ async function confirmLeadsImport(){
   const rows = leadsImportPending.rows.filter(r=>!r.error && !customerMobiles.has(r.mobile) && !existing.has(r.mobile));
   if(!rows.length){ showToast("ما فيه أرقام جديدة للإضافة"); return; }
   if(!await showConfirm(`إضافة ${rows.length} رقم لقائمة العملاء المحتملين؟`)) return;
-  const batchId = newId(), importedAt = new Date().toISOString();
+  const batchId = newId(), importedAt = serverNowIso();
   try{
     for(let i=0;i<rows.length;i+=400){
       const batch = db.batch();
