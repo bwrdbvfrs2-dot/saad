@@ -19,7 +19,7 @@ function requestOpeningBalanceEdit(cardId){
     showToast("فيه طلب سابق لنفس الصنف بانتظار موافقة المدير");
     return;
   }
-  state.openingBalanceEditRequests.push({id:newId(), cardId, cardName:card.name, requestedBy:currentUser.username, requestedAt:new Date().toISOString(), status:"pending"});
+  state.openingBalanceEditRequests.push({id:newId(), cardId, cardName:card.name, requestedBy:currentUser.username, requestedAt:serverNowIso(), status:"pending"});
   saveState(); renderAll();
   showToast("تم إرسال طلب التعديل للمدير");
 }
@@ -38,14 +38,14 @@ function renderOpeningBalanceRequestsPanel(){
 function approveOpeningBalanceRequest(reqId){
   const req = (state.openingBalanceEditRequests||[]).find(r=>r.id===reqId);
   if(!req) return;
-  req.status="approved"; req.approvedBy=currentUser.username; req.approvedAt=new Date().toISOString();
+  req.status="approved"; req.approvedBy=currentUser.username; req.approvedAt=serverNowIso();
   saveState(); renderAll();
   showToast(`تمت الموافقة — يقدر ${req.requestedBy} يعدّل رصيد "${req.cardName}" مرة وحدة قبل ما يسجّل خروج`);
 }
 function denyOpeningBalanceRequest(reqId){
   const req = (state.openingBalanceEditRequests||[]).find(r=>r.id===reqId);
   if(!req) return;
-  req.status="denied"; req.approvedBy=currentUser.username; req.approvedAt=new Date().toISOString();
+  req.status="denied"; req.approvedBy=currentUser.username; req.approvedAt=serverNowIso();
   saveState(); renderAll();
   showToast("تم رفض الطلب");
 }
@@ -566,7 +566,7 @@ async function confirmItemImport(){
   if(!rows.length){ showToast("ما فيه أصناف جديدة للاستيراد"); return; }
   if(!await showConfirm(`استيراد ${rows.length} صنف من الملف "${itemImportPending.fileName}"؟`)) return;
   const snapshot = JSON.parse(JSON.stringify(state));
-  const batchId = newId(), createdAt = new Date().toISOString();
+  const batchId = newId(), createdAt = serverNowIso();
   rows.forEach(r=>{
     state.itemCards.push({id:newId(), code:nextItemCode(), name:r.name, type:r.type, unit: r.type==="fabric"?state.settings.measureUnit:"piece",
       currentCost:r.cost, openingBalance:r.qty, stockQty:0, reservedQty:0, active:true, minSalePrice:0, minPrices: r.type==="fabric"?{"رجال":0,"ولادي":0,"طفل":0}:{},
