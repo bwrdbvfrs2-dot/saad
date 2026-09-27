@@ -32,6 +32,8 @@ function normalizeState(){
   state.cashBoxes.forEach(b=>{ if(b.openingBalance===undefined) b.openingBalance=0; });
   state.users.forEach(u=> ensureUserBoxes(u.username));
   if(!state.advisory) state.advisory={fabric:0, padding:0, wages:0, embroidery:0};
+  // thobes already sewn before the wages guideline followed each tailor's own rate
+  (state.invoices||[]).forEach(inv=> (inv.garments||[]).forEach(g=>{ if(g.tailor) syncGarmentWageAdvisory(g); }));
   if(!state.expenseCategories) state.expenseCategories=[
     {id:"c1", label:"أجور خياطين", advisoryKey:"wages"},
     {id:"c2", label:"شراء قماش", advisoryKey:"fabric"},

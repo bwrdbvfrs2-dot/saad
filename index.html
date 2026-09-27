@@ -314,6 +314,7 @@
         <div class="field"><label>مدة التسليم الافتراضية (لو ما فيه خياطين بقدرة محددة بعد)</label><input type="number" id="setDefaultDeliveryDays" min="1" step="1"></div>
         <div class="field"><label>القص لازم يخلص قبل التسليم بكم يوم؟</label><input type="number" id="setCuttingOverdueDays" min="1" step="1"></div>
       </div>
+      <div class="field"><label>الثوب الجاهز غير المستلم يتحوّل لثوب جاهز للبيع بعد (يوم من جاهزيته)</label><input type="number" id="setReadyToSaleDays" min="8" max="365" step="1"></div>
       <div class="stitch"></div>
       <h3 style="margin:0 0 8px;font-size:14px;">شروط الفاتورة المطبوعة</h3>
       <p class="sub" style="margin-bottom:8px;">تظهر بأسفل كل فاتورة ضريبية مطبوعة، سطر لكل شرط.</p>
@@ -337,10 +338,10 @@
       <div class="field"><label>رقم الفاتورة القادم (تفصيل)</label><input type="number" id="setNextInv" min="1" step="1"></div>
     </div>
     <div class="row-2">
-      <div class="field"><label>احتساب العمولة — متى تدخل عمولة أي موظف (خياط، كاشير، محاسب، مدير) بالحساب؟</label><select id="setCommissionBasis"><option value="تفصيل">بعد "تم التفصيل"</option><option value="تسليم">بعد "تم التسليم" (افتراضي)</option></select></div>
+      <div class="field"><label>احتساب العمولة — متى تدخل عمولة الكاشير والمحاسب والمدير بالحساب؟ (أجر الخياط دائماً فور "تم التفصيل")</label><select id="setCommissionBasis"><option value="تفصيل">بعد "تم التفصيل"</option><option value="تسليم">بعد "تم التسليم" (افتراضي)</option></select></div>
     </div>
     <div class="embro-toggle"><input type="checkbox" id="setQcEnabled"><label style="margin:0;">تفعيل فحص الجودة — الثوب بعد "تم التفصيل" ما يصير "جاهز" إلا بعد ما يجتاز الفحص</label></div>
-    <p class="sub" style="margin:6px 0 12px;">لو انرفض الثوب يرجع للخياط نفسه لإصلاحه ويسجّل "تم التفصيل" مرة ثانية، ويُسجَّل سبب الرفض والمتسبّب. لو كانت العمولة "بعد تم التفصيل" فأجر الخياط يُحتسب عند اجتياز الفحص (مرة وحدة، وإعادة الخياطة بدون أجر إضافي).</p>
+    <p class="sub" style="margin:6px 0 12px;">لو انرفض الثوب يرجع للخياط نفسه لإصلاحه ويسجّل "تم التفصيل" مرة ثانية، ويُسجَّل سبب الرفض والمتسبّب. أجر الخياط يُحتسب فور "تم التفصيل"؛ لو انرفض الثوب قبل صرف الأجر ما ينحسب حتى يعيد خياطته، وإعادة الخياطة بدون أجر إضافي.</p>
     <div class="row-2">
       <div class="field"><label>رقم الفاتورة القادم (مبيعات)</label><input type="number" id="setNextSaleInv" min="1" step="1"></div>
     </div>

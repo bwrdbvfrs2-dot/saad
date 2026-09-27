@@ -952,7 +952,10 @@ $("saleCustMobile").addEventListener("input", ()=>{
 });
 $("saleApplyPromoBtn").addEventListener("click", applySalePromo);
 $("odSaveBtn").addEventListener("click", addOpeningDebtCustomer);
-$("saleDirectDiscount").addEventListener("input", updateSaleTotal);
+$("saleDirectDiscount").addEventListener("input", ()=>{
+  if((parseFloat($("saleDirectDiscount").value)||0) > 0) resetSaleLinePricesToBase();
+  updateSaleTotal();
+});
 $("saleCustName").addEventListener("input", ()=>{
   if($("saleCustMobile").value.trim()) return;
   const match = findCustomerByIndividualName($("saleCustName").value.trim());
@@ -1060,15 +1063,17 @@ function checkAgedUndeliveredLoyalty(){
   });
   if(changed){ saveState(); renderAll(); }
 }
+// a ready thobe never picked up becomes a ready-made thobe for sale after the configured number of days
+// (default 67: 7 days overdue + 2 months). A thobe carried over as "معلقة" at the month close still counts
+// — it was being skipped — and the days follow the server's date, not the device clock.
 function checkReadyForSaleConversions(){
-  const now = Date.now();
-  const thresholdMs = 67*24*60*60*1000; // 7 days (overdue threshold) + ~2 months (60 days)
+  if(!currentUser) return;
+  const limit = readyToSaleDays();
   let changed = false;
   state.invoices.forEach(inv=>{
     inv.garments.forEach(g=>{
-      if(g.status!=="جاهز" || !g.readyDate || g.convertedToSale) return;
-      const readyTime = new Date(g.readyDate).getTime();
-      if(isNaN(readyTime) || now - readyTime < thresholdMs) return;
+      if(!isStuckReadyGarment(g) || !g.readyDate || g.convertedToSale) return;
+      if(daysSinceDate(g.readyDate) < limit) return;
       convertGarmentToSaleItem(g, inv);
       changed = true;
     });
@@ -1355,7 +1360,13 @@ $("offerMatchBy").addEventListener("change", renderOffers);
 $("addOfferBtn").addEventListener("click", addOffer);
 $("addPromoCodeBtn").addEventListener("click", savePromoCodeForm);
 $("applyPromoCodeBtn").addEventListener("click", applyPromoCodeInput);
-$("directDiscountInput").addEventListener("input", updateLiveTotals);
+$("directDiscountInput").addEventListener("input", ()=>{
+  // a direct discount comes on top of the full sale price, never on top of a price already lowered
+  updateLiveTotals();   // caps the discount to the user's limit first
+  if((parseFloat($("directDiscountInput").value)||0) > 0) resetGarmentPricesToBase();
+  updatePriceFieldsLockState();
+  updateLiveTotals();
+});
 $("promoNewType").addEventListener("change", ()=>{
   const t = $("promoNewType").value;
   $("promoNewGiftWrap").style.display = t==="gift" ? "" : "none";
@@ -1366,6 +1377,13 @@ $("purchType").addEventListener("change", ()=>{ $("purchOrigin").value=""; $("pu
 $("setInvoiceFooter").addEventListener("input", ()=>{ state.settings.invoiceFooterText=$("setInvoiceFooter").value; saveState(); });
 $("setSaveReminderMinutes").addEventListener("input", ()=>{ state.settings.invoiceSaveReminderMinutes=parseFloat($("setSaveReminderMinutes").value)||3; saveState(); });
 $("setDefaultDeliveryDays").addEventListener("input", ()=>{ state.settings.defaultDeliveryDays=parseInt($("setDefaultDeliveryDays").value)||3; saveState(); });
+$("setReadyToSaleDays").addEventListener("change", ()=>{
+  const v = parseInt($("setReadyToSaleDays").value);
+  if(!(v>=8 && v<=365)){ showToast("المدة بين 8 و365 يوم"); $("setReadyToSaleDays").value = readyToSaleDays(); return; }
+  const old = readyToSaleDays(); state.settings.readyToSaleDays = v; saveState();
+  logAudit("ready_to_sale_days_changed", {from:old, to:v});
+  showToast(`الثوب الجاهز غير المستلم يتحوّل للبيع بعد ${v} يوم`);
+});
 $("setCuttingOverdueDays").addEventListener("input", ()=>{ state.settings.cuttingOverdueDays=parseInt($("setCuttingOverdueDays").value)||3; saveState(); renderAll(); });
 $("setReceiptTerms").addEventListener("input", ()=>{ state.settings.receiptTerms=$("setReceiptTerms").value; saveState(); });
 $("setVatEnabled").addEventListener("change", ()=>{ state.settings.vatEnabled=$("setVatEnabled").checked; saveState(); showToast(state.settings.vatEnabled?"تم تفعيل ضريبة القيمة المضافة":"تم إيقاف ضريبة القيمة المضافة"); });

@@ -299,6 +299,17 @@ async function saveInvoice(){
     const tailoringOnly = itemCardIdRaw==="__none__";
     const effectiveMinPrice = itemCard ? ((itemCard.minPrices && itemCard.minPrices[garmentCategory]) || 0)
       : tailoringOnly ? (((state.settings.tailoringOnly||{}).minPrices||{})[garmentCategory] || 0) : 0;
+    // with a promo code or an offer bundle the thobe is sold at its full sale price — the deal is the
+    // only discount; a price lowered by hand is put back and the save stops so the new total is seen
+    if(isNewInvoice && hasActiveDiscountOffer() && !isCustomerVip(custMobile)){
+      const basePrice = garmentBaseSalePrice(itemCardIdRaw, garmentCategory);
+      if(basePrice>0 && (parseFloat(priceVal)||0) < basePrice - 0.001){
+        card.querySelector(".g-price").value = basePrice;
+        if(typeof updateLiveTotals==="function") updateLiveTotals();
+        showToast(`ثوب ${gi+1}: مع كود الخصم أو باقة العرض أو الخصم المباشر يكون السعر سعر البيع الكامل (${basePrice} ريال) — رجّعته، راجع الإجمالي واحفظ مرة ثانية`);
+        return;
+      }
+    }
     // a VIP customer can be given any price by anyone — no minimum, no per-user discount limit
     if((itemCard || tailoringOnly) && effectiveMinPrice>0 && !isCustomerVip(custMobile)){
       const enteredPrice = parseFloat(priceVal)||0;
@@ -718,6 +729,7 @@ function renderDistributionArea(inv){
       const creditBadge = g.creditDelivered ? `<p class="locked-note" style="color:var(--loss);">مسلَّم بدين — متبقٍ عليه ${creditGarmentOwed(g, inv).toFixed(0)} ﷼ (تابعه من "مديونية الثياب")</p>` : "";
       return `<div class="garment-card"><span class="tag">ثوب ${i+1} — ${esc(g.fabricType)}</span>
         ${buildStepperHtml(g.status)}
+        ${readyCounterHtml(g)}
         <div class="row-2">
           <div class="field"><label>اسم الخياط</label><input type="text" class="dist-tailor" data-idx="${i}" value="${esc(g.tailor||"")}" ${dis}></div>
           <div class="field"><label>الحالة</label><select class="dist-status" data-idx="${i}" ${dis}>${availableStatuses.map(s=>`<option value="${s.v}" ${s.v===g.status?"selected":""}>${s.label}</option>`).join("")}</select></div>
@@ -768,7 +780,7 @@ async function addDistPayment(inv){
     const locked = (g.status==="تسليم"||g.status==="ملغي") && !isAdmin;
     if(locked) return;
     const tInp=document.querySelector(`.dist-tailor[data-idx="${i}"]`);
-    if(tInp) g.tailor = tInp.value.trim();
+    if(tInp){ g.tailor = tInp.value.trim(); syncGarmentWageAdvisory(g); }
   });
   inv.payments = inv.payments || [];
   const cashReceiptNo = cash>0 ? nextVoucherNo() : null;
@@ -878,6 +890,7 @@ function claimSingleTailorGarment(inv, idx, number, conflicts){
   if(g.qcReturnedTo && g.qcReturnedTo!==currentUser.username){ showToast(`هذا الثوب راجع للخياط ${g.qcReturnedTo} لإصلاحه`); $("tailorScanPicker").innerHTML=""; return; }
   const wasRepair = !!g.qcReturnedTo;
   g.tailor = currentUser.username; g.status = "تفصيل"; g.tailorCompletedDate = todayStr();
+  syncGarmentWageAdvisory(g);
   delete g.qcReturnedTo;
   if(wasRepair) g.qcRepairedDate = todayStr();
   const alterationsCompleted = resolvePendingAlterationsForTailor(inv);
