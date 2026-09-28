@@ -7,12 +7,13 @@ const firebaseConfig = {
   appId: "1:1059210965874:web:511b19418f67b13a49a3eb"
 };
 firebase.initializeApp(firebaseConfig);
-// App Check: Firestore only answers requests that come from this site itself, so a script or tool
+// App Check (Fraud Defense, formerly reCAPTCHA Enterprise — classic reCAPTCHA v3 can no longer be registered):
+// Firestore only answers requests that come from this site itself, so a script or tool
 // run outside the app is refused even with a real employee login. The site key is public (it ships
 // in every page); until it is set, or when running locally, the app works exactly as before.
 const APP_CHECK_SITE_KEY = "6LeAZdMtAAAAACNNo30B1DHY6sNcgxXRFBdfVdwf";
 if(APP_CHECK_SITE_KEY && firebase.appCheck && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname)){
-  try{ firebase.appCheck().activate(new firebase.appCheck.ReCaptchaV3Provider(APP_CHECK_SITE_KEY), true); }
+  try{ firebase.appCheck().activate(new firebase.appCheck.ReCaptchaEnterpriseProvider(APP_CHECK_SITE_KEY), true); }
   catch(e){ console.error("App Check activation failed", e); }
 }
 const fbAuth = firebase.auth();
