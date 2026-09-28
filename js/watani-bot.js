@@ -8,9 +8,15 @@
 const LEADS_COL = db.collection("leads");
 const BOT_SETTINGS_DOC = db.collection("bot").doc("settings");
 const BOT_CONTACTS_COL = db.collection("bot_contacts");
-const BOT_DEFAULTS = {dailyCap:20, dormantMonths:6, attributionDays:30, campaignsEnabled:false};
+const BOT_DEFAULTS = {dailyCap:20, dormantMonths:6, attributionDays:30, campaignsEnabled:false,
+  // phase 2 — WhatsApp link and AI replies (the server reads the same document: functions/index.js BOT_DEFAULTS)
+  testMode:true, testNumbers:[], phoneNumberId:"", templateCustomer:"", templateLead:"", templateLang:"ar",
+  aiRepliesEnabled:false, aiDailyPerNumber:10};
+const BOT_FUNCTIONS_REGION = "europe-west1";
+const BOT_RUNS_COL = db.collection("bot_runs");
+const BOT_CONV_COL = db.collection("bot_conversations");
 const LEADS_IMPORT_MAX_ROWS = 5000;
-let botData = {loaded:false, settings:{...BOT_DEFAULTS}, leads:[], contacts:{}};
+let botData = {loaded:false, settings:{...BOT_DEFAULTS}, leads:[], contacts:{}, runs:[]};
 let leadsImportPending = null;
 
 // any Saudi mobile written the usual ways (05…, 5…, +9665…, 009665…, spaces, dashes, Arabic digits) → 05XXXXXXXX
@@ -33,6 +39,9 @@ async function loadBotData(){
   botData.settings = {...BOT_DEFAULTS, ...(settingsSnap.exists ? settingsSnap.data() : {})};
   botData.leads = leadsSnap.docs.map(d=>d.data());
   botData.contacts = {}; contactsSnap.docs.forEach(d=>{ botData.contacts[d.id] = d.data(); });
+  // the send log appears once the server part is running (and its rules are published) — optional until then
+  try{ const runsSnap = await BOT_RUNS_COL.get(); botData.runs = runsSnap.docs.map(d=>({id:d.id, ...d.data()})).sort((a,b)=> b.id.localeCompare(a.id)).slice(0,7); }
+  catch(e){ botData.runs = []; }
   botData.loaded = true;
   await markConvertedLeads();
 }
@@ -65,8 +74,31 @@ async function renderBotTab(){
       <div class="field"><label>العميل خامل بعد (شهر)</label><input type="number" id="botDormantMonths" min="1" max="36" value="${s.dormantMonths}"></div>
       <div class="field"><label>احتساب الفاتورة نتيجة للحملة خلال (يوم)</label><input type="number" id="botAttributionDays" min="1" max="180" value="${s.attributionDays}"></div>
     </div>
-    <div class="embro-toggle" style="margin:4px 0 10px;"><input type="checkbox" id="botCampaignsEnabled" disabled ${s.campaignsEnabled?"checked":""}><label style="margin:0;color:var(--muted);">تشغيل الحملات — يتفعّل بعد ربط واتساب (المرحلة 2)</label></div>
+    <h3 style="margin:14px 0 6px;font-size:13px;">ربط واتساب</h3>
+    <p class="sub" style="margin-bottom:8px;">القيم من حسابك في Meta (WhatsApp Manager). المفتاح السري ما ينحط هنا أبد — مكانه Secret Manager في Google Cloud.</p>
+    <div class="row-3">
+      <div class="field"><label>معرّف رقم الواتساب (Phone number ID)</label><input type="text" id="botPhoneNumberId" dir="ltr" value="${esc(s.phoneNumberId||"")}"></div>
+      <div class="field"><label>اسم قالب العملاء الخاملين</label><input type="text" id="botTemplateCustomer" dir="ltr" value="${esc(s.templateCustomer||"")}"></div>
+      <div class="field"><label>اسم قالب العملاء المحتملين</label><input type="text" id="botTemplateLead" dir="ltr" placeholder="نفس قالب العملاء إذا فاضي" value="${esc(s.templateLead||"")}"></div>
+    </div>
+    <div class="row-3">
+      <div class="field"><label>لغة القوالب</label><input type="text" id="botTemplateLang" dir="ltr" value="${esc(s.templateLang||"ar")}"></div>
+      <div class="field" style="grid-column:span 2;"><label>أرقام التجربة (يفصل بينها فاصلة)</label><input type="text" id="botTestNumbers" dir="ltr" value="${esc((s.testNumbers||[]).join(", "))}"></div>
+    </div>
+    <div class="embro-toggle" style="margin:4px 0;"><input type="checkbox" id="botTestMode" ${s.testMode?"checked":""}><label style="margin:0;">وضع التجربة — الرسائل تروح لأرقام التجربة بس، وما يوصل شي للعملاء</label></div>
+    <div class="embro-toggle" style="margin:4px 0;"><input type="checkbox" id="botCampaignsEnabled" ${s.campaignsEnabled?"checked":""}><label style="margin:0;">تشغيل الإرسال اليومي التلقائي (كل يوم الساعة 10 الصبح)</label></div>
+    <h3 style="margin:14px 0 6px;font-size:13px;">الرد الآلي بالذكاء الاصطناعي</h3>
+    <div class="embro-toggle" style="margin:4px 0;"><input type="checkbox" id="botAiReplies" ${s.aiRepliesEnabled?"checked":""}><label style="margin:0;">البوت يرد على رسائل العملاء (من معلومات المحل وطلبات العميل نفسه بس)</label></div>
+    <div class="row-3"><div class="field"><label>أقصى عدد ردود آلية لكل رقم في اليوم</label><input type="number" id="botAiDailyPerNumber" min="1" max="50" value="${s.aiDailyPerNumber}"></div></div>
     <button class="btn btn-gold btn-sm" id="botSaveSettingsBtn">حفظ الإعدادات</button>
+    <button class="btn btn-ghost btn-sm" id="botRunNowBtn" style="margin-inline-start:6px;">إرسال الآن ${s.testMode?"(لأرقام التجربة)":"(للعملاء فعلياً)"}</button>
+    <div id="botRunNowResult" style="margin-top:8px;"></div>
+    <div class="stitch"></div>
+    <h3 style="margin:0 0 6px;font-size:14px;">محادثات تحتاج موظف</h3>
+    <div id="botNeedsHuman">${renderBotNeedsHumanHtml()}</div>
+    <div class="stitch"></div>
+    <h3 style="margin:0 0 6px;font-size:14px;">آخر عمليات الإرسال</h3>
+    ${renderBotRunsHtml()}
     <div class="stitch"></div>
     <h3 style="margin:0 0 10px;font-size:14px;">قائمة العملاء المحتملين</h3>
     <p class="sub" style="margin-bottom:8px;">أرقام ناس ما فصّلوا عندك قبل. أول ما يسجّل أي رقم منها فاتورة، يتحوّل لعميل ويطلع من القائمة تلقائياً.</p>
@@ -86,6 +118,9 @@ async function renderBotTab(){
     <p class="sub" style="margin-bottom:10px;">هذي الأرقام اللي بيرسل لها البوت اليوم لو كان شغال — <b>ما ينرسل شي فعلياً</b>. الأولوية للعملاء الخاملين (الأقدم خمولاً أولاً)، والباقي يتعبى من قائمة العملاء المحتملين.</p>
     <div id="botDryRun">${renderBotDryRunHtml()}</div>`;
   $("botSaveSettingsBtn").addEventListener("click", saveBotSettings);
+  $("botRunNowBtn").addEventListener("click", botRunNow);
+  wrap.querySelectorAll(".bot-conv-btn").forEach(b=> b.addEventListener("click", ()=> showBotConversation(b.dataset.mobile)));
+  wrap.querySelectorAll(".bot-done-btn").forEach(b=> b.addEventListener("click", ()=> clearBotNeedsHuman(b.dataset.mobile)));
   $("leadsTemplateBtn").addEventListener("click", downloadLeadsTemplate);
   $("leadsImportFile").addEventListener("change", ()=>{ const f=$("leadsImportFile").files[0]; if(f) previewLeadsImport(f); });
 }
@@ -95,12 +130,93 @@ async function saveBotSettings(){
   if(!(dailyCap>=1 && dailyCap<=1000)){ showToast("السقف اليومي بين 1 و1000"); return; }
   if(!(dormantMonths>=1 && dormantMonths<=36)){ showToast("مدة الخمول بين 1 و36 شهر"); return; }
   if(!(attributionDays>=1 && attributionDays<=180)){ showToast("مدة الاحتساب بين 1 و180 يوم"); return; }
+  const phoneNumberId = $("botPhoneNumberId").value.trim(), templateCustomer = $("botTemplateCustomer").value.trim(), templateLead = $("botTemplateLead").value.trim();
+  const templateLang = $("botTemplateLang").value.trim() || "ar";
+  const rawTest = $("botTestNumbers").value.split(/[,،\n]/).map(x=>x.trim()).filter(Boolean);
+  const testNumbers = rawTest.map(normalizeSaudiMobile);
+  if(testNumbers.some(x=>!x)){ showToast("في رقم تجربة غير صحيح — اكتبها بصيغة 05XXXXXXXX"); return; }
+  const testMode = $("botTestMode").checked, campaignsEnabled = $("botCampaignsEnabled").checked, aiRepliesEnabled = $("botAiReplies").checked;
+  const aiDailyPerNumber = parseInt($("botAiDailyPerNumber").value);
+  if(!(aiDailyPerNumber>=1 && aiDailyPerNumber<=50)){ showToast("حد الردود الآلية بين 1 و50"); return; }
+  if(campaignsEnabled && (!phoneNumberId || !templateCustomer)){ showToast("لتشغيل الإرسال لازم معرّف الرقم واسم القالب"); return; }
+  if(testMode && campaignsEnabled && !testNumbers.length){ showToast("وضع التجربة شغال — أضف رقم تجربة واحد على الأقل"); return; }
   const old = {...botData.settings};
-  try{ await BOT_SETTINGS_DOC.set({dailyCap, dormantMonths, attributionDays, updatedAt:serverNowIso(), updatedBy:currentUser.username}, {merge:true}); }
+  // switching real sending on is the one change that reaches customers — ask once, clearly
+  if(campaignsEnabled && !testMode && !(old.campaignsEnabled && !old.testMode)){
+    if(!await showConfirm(`تأكيد: البوت بيبدأ يرسل للعملاء فعلياً كل يوم الساعة 10 الصبح — حتى ${dailyCap} رسالة يومياً. متأكد؟`)) return;
+  }
+  const next = {dailyCap, dormantMonths, attributionDays, phoneNumberId, templateCustomer, templateLead, templateLang, testNumbers, testMode, campaignsEnabled, aiRepliesEnabled, aiDailyPerNumber};
+  try{ await BOT_SETTINGS_DOC.set({...next, updatedAt:serverNowIso(), updatedBy:currentUser.username}, {merge:true}); }
   catch(e){ showToast("تعذّر الحفظ — تأكد من الاتصال وقواعد الحماية"); return; }
-  logAudit("bot_settings_changed", {from:{dailyCap:old.dailyCap, dormantMonths:old.dormantMonths, attributionDays:old.attributionDays}, to:{dailyCap, dormantMonths, attributionDays}});
+  const from = {}, to = {};
+  Object.keys(next).forEach(k=>{ if(JSON.stringify(old[k])!==JSON.stringify(next[k])){ from[k]=old[k]; to[k]=next[k]; } });
+  logAudit("bot_settings_changed", {from, to});
   showToast("تم حفظ إعدادات البوت");
   renderBotTab();
+}
+
+// ---- phase 2: send now, conversations that need a person, the send log ----
+async function botRunNow(){
+  if(!isBotAdmin()){ showToast("للمدير فقط"); return; }
+  const s = botData.settings;
+  if(!s.phoneNumberId || !s.templateCustomer){ showToast("احفظ معرّف الرقم واسم القالب أولاً"); return; }
+  if(!s.testMode && !await showConfirm(`وضع التجربة موقف — هذا بيرسل للعملاء فعلياً الحين (حتى ${s.dailyCap} رسالة). متأكد؟`)) return;
+  const out = $("botRunNowResult");
+  out.innerHTML = `<p class="sub">جاري الإرسال…</p>`;
+  try{
+    if(!firebase.functions) throw new Error("مكتبة الاتصال بالسيرفر ما تحمّلت");
+    const res = await firebase.app().functions(BOT_FUNCTIONS_REGION).httpsCallable("botRunNow")({});
+    const r = res.data || {};
+    logAudit("bot_run_now", {testMode:!!s.testMode, sent:r.sent||0, failed:r.failed||0});
+    out.innerHTML = r.skipped ? `<p class="locked-note">${esc(r.skipped)}</p>`
+      : `<p class="sub">انرسلت <b>${r.sent||0}</b> رسالة${r.failed?` — وفشلت <b style="color:var(--loss);">${r.failed}</b>: ${esc((r.errors||[]).slice(0,3).map(e=>e.mobile+": "+e.error).join(" | "))}`:""}${r.testMode?" (وضع التجربة)":""}.</p>`;
+  }catch(e){
+    out.innerHTML = `<p class="locked-note" style="color:var(--loss);">تعذّر التشغيل — ${esc(e.message||"")}. تأكد إن السيرفر (Cloud Functions) منشور.</p>`;
+  }
+}
+function renderBotNeedsHumanHtml(){
+  const list = Object.entries(botData.contacts).filter(([,c])=> c.needsHuman).sort((a,b)=> String(b[1].needsHumanAt||"").localeCompare(String(a[1].needsHumanAt||"")));
+  if(!list.length) return `<p class="sub">ما فيه محادثات تنتظر موظف.</p>`;
+  const nameOf = m=>{ const c = state.customers.find(x=>x.mobile===m); return (c && (c.individuals[0]||{}).name) || (botData.contacts[m]||{}).waName || ""; };
+  return list.map(([m,c])=>`<div class="garment-card" style="margin-bottom:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
+        <span><b>${esc(nameOf(m)||"—")}</b> — ${esc(m)} <span class="sub">(${esc(c.needsHumanReason||"")}${c.needsHumanAt?" — "+esc(new Date(c.needsHumanAt).toLocaleString("ar-SA-u-ca-gregory-nu-latn",{timeZone:"Asia/Riyadh",dateStyle:"short",timeStyle:"short"})):""})</span></span>
+        <span>
+          <a href="${waLink(m)}" target="_blank" class="btn btn-ghost btn-sm">فتح واتساب</a>
+          <button class="btn btn-ghost btn-sm bot-conv-btn" data-mobile="${m}">المحادثة</button>
+          <button class="btn btn-gold btn-sm bot-done-btn" data-mobile="${m}">تم الرد</button>
+        </span>
+      </div>
+      <div id="botConv-${m}"></div>
+    </div>`).join("");
+}
+async function showBotConversation(mobile){
+  const el = $("botConv-"+mobile);
+  if(!el) return;
+  el.innerHTML = `<p class="sub">جاري التحميل…</p>`;
+  try{
+    const snap = await BOT_CONV_COL.doc(mobile).collection("messages").orderBy("at","desc").limit(10).get();
+    const msgs = snap.docs.map(d=>d.data()).reverse();
+    el.innerHTML = msgs.length ? msgs.map(m=>`<div style="margin:4px 0;padding:6px 8px;border-radius:8px;max-width:85%;${m.direction==="in"?"background:var(--card2,#f3f3f3);":"background:rgba(201,162,39,.15);margin-inline-start:auto;"}">
+        <div style="font-size:12px;">${esc(m.text||"")}</div>
+        <div class="sub" style="font-size:10px;">${m.direction==="in"?"العميل":(m.kind==="ai"?"البوت (ذكاء اصطناعي)":m.kind==="template"?"رسالة الحملة":"البوت")}${m.at&&m.at.toDate?" — "+m.at.toDate().toLocaleString("ar-SA-u-ca-gregory-nu-latn",{timeZone:"Asia/Riyadh",dateStyle:"short",timeStyle:"short"}):""}${m.status&&m.direction==="out"?" — "+esc(m.status):""}</div>
+      </div>`).join("") : `<p class="sub">ما فيه رسائل.</p>`;
+  }catch(e){ el.innerHTML = `<p class="sub">تعذّر تحميل المحادثة.</p>`; }
+}
+async function clearBotNeedsHuman(mobile){
+  try{ await BOT_CONTACTS_COL.doc(mobile).update({needsHuman:false, needsHumanClearedAt:serverNowIso(), needsHumanClearedBy:currentUser.username}); }
+  catch(e){ showToast("تعذّر الحفظ — تأكد إن قواعد الحماية الجديدة منشورة"); return; }
+  logAudit("bot_conversation_handled", {mobile});
+  if(botData.contacts[mobile]) botData.contacts[mobile].needsHuman = false;
+  $("botNeedsHuman").innerHTML = renderBotNeedsHumanHtml();
+  $("botNeedsHuman").querySelectorAll(".bot-conv-btn").forEach(b=> b.addEventListener("click", ()=> showBotConversation(b.dataset.mobile)));
+  $("botNeedsHuman").querySelectorAll(".bot-done-btn").forEach(b=> b.addEventListener("click", ()=> clearBotNeedsHuman(b.dataset.mobile)));
+}
+function renderBotRunsHtml(){
+  if(!botData.runs.length) return `<p class="sub">ما فيه عمليات إرسال بعد.</p>`;
+  return `<div class="table-wrap"><table><thead><tr><th>اليوم</th><th>النوع</th><th>انرسل</th><th>فشل</th></tr></thead><tbody>${
+    botData.runs.map(r=>`<tr><td>${esc(r.date||r.id)}</td><td>${r.id.includes("يدوي")?"يدوي":"تلقائي"}${r.testMode?" — تجربة":""}</td><td>${r.sent||0}</td><td style="${r.failed?"color:var(--loss);font-weight:700;":""}">${r.failed||0}</td></tr>`).join("")
+  }</tbody></table></div>`;
 }
 
 // ---- who the bot would message today: dormant real customers first (oldest first), then fresh leads ----

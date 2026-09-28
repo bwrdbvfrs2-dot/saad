@@ -1,0 +1,15 @@
+{
+  "name": "watani-bot-functions",
+  "private": true,
+  "description": "وطني بوت — the shop's WhatsApp outreach and AI replies (Firebase Cloud Functions)",
+  "main": "index.js",
+  "engines": { "node": "22" },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
+    "firebase-admin": "^14.5.0",
+    "firebase-functions": "^7.4.0"
+  }
+}
