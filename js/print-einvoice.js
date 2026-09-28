@@ -187,6 +187,9 @@ function buildCuttingCardHtml(inv, gIdx){
   const garmentTypeItem = (state.garmentTypes||[]).find(o=>o.code===m.garmentType);
   const customer = findCustomerByMobile(inv.customerMobile);
   const garmentCount = inv.garments.filter(x=>x.status!=="ملغي").length;
+  // what the customer still owes on the whole invoice (all its thobes), as of printing
+  const remainingAmt = Math.max(0, invoiceRemaining(inv));
+  const remainingLine = `${remainingAmt.toFixed(0)} ﷼ من ${invoiceSaleTotal(inv).toFixed(0)} ﷼`;
   const PHONE_ICON = `<svg viewBox="0 0 24 24" width="24" height="24"><rect x="6" y="2" width="12" height="20" rx="2.2" fill="none" stroke="#333" stroke-width="1.4"/><line x1="10" y1="19" x2="14" y2="19" stroke="#333" stroke-width="1.4"/></svg>`;
   const WALLET_ICON = `<svg viewBox="0 0 24 24" width="24" height="24"><rect x="2" y="6" width="20" height="14" rx="2" fill="none" stroke="#333" stroke-width="1.4"/><path d="M2 10h20" stroke="#333" stroke-width="1.4"/><circle cx="17" cy="14" r="1.3" fill="#333"/></svg>`;
   // left-column identification boxes: type image + label + (optional) linked measurements
@@ -310,6 +313,7 @@ function buildCuttingCardHtml(inv, gIdx){
         <p style="margin:1px 0;">جوال العميل: ${esc(inv.customerMobile||"—")}</p>
         <p style="margin:1px 0;">كود العميل: ${esc(customerCode)}</p>
         <p style="margin:1px 0;">رقم الفاتورة: ${esc(inv.number)}</p>
+        <p style="margin:1px 0;font-weight:700;">المتبقي من إجمالي الفاتورة: ${remainingLine}</p>
       </div>
       <div style="text-align:center;">
         <svg id="cuttingBarcodeHolder" style="max-width:150px;max-height:42px;"></svg>
@@ -332,6 +336,7 @@ function buildCuttingCardHtml(inv, gIdx){
       <div style="flex:1;padding:6px 8px;border-left:2px dashed #000;text-align:center;">
         <div style="font-size:9px;">${inv.date} — ${esc(inv.customerName||"—")}</div>
         <div style="font-size:9px;">فاتورة #${esc(inv.number)} — ${garmentCount} ثوب</div>
+        <div style="font-size:9.5px;font-weight:700;">المتبقي: ${remainingLine}</div>
         <svg id="cuttingBarcodeHolderStub1" style="max-width:130px;max-height:34px;"></svg>
         <div style="font-size:9px;font-weight:700;">${esc(inv.number)}</div>
         <div style="font-size:10px;font-weight:700;margin-top:2px;">${esc(s.shopName||"—")}</div>
