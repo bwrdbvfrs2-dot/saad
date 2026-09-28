@@ -1156,6 +1156,11 @@ function computeVatSummary(from, to){
     const total = saleNetTotal(inv);
     outputVat += outputVatFromTotal(total); salesTotal += total;
   });
+  // external repairs are sales too — by the day they were taken in, like tailoring invoices
+  (state.repairs||[]).forEach(r=>{
+    if(r.status==="ملغي" || !inDateRange(r.date, from, to)) return;
+    outputVat += outputVatFromTotal(r.price||0); salesTotal += r.price||0;
+  });
   // returned goods reverse their output VAT in the period the return happens
   salesReturnsInRange(from, to).forEach(r=>{
     const total = saleReturnValue(r);
@@ -1621,6 +1626,35 @@ function renderTailorReportSelector(){
   const tailors = state.users.filter(u=>u.role==="خياط");
   sel.innerHTML = tailors.length ? tailors.map(u=>`<option value="${esc(u.username)}" ${u.username===current?"selected":""}>${esc(u.username)}</option>`).join("") : `<option value="">-- ما فيه خياطين --</option>`;
   $("tailorReportView").innerHTML = buildTailorMonthlyReport(sel.value, todayStr().slice(0,7));
+  renderAlterationsMonthlyReport();
+}
+// every thobe that came back for an alteration in a month — who sewed it, why, and who was held
+// responsible. Tracking only: alterations carry no deduction.
+function renderAlterationsMonthlyReport(){
+  const monthInp = $("alterReportMonth"), el = $("alterReportView");
+  if(!monthInp || !el) return;
+  if(!monthInp.value) monthInp.value = todayStr().slice(0,7);
+  const month = monthInp.value;
+  const rows = (state.alterations||[]).filter(a=> (a.dateReceived||"").slice(0,7)===month).map(a=>{
+    const inv = state.invoices.find(i=>i.id===a.invoiceId);
+    const g = inv ? inv.garments[a.garmentIndex] : null;
+    return {a, tailor:(g && g.tailor) || "—"};
+  }).sort((x,y)=> (y.a.dateReceived||"").localeCompare(x.a.dateReceived||""));
+  if(!rows.length){ el.innerHTML = `<p class="sub">ما فيه تعديلات مسجّلة بهالشهر.</p>`; return; }
+  const byTailor = {};
+  rows.forEach(({a,tailor})=>{
+    const t = byTailor[tailor] || (byTailor[tailor] = {count:0, reasons:{}});
+    t.count++; t.reasons[a.reason||"—"] = (t.reasons[a.reason||"—"]||0) + 1;
+  });
+  const reasonTotals = {};
+  rows.forEach(({a})=>{ reasonTotals[a.reason||"—"] = (reasonTotals[a.reason||"—"]||0) + 1; });
+  const summary = Object.entries(byTailor).sort((x,y)=> y[1].count-x[1].count).map(([t,v])=>
+    `<tr><td>${esc(t)}</td><td style="font-weight:700;">${v.count}</td><td>${Object.entries(v.reasons).sort((x,y)=>y[1]-x[1]).map(([r,c])=>`${esc(r)} (${c})`).join("، ")}</td></tr>`).join("");
+  el.innerHTML = `<p class="sub" style="margin-bottom:6px;">إجمالي التعديلات: <b>${rows.length}</b> — أكثر الأسباب: ${Object.entries(reasonTotals).sort((x,y)=>y[1]-x[1]).slice(0,3).map(([r,c])=>`${esc(r)} (${c})`).join("، ")}</p>
+    <div class="table-wrap"><table><thead><tr><th>الخياط</th><th>عدد التعديلات</th><th>الأسباب</th></tr></thead><tbody>${summary}</tbody></table></div>
+    <div class="table-wrap" style="margin-top:10px;"><table><thead><tr><th>التاريخ</th><th>رقم التعديل</th><th>الفاتورة</th><th>الخياط</th><th>السبب</th><th>المتسبب</th><th>الحالة</th></tr></thead><tbody>${
+      rows.map(({a,tailor})=>`<tr><td>${a.dateReceived}</td><td>${esc(String(a.alterationNumber||""))}</td><td>${esc(a.invoiceNumber||"")} (ثوب ${a.garmentIndex+1})</td><td>${esc(tailor)}</td><td>${esc(a.reason||"—")}</td><td>${esc(a.responsible||"—")}</td><td>${a.status==="completed"?"تم":"عند الخياط"}</td></tr>`).join("")
+    }</tbody></table></div>`;
 }
 function renderSearch(){
   const q=($("searchBox").value||"").trim().toLowerCase();

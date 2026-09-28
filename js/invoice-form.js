@@ -177,6 +177,12 @@ function computeShiftExpected(username, date){
       payRefs.push({source:"دين سابق", invNumber:"عميل "+p.customerCode, cash:p.cash||0, network:p.network||0, cashReceiptNo:null, networkReceiptNo:p.receipt||null});
     }
   });
+  (state.repairs||[]).forEach(r=> (r.payments||[]).forEach(p=>{
+    if(p.recordedBy===username && p.date===date){
+      sysCash += p.cash||0; sysNetwork += p.network||0;
+      payRefs.push({source:"صيانة خارجية", invNumber:"ص-"+r.number, cash:p.cash||0, network:p.network||0, cashReceiptNo:p.cashReceiptNo, networkReceiptNo:p.networkReceiptNo});
+    }
+  }));
   const sysTransfers = state.transferRequests.filter(r=>r.status==="accepted" && r.toOwner===username && r.resolvedAt===date).reduce((a,r)=>a+r.amount,0);
   // a cross-user transfer this user SENT is deducted from their box the instant it's sent (see
   // transferFunds()), not when it's accepted/rejected — so it must reduce today's expected cash too,
@@ -205,6 +211,7 @@ function computeShiftExpected(username, date){
   state.invoiceReturns.forEach(r=>{ if(r.date===date && r.refundAmount && ownBox(r.boxId)) otherMoves.push({label:`استرداد مرتجع فاتورة ${r.invoiceNumber}`, amount:-r.refundAmount}); });
   (state.salesReturns||[]).forEach(r=>{ if(r.date===date && r.refundAmount && ownBox(r.boxId)) otherMoves.push({label:`استرداد مرتجع مبيعات ${r.saleInvoiceNumber}`, amount:-r.refundAmount}); });
   (state.legacyPayments||[]).forEach(l=>{ if(l.date===date && l.recordedBy===username) otherMoves.push({label:"تحصيل قطعة قديمة (سجل سابق)", amount:l.amount}); });
+  (state.repairs||[]).forEach(r=> (r.refunds||[]).forEach(f=>{ if(f.date===date && f.owner===username) otherMoves.push({label:`استرداد صيانة ملغاة ص-${r.number}`, amount:-((f.cash||0)+(f.network||0))}); }));
   state.purchases.forEach(p=>{ if(p.date===date && p.payStatus==="paid" && ownBox(p.sourceBoxId)) otherMoves.push({label:`فاتورة شراء ${p.invoiceNo}`, amount:-p.total}); });
   state.purchaseReturns.forEach(r=>{ if(r.date===date && r.payStatus==="paid" && ownBox(r.boxId)) otherMoves.push({label:"مرتجع مشتريات (مبلغ مسترد)", amount:r.value}); });
   state.suppliers.forEach(s=> (s.payments||[]).forEach(sp=>{ if(sp.date===date && ownBox(sp.boxId)) otherMoves.push({label:`تسديد مورد ${s.name}`, amount:-sp.amount}); }));

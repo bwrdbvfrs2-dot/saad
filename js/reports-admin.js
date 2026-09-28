@@ -198,6 +198,10 @@ function buildDailyReport(day){
   }));
   // ready-made sales, their returns and tailoring refunds of the day — none of these were in the report
   const salesToday = state.salesInvoices.filter(s=>(s.payment&&s.payment.date||s.date)===day);
+  // external repairs: new ones taken in today, and every repair payment received today
+  const repairsToday = (state.repairs||[]).filter(r=>r.date===day);
+  const repairPaymentsToday = [];
+  (state.repairs||[]).forEach(r=> (r.payments||[]).forEach(p=>{ if(p.date===day) repairPaymentsToday.push({r,p}); }));
   const saleReturnsToday = (state.salesReturns||[]).filter(r=>r.date===day);
   const refundsToday = state.invoiceReturns.filter(r=>r.date===day && r.refundAmount);
   // every box movement of the day, split by box type — the real in/out of cash and of network
@@ -205,7 +209,7 @@ function buildDailyReport(day){
   const moves = collectBoxMovements().filter(m=>m.date===day);
   const sumType = (t, sign)=> moves.filter(m=>boxType(m.boxId)===t && Math.sign(m.amount)===sign).reduce((a,m)=>a+m.amount,0);
   const flows = {cashIn:sumType("cash",1), cashOut:-sumType("cash",-1), netIn:sumType("network",1), netOut:-sumType("network",-1)};
-  return {newInvoices, deliveredThisMonth, deliveredOverdue, legacyDelivered, vouchersToday, expensesToday, expensesTotal, openingAdjustmentsToday, cash, network, discount, paymentRows, salesToday, saleReturnsToday, refundsToday, flows, moves};
+  return {newInvoices, deliveredThisMonth, deliveredOverdue, legacyDelivered, vouchersToday, expensesToday, expensesTotal, openingAdjustmentsToday, cash, network, discount, paymentRows, salesToday, saleReturnsToday, refundsToday, flows, moves, repairsToday, repairPaymentsToday};
 }
 function renderDailyPreview(){
   const day = $("dailyDate").value || todayStr();
@@ -265,6 +269,11 @@ function buildDailyReportHtml(day, r){
   html += `<h3>فواتير المبيعات (أصناف جاهزة) اليوم (${r.salesToday.length})</h3><table><thead><tr><th>رقم</th><th>العميل</th><th>كاش</th><th>شبكة</th><th>الإجمالي</th></tr></thead><tbody>`;
   r.salesToday.forEach(s=> html+=`<tr><td>${esc(s.number)}</td><td>${esc(s.customerName||"—")}</td><td>${((s.payment||{}).cash||0).toFixed(0)} ﷼</td><td>${((s.payment||{}).network||0).toFixed(0)} ﷼</td><td>${saleTotal(s).toFixed(0)} ﷼</td></tr>`);
   if(!r.salesToday.length) html+=`<tr><td colspan="5">لا يوجد</td></tr>`;
+  html += `</tbody></table>`;
+  html += `<h3>الصيانة الخارجية اليوم — استلام ${r.repairsToday.length} ودفعات ${r.repairPaymentsToday.length}</h3><table><thead><tr><th>الرقم</th><th>العميل</th><th>المطلوب</th><th>كاش</th><th>شبكة</th></tr></thead><tbody>`;
+  r.repairPaymentsToday.forEach(({r:rp,p})=> html+=`<tr><td>ص-${rp.number}</td><td>${esc(rp.customerName||"—")}</td><td>${esc(rp.description||"")}</td><td>${(p.cash||0).toFixed(0)} ﷼</td><td>${(p.network||0).toFixed(0)} ﷼</td></tr>`);
+  r.repairsToday.filter(rp=>!r.repairPaymentsToday.some(x=>x.r===rp)).forEach(rp=> html+=`<tr><td>ص-${rp.number}</td><td>${esc(rp.customerName||"—")}</td><td>${esc(rp.description||"")}</td><td>—</td><td>—</td></tr>`);
+  if(!r.repairsToday.length && !r.repairPaymentsToday.length) html+=`<tr><td colspan="5">لا يوجد</td></tr>`;
   html += `</tbody></table>`;
   html += `<h3>المرتجعات والمبالغ المستردة اليوم (${r.refundsToday.length + r.saleReturnsToday.length})</h3><table><thead><tr><th>النوع</th><th>الفاتورة</th><th>المبلغ المسترد</th><th>السبب</th></tr></thead><tbody>`;
   r.refundsToday.forEach(x=> html+=`<tr><td>مرتجع فاتورة تفصيل</td><td>${esc(x.invoiceNumber)}</td><td>${x.refundAmount.toFixed(0)} ﷼</td><td>${esc(x.reason||"—")}</td></tr>`);
@@ -423,6 +432,13 @@ function buildFullActivityLog(from, to){
   state.alterations.forEach(a=>{
     if(inDateRange(a.dateReceived, from, to)) rows.push({date:a.dateReceived, section:"تعديلات", desc:`استلام تعديل — فاتورة ${a.invoiceNumber} — ${a.reason}`, amount:0});
     if(a.dateCompleted && inDateRange(a.dateCompleted, from, to)) rows.push({date:a.dateCompleted, section:"تعديلات", desc:`إكمال تعديل — فاتورة ${a.invoiceNumber}`, amount:0});
+  });
+  (state.repairs||[]).forEach(r=>{
+    if(inDateRange(r.date, from, to)) rows.push({date:r.date, section:"صيانة خارجية", desc:`استلام صيانة ص-${r.number} — ${esc(r.customerName||"—")} — ${esc(r.description||"")}`, amount:r.price||0});
+    (r.payments||[]).forEach(p=>{ const amt=(p.cash||0)+(p.network||0); if(amt>0.001 && inDateRange(p.date, from, to)) rows.push({date:p.date, section:"صيانة خارجية", desc:`دفعة صيانة ص-${r.number} (كاش ${(p.cash||0).toFixed(0)} / شبكة ${(p.network||0).toFixed(0)})`, amount:amt}); });
+    if(r.readyDate && inDateRange(r.readyDate, from, to)) rows.push({date:r.readyDate, section:"صيانة خارجية", desc:`صيانة ص-${r.number} جاهزة (${esc(r.tailor||"—")})`, amount:0});
+    if(r.deliveredDate && inDateRange(r.deliveredDate, from, to)) rows.push({date:r.deliveredDate, section:"صيانة خارجية", desc:`تسليم صيانة ص-${r.number}`, amount:0});
+    if(r.cancelledDate && inDateRange(r.cancelledDate, from, to)) rows.push({date:r.cancelledDate, section:"صيانة خارجية", desc:`إلغاء صيانة ص-${r.number}`, amount:-(r.refunds||[]).reduce((a,f)=>a+(f.cash||0)+(f.network||0),0)});
   });
   (state.openingBalanceAdjustments||[]).forEach(a=>{
     if(inDateRange(a.date, from, to)) rows.push({date:a.date, section:"تعديل المخزون", desc:`تعديل رصيد أول المدة لصنف "${esc(a.cardName)}" من ${a.oldValue.toFixed(1)} إلى ${a.newValue.toFixed(1)} — بواسطة ${esc(a.username)}`, amount:0});
@@ -1040,6 +1056,7 @@ function performTabSwitch(name){
   renderBottomNav();
   if(name==="sensitiveFinancials") renderSensitiveGate();
   if(name==="bot") renderBotTab();
+  if(name==="repairs") renderRepairsTab();
   if(name==="invoice" && !editingId){
     // refresh dropdowns (e.g. newly-added measurement options) without discarding data already entered
     renderGarmentFields(readGarmentFields());
@@ -1458,6 +1475,17 @@ $("setWaPromo").addEventListener("input", ()=>{
   $("submitBonusBtn").addEventListener("click", submitBonusOrDeduction);
   $("addSeasonBtn").addEventListener("click", addSeason);
   $("tailorReportSelect").addEventListener("change", ()=>{ $("tailorReportView").innerHTML = buildTailorMonthlyReport($("tailorReportSelect").value, todayStr().slice(0,7)); });
+  $("alterReportMonth").addEventListener("change", renderAlterationsMonthlyReport);
+  $("rpSaveBtn").addEventListener("click", saveNewRepair);
+  $("repairsSearch").addEventListener("input", renderRepairsList);
+  document.querySelectorAll(".repairs-filter-btn").forEach(b=> b.addEventListener("click", ()=>{ repairsFilter = b.dataset.f; renderRepairsList(); }));
+  $("setRepairWagePercent").addEventListener("change", ()=>{
+    const v = parseFloat($("setRepairWagePercent").value);
+    if(!(v>=0 && v<=100)){ showToast("النسبة بين 0 و100"); $("setRepairWagePercent").value = state.settings.repairWagePercent||0; return; }
+    const old = state.settings.repairWagePercent||0; state.settings.repairWagePercent = v; saveState();
+    logAudit("repair_wage_percent_changed", {from:old, to:v});
+    showToast(`أجر الخياط من الصيانة الخارجية: ${v}% من سعرها`);
+  });
   ["bcTierFilter","bcActivityFilter","bcDebtFilter"].forEach(id=> $(id).addEventListener("change", ()=>{ broadcastPage=0; renderBroadcastList(); }));
   $("bcSearchInput").addEventListener("input", ()=>{ broadcastPage=0; renderBroadcastList(); });
   $("bcMessageInput").addEventListener("input", renderBroadcastList);
