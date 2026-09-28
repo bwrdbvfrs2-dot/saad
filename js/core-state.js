@@ -7,9 +7,20 @@ const firebaseConfig = {
   appId: "1:1059210965874:web:511b19418f67b13a49a3eb"
 };
 firebase.initializeApp(firebaseConfig);
+// App Check: Firestore only answers requests that come from this site itself, so a script or tool
+// run outside the app is refused even with a real employee login. The site key is public (it ships
+// in every page); until it is set, or when running locally, the app works exactly as before.
+const APP_CHECK_SITE_KEY = "";
+if(APP_CHECK_SITE_KEY && firebase.appCheck && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname)){
+  try{ firebase.appCheck().activate(new firebase.appCheck.ReCaptchaV3Provider(APP_CHECK_SITE_KEY), true); }
+  catch(e){ console.error("App Check activation failed", e); }
+}
 const fbAuth = firebase.auth();
 const db = firebase.firestore();
 const STATE_DOC = db.collection("shop").doc("state");
+// one entry per save of shop/state, written in the same transaction — the security rules refuse a save
+// without its entry, and the entry carries the real signed-in account, so no change goes untraced
+const WRITE_LOG_COL = db.collection("writeLog");
 const AUDIT_LOG_COL = db.collection("auditLog"); // separate top-level collection — NEVER written into the shop/state document, so it survives even a full state overwrite
 
 async function logAudit(action, details){

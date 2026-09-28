@@ -1496,6 +1496,7 @@ $("setWaPromo").addEventListener("input", ()=>{
     showToast("تم تسجيل دفعة الضريبة");
   });
   $("loadAuditLogBtn").addEventListener("click", loadAndRenderAuditLog);
+  $("loadWriteLogBtn").addEventListener("click", loadAndRenderWriteLog);
   $("runIntegrityCheckBtn").addEventListener("click", renderIntegrityCheck);
   $("submitReturnBtn").addEventListener("click", submitInvoiceReturn);
 })();

@@ -83,6 +83,27 @@ async function loadAndRenderAuditLog(){
     el.innerHTML = `<p class="sub">تعذّر تحميل السجل: ${esc(e.message||"خطأ غير معروف")}</p>`;
   }
 }
+// the mandatory write log — one line per save of shop/state (who, when, which parts changed)
+const WRITE_LOG_PART_LABELS = {invoices:"الفواتير", salesInvoices:"فواتير المبيعات", cashBoxes:"الصناديق", customers:"العملاء", itemCards:"الأصناف",
+  expenses:"المصاريف", vouchers:"السندات", payrollLedger:"الرواتب", purchases:"المشتريات", purchaseReturns:"مرتجع المشتريات", suppliers:"الموردين",
+  settings:"الإعدادات", users:"المستخدمين", permissions:"الصلاحيات", invoiceReturns:"مرتجع الفواتير", salesReturns:"مرتجع المبيعات",
+  transfers:"التحويلات", advisory:"الأرصدة الإرشادية", offers:"العروض", promoCodes:"أكواد الخصم", alterations:"التعديلات", closingReports:"إقفال الشهر"};
+async function loadAndRenderWriteLog(){
+  const el = $("writeLogView");
+  if(!el) return;
+  el.innerHTML = `<p class="sub">جاري التحميل...</p>`;
+  try{
+    const snap = await WRITE_LOG_COL.orderBy("at","desc").limit(150).get();
+    if(snap.empty){ el.innerHTML = `<p class="sub">ما فيه سجلات بعد — يبدأ التسجيل بعد نشر قواعد الحماية الجديدة.</p>`; return; }
+    const part = p=>{ const m = /^(\w+)(.*)$/.exec(p); return m ? (WRITE_LOG_PART_LABELS[m[1]]||m[1]) + m[2] : p; };
+    el.innerHTML = `<div class="table-wrap"><table><thead><tr><th>#</th><th>الوقت</th><th>الحساب</th><th>اللي تغيّر</th></tr></thead><tbody>${
+      snap.docs.map(d=>{ const r=d.data(); const when = r.at && r.at.toDate ? r.at.toDate().toLocaleString("ar-SA",{timeZone:"Asia/Riyadh"}) : "—";
+        return `<tr><td>${esc(String(r.rev))}</td><td style="white-space:nowrap;">${when}</td><td>${esc(r.username||"—")}</td><td style="font-size:11px;">${esc((r.changed||[]).map(part).join("، ")||"—")}</td></tr>`; }).join("")
+    }</tbody></table></div>`;
+  }catch(e){
+    el.innerHTML = `<p class="sub">تعذّر تحميل السجل: ${esc(e.message||"خطأ غير معروف")}</p>`;
+  }
+}
 // ---------------- accounts & inventory integrity check ----------------
 // Rebuilds every box balance, supplier balance and stock figure purely from the recorded movements
 // and compares them with the stored figures. Read-only. A difference means money/stock moved
