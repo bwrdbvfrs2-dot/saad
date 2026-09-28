@@ -337,6 +337,18 @@ function saveState(){
   saveQueue = run.catch(()=>{});
   return run;
 }
+// which top-level parts of the shop data a save touched (invoices, cashBoxes, …), for the write log
+function changedStateParts(before, after){
+  const keys = new Set([...Object.keys(before||{}), ...Object.keys(after||{})]);
+  keys.delete("_rev");
+  const out = [];
+  keys.forEach(k=>{
+    const a = before ? before[k] : undefined, b = after ? after[k] : undefined;
+    if(JSON.stringify(a)===JSON.stringify(b)) return;
+    out.push(Array.isArray(a) && Array.isArray(b) && a.length!==b.length ? `${k} (${a.length}→${b.length})` : k);
+  });
+  return out.slice(0, 40);
+}
 async function commitStatePayload(payload){
   stateSaveConflict = false;
   // a save captured before this device's own previous save landed was built on top of that save's
@@ -344,8 +356,10 @@ async function commitStatePayload(payload){
   let baseRev = payload._rev||0;
   while(ownCommittedRevs.has(baseRev)) baseRev = ownCommittedRevs.get(baseRev);
   payload._rev = baseRev + 1;
-  try{
-    await db.runTransaction(async tx=>{
+  // the write-log entry rides in the same transaction. Until the rules that allow (and require) it
+  // are published, that write is refused — so a save refused WITH its entry is retried once without
+  // it. Once the new rules are live the retry is refused too, so this never lets a save skip the log.
+  const runSave = withLog => db.runTransaction(async tx=>{
       const cur = await tx.get(STATE_DOC);
       const curRev = (cur.exists && cur.data()._rev) || 0;
       if(curRev !== baseRev){ const err = new Error("shop/state changed since it was loaded"); err.code = "state-conflict"; throw err; }
@@ -359,7 +373,20 @@ async function commitStatePayload(payload){
         payload.permissions = server.permissions;
       }
       tx.set(STATE_DOC, payload);
+      if(withLog) tx.set(WRITE_LOG_COL.doc(String(payload._rev)), {
+        rev: payload._rev,
+        uid: fbAuth.currentUser ? fbAuth.currentUser.uid : null,
+        username: currentUser ? currentUser.username : "—",
+        at: firebase.firestore.FieldValue.serverTimestamp(),
+        changed: cur.exists ? changedStateParts(cur.data(), payload) : ["إنشاء"],
+      });
     });
+  try{
+    try{ await runSave(true); }
+    catch(e){
+      if(!(e && e.code==="permission-denied")) throw e;
+      await runSave(false);
+    }
     ownCommittedRevs.set(baseRev, payload._rev);
     latestOwnRev = Math.max(latestOwnRev, payload._rev);
     return true;
@@ -463,8 +490,9 @@ async function maybeBackupStateToday(){
     const ref = BACKUPS_COL.doc(today);
     const snap = await ref.get();
     if(snap.exists) return; // already have today's snapshot
-    await ref.set({snapshot: JSON.parse(JSON.stringify(state)), backedUpAt: firebase.firestore.FieldValue.serverTimestamp()});
-    await pruneOldBackups();
+    await ref.set({snapshot: JSON.parse(JSON.stringify(state)), backedUpAt: firebase.firestore.FieldValue.serverTimestamp(), by: fbAuth.currentUser ? fbAuth.currentUser.uid : null});
+    // removing old backups is the manager's (the rules allow no one else to delete one)
+    if(currentUser && currentUser.role==="مدير") await pruneOldBackups();
   }catch(e){ console.error("automatic backup failed", e); } // never block normal app use over this
 }
 async function pruneOldBackups(){
@@ -487,7 +515,7 @@ async function resetForGoLive(){
   if(!await confirmWithPassword("هذا إجراء نهائي على بيانات المحل (تنحفظ نسخة احتياطية قبله). أدخل كلمة مرورك للتأكيد.")) return;
   const backupId = "before-reset-" + new Date().toISOString().replace(/[:.]/g,"-");
   try{
-    await BACKUPS_COL.doc(backupId).set({snapshot: JSON.parse(JSON.stringify(state)), backedUpAt: firebase.firestore.FieldValue.serverTimestamp()});
+    await BACKUPS_COL.doc(backupId).set({snapshot: JSON.parse(JSON.stringify(state)), backedUpAt: firebase.firestore.FieldValue.serverTimestamp(), by: fbAuth.currentUser ? fbAuth.currentUser.uid : null});
   }catch(e){ console.error("pre-reset backup failed", e); showToast("تعذّر حفظ النسخة الاحتياطية — ما تم المسح"); return; }
   const fresh = JSON.parse(PRISTINE_STATE_JSON);
   fresh.users = state.users;

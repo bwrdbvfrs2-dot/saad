@@ -39,6 +39,13 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // every save of shop/state must carry, in the same transaction, its entry in writeLog — made by
+    // the signed-in account itself, stamped with the server's own time. A save without one is refused.
+    function writeLogged(rev) {
+      let entry = /databases/$(database)/documents/writeLog/$(string(rev));
+      return existsAfter(entry) && getAfter(entry).data.uid == request.auth.uid;
+    }
+
     match /shop/state {
       // an unauthenticated client may only ever learn whether this document exists yet — never
       // its contents — which is what lets the app show "first-time setup" vs "login" correctly
@@ -53,14 +60,33 @@ service cloud.firestore {
         && (isAdmin() || (
           request.resource.data.users == resource.data.users
           && request.resource.data.permissions == resource.data.permissions
-        ));
+        ))
+        && request.resource.data._rev == resource.data.get('_rev', 0) + 1
+        && writeLogged(request.resource.data._rev);
+    }
+
+    // the mandatory write log: one entry per save, keyed by the revision it produced. Only created
+    // together with that very save, never edited or removed (not even by the manager); only the
+    // manager reads it.
+    match /writeLog/{rev} {
+      allow get, list: if isAdmin();
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.at == request.time
+        && string(request.resource.data.rev) == rev
+        && getAfter(/databases/$(database)/documents/shop/state).data._rev == request.resource.data.rev;
+      allow update, delete: if false;
     }
 
     // append-only activity trail — every signed-in user may add an entry, nobody may edit or
     // remove one after the fact (including admins), so it stays trustworthy as a tamper record.
+    // An entry always carries the real account that wrote it and the server's time, so it can't be
+    // written in someone else's name or back-dated. Only the manager reads the trail.
     match /auditLog/{entry} {
-      allow get, list: if isSignedIn();
-      allow create: if isSignedIn();
+      allow get, list: if isAdmin();
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.timestamp == request.time;
       allow update, delete: if false;
     }
 
@@ -78,15 +104,16 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // daily state snapshots for disaster recovery. Same protection level as the state document
-    // itself: any signed-in user can create today's backup, nobody can delete one via the client
-    // (pruning old ones happens through this same rule set, from the app, so it stays consistent
-    // with "signed-in users can create/prune, nobody can delete out of band").
+    // daily state snapshots for disaster recovery. Any signed-in user makes the day's backup (stamped
+    // with their account and the server's time), nobody can change one, and only the manager can
+    // remove old ones — so an employee can't wipe the backups.
     match /backups/{date} {
       allow get, list: if isSignedIn();
-      allow create: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.backedUpAt == request.time;
       allow update: if false;
-      allow delete: if isSignedIn();
+      allow delete: if isAdmin();
     }
   }
 }
