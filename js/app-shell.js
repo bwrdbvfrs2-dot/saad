@@ -755,7 +755,6 @@ const NAV_GROUPS = [
     {tab:"debts", label:"مديونية الثياب"},
     {tab:"report-undelivered", label:"الثياب غير المسلّمة"},
     {tab:"report-garmentInventory", label:"جرد الثياب حسب الحالة"},
-    {tab:"report-noFabricWage", label:"أجرة تفصيل بدون قماش"},
   ]},
   {title:"العملاء", color:"#1f9d5c", items:[
     {tab:"customerDebts", label:"مديونيات العملاء"},
@@ -789,6 +788,7 @@ const NAV_GROUPS = [
     {tab:"report-salesRanking", label:"الأكثر والأقل مبيعاً"},
     {tab:"report-daily", label:"التقرير اليومي"},
     {tab:"report-tailorMonthly", label:"تقرير الخياط الشهري"},
+    {tab:"report-noFabricWage", label:"أجرة تفصيل بدون قماش"},
     {tab:"report-auditLog", label:"سجل التدقيق"},
     {tab:"growth", label:"النمو"},
   ]},
