@@ -337,17 +337,74 @@ function saveState(){
   saveQueue = run.catch(()=>{});
   return run;
 }
-// which top-level parts of the shop data a save touched (invoices, cashBoxes, …), for the write log
-function changedStateParts(before, after){
+// what a save did, in words, for the write log — e.g. "فاتورة جديدة #12", "تعديل عميل C0003". Items are
+// matched by their id, and compared with key order ignored (Firestore hands maps back with their keys
+// sorted, so a plain JSON comparison saw nearly everything as changed).
+function stableJson(v){
+  if(Array.isArray(v)) return "["+v.map(stableJson).join(",")+"]";
+  if(v && typeof v==="object") return "{"+Object.keys(v).sort().map(k=>JSON.stringify(k)+":"+stableJson(v[k])).join(",")+"}";
+  return JSON.stringify(v===undefined ? null : v);
+}
+const WRITE_LOG_ITEMS = {
+  invoices:{one:"فاتورة", many:"فواتير", name:x=>"#"+x.number},
+  salesInvoices:{one:"فاتورة مبيعات", many:"فواتير مبيعات", name:x=>"#"+x.number},
+  customers:{one:"عميل", many:"عملاء", name:x=>x.code||x.mobile||""},
+  itemCards:{one:"صنف", many:"أصناف", name:x=>x.name||x.code||""},
+  suppliers:{one:"مورد", many:"موردين", name:x=>x.name||""},
+  purchases:{one:"فاتورة مشتريات", many:"فواتير مشتريات", name:x=>"#"+(x.invoiceNo||"")},
+  purchaseReturns:{one:"مرتجع مشتريات", many:"مرتجعات مشتريات", name:x=>(x.value||0)+" ﷼"},
+  expenses:{one:"مصروف", many:"مصاريف", name:x=>(x.amount||0)+" ﷼"},
+  vouchers:{one:"سند", many:"سندات", name:x=>x.voucherNo||""},
+  invoiceReturns:{one:"مرتجع فاتورة", many:"مرتجعات فواتير", name:x=>"#"+(x.invoiceNumber||"")},
+  salesReturns:{one:"مرتجع مبيعات", many:"مرتجعات مبيعات", name:x=>"#"+(x.saleInvoiceNumber||"")},
+  payrollLedger:{one:"حركة رواتب", many:"حركات رواتب", name:x=>(x.username||"")+" "+(x.amount||0)+" ﷼"},
+  transferRequests:{one:"تحويل أموال", many:"تحويلات أموال", name:x=>(x.amount||0)+" ﷼"},
+  alterations:{one:"تعديل ثوب", many:"تعديلات ثياب", name:x=>""},
+  offers:{one:"عرض", many:"عروض", name:x=>x.name||""},
+  promoCodes:{one:"كود خصم", many:"أكواد خصم", name:x=>x.code||""},
+  users:{one:"مستخدم", many:"مستخدمين", name:x=>x.username||"", key:x=>x.username},
+  closingReports:{one:"إقفال شهر", many:"إقفالات", name:x=>x.monthLabel||"", key:x=>x.monthLabel},
+  legacyPayments:{one:"تحصيل قطعة قديمة", many:"تحصيلات قديمة", name:x=>(x.amount||0)+" ﷼"},
+  openingDebtPayments:{one:"تحصيل دين سابق", many:"تحصيلات ديون سابقة", name:x=>(x.amount||0)+" ﷼"},
+  stockWriteOffs:{one:"إتلاف مخزون", many:"إتلافات مخزون", name:x=>""},
+  shiftClosings:{one:"إقفال وردية", many:"إقفالات ورديات", name:x=>x.date||""},
+};
+// parts that only move along with something else (a payment updates a box balance…) — named briefly
+const WRITE_LOG_SIDE = {cashBoxes:"الصناديق", advisory:"الأرصدة الإرشادية", loyaltyLedger:"نقاط الولاء", tailorScans:"مسح الخياطين",
+  permissions:"الصلاحيات", quickMenus:"القوائم السريعة", deletedInvoicesLog:"سجل الفواتير المحذوفة", mailRequests:"طلبات البريد"};
+function describeStateChange(before, after){
+  const main = [], side = [];
   const keys = new Set([...Object.keys(before||{}), ...Object.keys(after||{})]);
   keys.delete("_rev");
-  const out = [];
   keys.forEach(k=>{
     const a = before ? before[k] : undefined, b = after ? after[k] : undefined;
-    if(JSON.stringify(a)===JSON.stringify(b)) return;
-    out.push(Array.isArray(a) && Array.isArray(b) && a.length!==b.length ? `${k} (${a.length}→${b.length})` : k);
+    if(stableJson(a)===stableJson(b)) return;
+    const d = WRITE_LOG_ITEMS[k];
+    if(d && (Array.isArray(a)||a===undefined) && Array.isArray(b)){
+      const keyOf = d.key || (x=> x && (x.id ?? x.number ?? x.code));
+      const old = new Map((a||[]).map(x=>[String(keyOf(x)), x]));
+      const now = new Map(b.map(x=>[String(keyOf(x)), x]));
+      const added=[], changed=[], removed=[];
+      now.forEach((x,id)=>{ if(!old.has(id)) added.push(x); else if(stableJson(old.get(id))!==stableJson(x)) changed.push(x); });
+      old.forEach((x,id)=>{ if(!now.has(id)) removed.push(x); });
+      const say = (verb, list)=>{
+        if(!list.length) return;
+        if(list.length<=3) list.forEach(x=>{ const n=d.name(x); main.push(`${verb} ${d.one}${n?" "+n:""}`); });
+        else main.push(`${verb} ${list.length} ${d.many}`);
+      };
+      say("إضافة", added); say("تعديل", changed); say("حذف", removed);
+      return;
+    }
+    if(k==="settings"){
+      const sk = new Set([...Object.keys(a||{}), ...Object.keys(b||{})]);
+      const real = [...sk].filter(x=> !/^next[A-Z]/.test(x) && stableJson((a||{})[x])!==stableJson((b||{})[x]));
+      if(real.length) main.push("تعديل الإعدادات");
+      return;
+    }
+    if(WRITE_LOG_SIDE[k]){ side.push(WRITE_LOG_SIDE[k]); return; }
+    main.push(k.endsWith("Types") ? "تعديل أنواع التفصيل" : "تعديل "+k);
   });
-  return out.slice(0, 40);
+  return {changed: [...new Set(main)].slice(0,30), side: [...new Set(side)]};
 }
 async function commitStatePayload(payload){
   stateSaveConflict = false;
@@ -378,7 +435,7 @@ async function commitStatePayload(payload){
         uid: fbAuth.currentUser ? fbAuth.currentUser.uid : null,
         username: currentUser ? currentUser.username : "—",
         at: firebase.firestore.FieldValue.serverTimestamp(),
-        changed: cur.exists ? changedStateParts(cur.data(), payload) : ["إنشاء"],
+        ...(cur.exists ? describeStateChange(cur.data(), payload) : {changed:["إنشاء بيانات المحل"], side:[]}),
       });
     });
   try{

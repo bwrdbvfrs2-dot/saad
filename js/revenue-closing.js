@@ -96,9 +96,12 @@ async function loadAndRenderWriteLog(){
     const snap = await WRITE_LOG_COL.orderBy("at","desc").limit(150).get();
     if(snap.empty){ el.innerHTML = `<p class="sub">ما فيه سجلات بعد — يبدأ التسجيل بعد نشر قواعد الحماية الجديدة.</p>`; return; }
     const part = p=>{ const m = /^(\w+)(.*)$/.exec(p); return m ? (WRITE_LOG_PART_LABELS[m[1]]||m[1]) + m[2] : p; };
-    el.innerHTML = `<div class="table-wrap"><table><thead><tr><th>#</th><th>الوقت</th><th>الحساب</th><th>اللي تغيّر</th></tr></thead><tbody>${
-      snap.docs.map(d=>{ const r=d.data(); const when = r.at && r.at.toDate ? r.at.toDate().toLocaleString("ar-SA",{timeZone:"Asia/Riyadh"}) : "—";
-        return `<tr><td>${esc(String(r.rev))}</td><td style="white-space:nowrap;">${when}</td><td>${esc(r.username||"—")}</td><td style="font-size:11px;">${esc((r.changed||[]).map(part).join("، ")||"—")}</td></tr>`; }).join("")
+    el.innerHTML = `<div class="table-wrap"><table><thead><tr><th>#</th><th>الوقت</th><th>الحساب</th><th>وش سوّى</th></tr></thead><tbody>${
+      snap.docs.map(d=>{ const r=d.data(); const when = r.at && r.at.toDate ? r.at.toDate().toLocaleString("ar-SA-u-ca-gregory-nu-latn",{timeZone:"Asia/Riyadh", dateStyle:"short", timeStyle:"short"}) : "—";
+        // entries from the first version listed raw part names; newer ones say what was done
+        const what = r.side ? (r.changed||[]).join("، ") : (r.changed||[]).map(part).join("، ");
+        const alongside = r.side && r.side.length ? `<div class="sub" style="font-size:10.5px;margin-top:2px;">ومعها: ${esc(r.side.join("، "))}</div>` : "";
+        return `<tr><td>${esc(String(r.rev))}</td><td style="white-space:nowrap;">${when}</td><td>${esc(r.username||"—")}</td><td style="font-size:12px;"><b>${esc(what||"—")}</b>${alongside}</td></tr>`; }).join("")
     }</tbody></table></div>`;
   }catch(e){
     el.innerHTML = `<p class="sub">تعذّر تحميل السجل: ${esc(e.message||"خطأ غير معروف")}</p>`;
