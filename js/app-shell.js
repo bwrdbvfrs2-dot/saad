@@ -373,6 +373,7 @@ const WRITE_LOG_ITEMS = {
   openingDebtPayments:{one:"تحصيل دين سابق", many:"تحصيلات ديون سابقة", name:x=>(x.amount||0)+" ﷼"},
   stockWriteOffs:{one:"إتلاف مخزون", many:"إتلافات مخزون", name:x=>""},
   shiftClosings:{one:"إقفال وردية", many:"إقفالات ورديات", name:x=>x.date||""},
+  repairs:{one:"صيانة خارجية", many:"صيانات خارجية", name:x=>"ص-"+x.number},
 };
 // parts that only move along with something else (a payment updates a box balance…) — named briefly
 const WRITE_LOG_SIDE = {cashBoxes:"الصناديق", advisory:"الأرصدة الإرشادية", loyaltyLedger:"نقاط الولاء", tailorScans:"مسح الخياطين",
