@@ -1458,6 +1458,7 @@ $("setWaPromo").addEventListener("input", ()=>{
   $("submitBonusBtn").addEventListener("click", submitBonusOrDeduction);
   $("addSeasonBtn").addEventListener("click", addSeason);
   $("tailorReportSelect").addEventListener("change", ()=>{ $("tailorReportView").innerHTML = buildTailorMonthlyReport($("tailorReportSelect").value, todayStr().slice(0,7)); });
+  $("alterReportMonth").addEventListener("change", renderAlterationsMonthlyReport);
   ["bcTierFilter","bcActivityFilter","bcDebtFilter"].forEach(id=> $(id).addEventListener("change", ()=>{ broadcastPage=0; renderBroadcastList(); }));
   $("bcSearchInput").addEventListener("input", ()=>{ broadcastPage=0; renderBroadcastList(); });
   $("bcMessageInput").addEventListener("input", renderBroadcastList);
