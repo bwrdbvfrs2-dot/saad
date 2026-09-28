@@ -1040,6 +1040,7 @@ function performTabSwitch(name){
   renderBottomNav();
   if(name==="sensitiveFinancials") renderSensitiveGate();
   if(name==="bot") renderBotTab();
+  if(name==="repairs") renderRepairsTab();
   if(name==="invoice" && !editingId){
     // refresh dropdowns (e.g. newly-added measurement options) without discarding data already entered
     renderGarmentFields(readGarmentFields());
@@ -1459,6 +1460,16 @@ $("setWaPromo").addEventListener("input", ()=>{
   $("addSeasonBtn").addEventListener("click", addSeason);
   $("tailorReportSelect").addEventListener("change", ()=>{ $("tailorReportView").innerHTML = buildTailorMonthlyReport($("tailorReportSelect").value, todayStr().slice(0,7)); });
   $("alterReportMonth").addEventListener("change", renderAlterationsMonthlyReport);
+  $("rpSaveBtn").addEventListener("click", saveNewRepair);
+  $("repairsSearch").addEventListener("input", renderRepairsList);
+  document.querySelectorAll(".repairs-filter-btn").forEach(b=> b.addEventListener("click", ()=>{ repairsFilter = b.dataset.f; renderRepairsList(); }));
+  $("setRepairWagePercent").addEventListener("change", ()=>{
+    const v = parseFloat($("setRepairWagePercent").value);
+    if(!(v>=0 && v<=100)){ showToast("النسبة بين 0 و100"); $("setRepairWagePercent").value = state.settings.repairWagePercent||0; return; }
+    const old = state.settings.repairWagePercent||0; state.settings.repairWagePercent = v; saveState();
+    logAudit("repair_wage_percent_changed", {from:old, to:v});
+    showToast(`أجر الخياط من الصيانة الخارجية: ${v}% من سعرها`);
+  });
   ["bcTierFilter","bcActivityFilter","bcDebtFilter"].forEach(id=> $(id).addEventListener("change", ()=>{ broadcastPage=0; renderBroadcastList(); }));
   $("bcSearchInput").addEventListener("input", ()=>{ broadcastPage=0; renderBroadcastList(); });
   $("bcMessageInput").addEventListener("input", renderBroadcastList);

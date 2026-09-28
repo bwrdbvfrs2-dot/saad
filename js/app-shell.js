@@ -204,6 +204,7 @@ function normalizeState(){
   if(state.settings.nextDecisionNumber===undefined) state.settings.nextDecisionNumber=1;
   if(state.settings.nextMailRequestNumber===undefined) state.settings.nextMailRequestNumber=1;
   if(!state.alterations) state.alterations=[];
+  if(!state.repairs) state.repairs=[];
   if(state.alterations.some(a=>a.alterationNumber===undefined)){
     state.alterations.sort((a,b)=>(a.dateReceived||"").localeCompare(b.dateReceived||""));
     let n = 1;
@@ -219,12 +220,12 @@ function normalizeState(){
   if(!state.alterationReasons) state.alterationReasons=[];
   if(!state.alterationResponsibles || !state.alterationResponsibles.length) state.alterationResponsibles=["الخياط","القصاص","ماخذ المقاسات","الزبون نفسه"];
   if(!state.permissions){
-    const allTabs = ["invoice","dashboard","advisoryBalances","sensitiveFinancials","shiftClose","vouchers","production","mail","salesInvoice","invoicesList","distribution","scan","alteration","debts","customerDebts","legacy","itemCards","suppliers","purchases","purchaseReturns","balances","expenses","payroll","report-broadcastCampaign","report-tailorMonthly","report-fullLog","report-search","report-undelivered","report-garmentInventory","report-noFabricWage","report-salesRanking","report-vatCalc","report-returns","report-customers","report-daily","report-missingReceipt","report-topExpenses","report-expenseSubItems","report-auditLog","growth","archive","settingsShop","settingsFinance","settingsUsers","settingsProducts","settingsMarketing"];
+    const allTabs = ["invoice","dashboard","advisoryBalances","sensitiveFinancials","shiftClose","vouchers","production","mail","salesInvoice","invoicesList","distribution","scan","alteration","repairs","debts","customerDebts","legacy","itemCards","suppliers","purchases","purchaseReturns","balances","expenses","payroll","report-broadcastCampaign","report-tailorMonthly","report-fullLog","report-search","report-undelivered","report-garmentInventory","report-noFabricWage","report-salesRanking","report-vatCalc","report-returns","report-customers","report-daily","report-missingReceipt","report-topExpenses","report-expenseSubItems","report-auditLog","growth","archive","settingsShop","settingsFinance","settingsUsers","settingsProducts","settingsMarketing"];
     const allSections = ["fullLog","search","undelivered","garmentInventory","salesRanking","vatCalc","returns","customers","daily","missingReceipt"];
     state.permissions = {
       "مدير": { tabs: [...allTabs], reportSections: [...allSections] },
       "محاسب": { tabs: allTabs.filter(t=>!["settingsShop","settingsFinance","settingsUsers","settingsProducts","settingsMarketing","payroll","sensitiveFinancials"].includes(t)), reportSections: [...allSections] },
-      "كاشير": { tabs: ["invoice","salesInvoice","invoicesList","distribution","scan","alteration","debts","customerDebts","report-search","report-daily","report-customers","shiftClose","mail"], reportSections: [...allSections] },
+      "كاشير": { tabs: ["invoice","salesInvoice","invoicesList","distribution","scan","alteration","repairs","debts","customerDebts","report-search","report-daily","report-customers","shiftClose","mail"], reportSections: [...allSections] },
     };
   }
   // migration: ensure newly-added report sections appear for existing installs
@@ -240,6 +241,10 @@ function normalizeState(){
     state.settings.qcTabGranted = true;
   }
   if(!state.qcLog) state.qcLog=[];
+  if(!state.settings.repairsTabGranted){ // one-time: hand the new external-repairs tab to every employee role
+    Object.values(state.permissions).forEach(p=>{ if(p.tabs && !p.tabs.includes("repairs")) p.tabs.push("repairs"); });
+    state.settings.repairsTabGranted = true;
+  }
   // وطني بوت: the manager's alone for now — staff get their handed-off conversations in a later phase
   if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("bot")) state.permissions["مدير"].tabs.push("bot");
   // the "أجرة تفصيل (بدون قماش)" line (customer brings their own fabric) has its own price card:
@@ -745,6 +750,7 @@ const NAV_GROUPS = [
     {tab:"production", label:"متابعة الإنتاج"},
     {tab:"scan", label:"مسح الباركود"},
     {tab:"alteration", label:"ثوب معاد للتعديل"},
+    {tab:"repairs", label:"صيانة خارجية"},
     {tab:"qc", label:"فحص الجودة"},
     {tab:"debts", label:"مديونية الثياب"},
     {tab:"report-undelivered", label:"الثياب غير المسلّمة"},
@@ -807,7 +813,7 @@ const TAB_ICONS = {
   "report-fullLog":"scroll-text", "report-search":"search", "report-salesRanking":"trophy",
   "report-daily":"calendar", "report-tailorMonthly":"hard-hat", "report-auditLog":"history", growth:"trending-up",
   settingsShop:"store", settingsFinance:"circle-dollar-sign", settingsUsers:"user-cog",
-  settingsProducts:"shirt", settingsMarketing:"gift", mail:"mail-open", bot:"bot",
+  settingsProducts:"shirt", settingsMarketing:"gift", mail:"mail-open", bot:"bot", repairs:"wrench",
 };
 const GROUP_ICONS = { "الرئيسية":"home", "المبيعات":"shopping-bag", "الخياطة":"scissors", "العملاء":"users",
   "المخزون":"warehouse", "الحسابات":"wallet", "التقارير":"bar-chart-3", "الإعدادات":"settings" };

@@ -25,6 +25,8 @@ function renderAll(){
   renderExpenseCategories();
   $("setMeasureUnit").value = state.settings.measureUnit;
   $("setCommissionBasis").value = state.settings.commissionBasis||"تسليم";
+  if($("setRepairWagePercent")) $("setRepairWagePercent").value = state.settings.repairWagePercent||0;
+  if($("tab-repairs") && $("tab-repairs").classList.contains("active") && typeof renderRepairsList==="function") renderRepairsList();
   if($("setQcEnabled")) $("setQcEnabled").checked = !!state.settings.qcEnabled;
   if($("setCuttingCardTemplate")) $("setCuttingCardTemplate").value = state.settings.cuttingCardTemplate||"default";
   $("setLoyEarnRate").value = state.settings.loyaltyEarnRate;

@@ -128,6 +128,13 @@ function collectBoxMovements(){
   state.salesInvoices.forEach(s=>{ if(s.payment) pay(s.payment, `فاتورة مبيعات ${s.number}`, s.payment.date||s.date); });
   (state.legacyPayments||[]).forEach(l=> add(l.recordedBy ? mainId(l.recordedBy,"cash") : null, l.amount, l.recordedBy ? "تحصيل قطعة قديمة" : "تحصيل قطعة قديمة (سجل قديم بدون مستخدم)", l.date));
   (state.openingDebtPayments||[]).forEach(p=> pay(p, `تحصيل دين سابق — عميل ${p.customerCode}`, p.date));
+  (state.repairs||[]).forEach(r=>{
+    (r.payments||[]).forEach(p=> pay(p, `دفعة صيانة ص-${r.number}`, p.date));
+    (r.refunds||[]).forEach(f=>{
+      if(f.cash) add(mainId(f.owner,"cash"), -f.cash, `استرداد صيانة ملغاة ص-${r.number}`, f.date);
+      if(f.network) add(mainId(f.owner,"network"), -f.network*(1-fee/100), `استرداد صيانة ملغاة ص-${r.number}`, f.date);
+    });
+  });
   state.vouchers.forEach(v=> add(v.boxId, v.type==="receipt" ? v.amount : -v.amount, `سند ${v.type==="receipt"?"قبض":"صرف"} ${v.voucherNo}`, v.date));
   state.expenses.forEach(e=> add(e.sourceBoxId, -e.amount, "مصروف", e.date));
   state.invoiceReturns.forEach(r=>{ if(r.refundAmount) add(r.boxId, -r.refundAmount, `استرداد مرتجع فاتورة ${r.invoiceNumber}`, r.date); });
@@ -278,6 +285,9 @@ function computeMonthlyFinancials(monthLabel){
   });
   // tailoring-offer gifts leave stock the day the invoice is issued — their cost lands in that month
   const giftsCost = state.invoices.filter(inv=>(inv.date||"").slice(0,7)===monthLabel).reduce((a,inv)=>a+freeGiftsCost(inv),0);
+  // external repairs: price and the tailor's wage, in the month each one is delivered
+  const repairs = typeof repairsFinancialsForMonth==="function" ? repairsFinancialsForMonth(monthLabel) : {revenue:0, cost:0, count:0};
+  revenue += repairs.revenue; cost += repairs.cost;
   const operationalLosses = totalOperationalLossesForMonth(monthLabel);
   const generalExpenses = generalExpensesForMonth(monthLabel);
   cost += operationalLosses + generalExpenses + giftsCost;
@@ -288,7 +298,7 @@ function computeMonthlyFinancials(monthLabel){
   if(garmentsCutInMonth(monthLabel)===0) cost += Math.max(0, rawFixed - salesProfit);
   const excessSalesProfit = Math.max(0, salesProfit - rawFixed); // ready-made sales profit beyond what's needed to fully cover fixed costs adds straight to net profit
   cost -= excessSalesProfit;
-  return {revenue, cost, profit:revenue-cost, garmentsCut, generalExpenses, operationalLosses, giftsCost, salesProfit, excessSalesProfit};
+  return {revenue, cost, profit:revenue-cost, garmentsCut, generalExpenses, operationalLosses, giftsCost, salesProfit, excessSalesProfit, repairsRevenue:repairs.revenue, repairsCount:repairs.count};
 }
 function totalPendingCustody(){
   let total = 0;
@@ -1060,8 +1070,11 @@ function garmentWagePaidElsewhere(g, monthLabel){
   return !!(g.wagePaidOut && g.wagePaidMonth && g.wagePaidMonth!==monthLabel);
 }
 function computeEmployeeEntitlement(user, monthLabel){
-  let garmentCount = 0, commission = 0, base = 0;
+  let garmentCount = 0, commission = 0, base = 0, repairCount = 0, repairWages = 0;
   if(user.role==="خياط"){
+    // external repairs: their wage (a share of the price) counts from the day they're marked جاهز
+    if(typeof tailorRepairsForMonth==="function") tailorRepairsForMonth(user.username, monthLabel).forEach(r=>{ repairCount++; repairWages += repairWage(r); });
+    commission += repairWages;
     state.invoices.forEach(inv=> inv.garments.forEach(g=>{
       // policy: a garment cancelled before the month is closed earns no wage — even if cutting or
       // sewing had already started. Payroll runs only at month close, so its status then decides.
@@ -1091,14 +1104,14 @@ function computeEmployeeEntitlement(user, monthLabel){
     base = user.baseSalary||0;
     if(user.commissionEnabled) commission = garmentCount * (user.commissionRate||0);
   }
-  return { base, commission, garmentCount, total: base+commission };
+  return { base, commission, garmentCount, repairCount, repairWages, total: base+commission };
 }
 function runPayrollForMonth(monthLabel){
   state.users.forEach(u=>{
     const ent = computeEmployeeEntitlement(u, monthLabel);
     if(ent.total>0.001){
       let detail;
-      if(u.role==="خياط") detail = ` (${ent.garmentCount} ثوب — إجمالي ${ent.commission.toFixed(0)} ريال حسب فئة كل ثوب)`;
+      if(u.role==="خياط") detail = ` (${ent.garmentCount} ثوب${ent.repairCount?` + ${ent.repairCount} صيانة خارجية (${ent.repairWages.toFixed(0)} ريال)`:""} — إجمالي ${ent.commission.toFixed(0)} ريال)`;
       else if(ent.commission) detail = ` (أساسي ${ent.base.toFixed(0)} + عمولة ${ent.commission.toFixed(0)} عن ${ent.garmentCount} ثوب)`;
       else detail = "";
       state.payrollLedger.push({id:Date.now()+"-"+u.username, username:u.username, type:"entitlement", amount:ent.total, date:todayStr(), monthLabel, garmentCount:ent.garmentCount, note:`استحقاق ${monthDisplay(monthLabel)}${detail}`});
@@ -1108,6 +1121,7 @@ function runPayrollForMonth(monthLabel){
             if(tailorWageCountsIn(g, monthLabel) && !garmentWagePaidElsewhere(g, monthLabel)){ g.wagePaidOut = true; g.wagePaidMonth = monthLabel; }
           }
         }));
+        if(typeof tailorRepairsForMonth==="function") tailorRepairsForMonth(u.username, monthLabel).forEach(r=>{ r.wagePaidOut = true; r.wagePaidMonth = monthLabel; });
       }
     }
   });

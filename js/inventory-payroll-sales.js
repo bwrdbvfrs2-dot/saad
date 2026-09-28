@@ -1156,6 +1156,11 @@ function computeVatSummary(from, to){
     const total = saleNetTotal(inv);
     outputVat += outputVatFromTotal(total); salesTotal += total;
   });
+  // external repairs are sales too — by the day they were taken in, like tailoring invoices
+  (state.repairs||[]).forEach(r=>{
+    if(r.status==="ملغي" || !inDateRange(r.date, from, to)) return;
+    outputVat += outputVatFromTotal(r.price||0); salesTotal += r.price||0;
+  });
   // returned goods reverse their output VAT in the period the return happens
   salesReturnsInRange(from, to).forEach(r=>{
     const total = saleReturnValue(r);
