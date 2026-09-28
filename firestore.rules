@@ -99,7 +99,21 @@ service cloud.firestore {
     match /bot/{doc} {
       allow read, write: if isAdmin();
     }
+    // outreach state per number — written by the server (Admin SDK bypasses these rules). The manager may
+    // only clear the "needs a person" flag after handling the conversation.
     match /bot_contacts/{mobile} {
+      allow read: if isAdmin();
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['needsHuman', 'needsHumanClearedAt', 'needsHumanClearedBy'])
+        && request.resource.data.needsHuman == false;
+      allow create, delete: if false;
+    }
+    // the WhatsApp conversations and the daily send runs — server-written, manager-read
+    match /bot_conversations/{mobile}/messages/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    match /bot_runs/{run} {
       allow read: if isAdmin();
       allow write: if false;
     }
