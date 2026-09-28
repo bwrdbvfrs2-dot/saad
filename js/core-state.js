@@ -11,6 +11,8 @@ firebase.initializeApp(firebaseConfig);
 // Firestore only answers requests that come from this site itself, so a script or tool
 // run outside the app is refused even with a real employee login. The site key is public (it ships
 // in every page); until it is set, or when running locally, the app works exactly as before.
+// Enforcement is switched on in Firebase Console (App Check → APIs → Cloud Firestore) only once
+// nearly all requests show as verified.
 const APP_CHECK_SITE_KEY = "6LeAZdMtAAAAACNNo30B1DHY6sNcgxXRFBdfVdwf";
 if(APP_CHECK_SITE_KEY && firebase.appCheck && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname)){
   try{ firebase.appCheck().activate(new firebase.appCheck.ReCaptchaEnterpriseProvider(APP_CHECK_SITE_KEY), true); }
