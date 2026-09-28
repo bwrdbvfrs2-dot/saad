@@ -241,10 +241,14 @@ function normalizeState(){
     state.settings.qcTabGranted = true;
   }
   if(!state.qcLog) state.qcLog=[];
-  if(!state.settings.repairsTabGranted){ // one-time: hand the new external-repairs tab to every employee role
-    Object.values(state.permissions).forEach(p=>{ if(p.tabs && !p.tabs.includes("repairs")) p.tabs.push("repairs"); });
-    state.settings.repairsTabGranted = true;
-  }
+  // one-time: hand the new external-repairs tab to every employee role. The "done" mark lives on each role
+  // itself, not in settings — only a manager's save can change permissions, so a mark in settings saved
+  // by a cashier first would have skipped the grant for good.
+  Object.values(state.permissions).forEach(p=>{
+    if(!p.tabs || p.repairsTabGranted) return;
+    if(!p.tabs.includes("repairs")) p.tabs.push("repairs");
+    p.repairsTabGranted = true;
+  });
   // وطني بوت: the manager's alone for now — staff get their handed-off conversations in a later phase
   if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("bot")) state.permissions["مدير"].tabs.push("bot");
   // the "أجرة تفصيل (بدون قماش)" line (customer brings their own fabric) has its own price card:
