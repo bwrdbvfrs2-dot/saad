@@ -965,6 +965,8 @@ async function closeMonthNow(m){
     + state.salesInvoices.filter(s=>inMonth(s.date) && s.payment).reduce((a,s)=>a+(s.payment.cash||0)+(s.payment.network||0),0)
     + (state.legacyPayments||[]).filter(l=>inMonth(l.date)).reduce((a,l)=>a+l.amount,0)
     + (state.openingDebtPayments||[]).filter(p=>inMonth(p.date)).reduce((a,p)=>a+(p.cash||0)+(p.network||0),0)
+    + (state.repairs||[]).reduce((a,r)=> a + (r.payments||[]).filter(p=>inMonth(p.date)).reduce((s,p)=>s+(p.cash||0)+(p.network||0),0)
+        - (r.refunds||[]).filter(f=>inMonth(f.date)).reduce((s,f)=>s+(f.cash||0)+(f.network||0),0), 0)
     - state.invoiceReturns.filter(r=>inMonth(r.date)).reduce((a,r)=>a+(r.refundAmount||0),0)
     - (state.salesReturns||[]).filter(r=>inMonth(r.date)).reduce((a,r)=>a+(r.refundAmount||0),0);
   state.closingReports.push({
