@@ -546,7 +546,9 @@ async function afterSignedIn(){
   checkAllLoyaltyPointsExpiry();
   checkAutoCloseMonth();
   renderUsers();
-  maybeBackupStateToday();
+  // the daily backup uploads a full copy of the shop data — it runs in the background a few seconds
+  // after the app opens instead of holding up the login screen (the first login of each day was slow)
+  setTimeout(maybeBackupStateToday, 5000);
 }
 
 // ---------------- daily backups (disaster recovery — keeps the last 14 days) ----------------
@@ -566,7 +568,8 @@ async function pruneOldBackups(){
   try{
     const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-14);
     const cutoffStr = cutoff.toISOString().slice(0,10);
-    const snap = await BACKUPS_COL.get();
+    // only the old ones are fetched — downloading every backup (each a full copy of the shop data) was slow
+    const snap = await BACKUPS_COL.where(firebase.firestore.FieldPath.documentId(), "<", cutoffStr).get();
     const deletions = [];
     snap.forEach(doc=>{ if(doc.id < cutoffStr) deletions.push(doc.ref.delete()); });
     await Promise.all(deletions);
