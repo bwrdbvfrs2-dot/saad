@@ -812,6 +812,22 @@ async function saveUserEdit(i){
     try{ await ROLES_COL.doc(prevUser.authUid).set({role}); }
     catch(e){ console.error("role update failed", e); showToast("تعذّر تحديث الصلاحية — حاول مرة ثانية"); return; }
   }
+  // the shop data is saved FIRST; the login name is repointed only once that has landed. The other way
+  // round, a failed save left the username on the new login account while the user record still held
+  // the old one — and nobody could log in with either password.
+  const wasCurrent = currentUser && currentUser.username===oldUsername;
+  state.users[i]=updatedUser;
+  if(wasCurrent){ currentUser=state.users[i]; }
+  normalizeState();
+  const saved = await saveState();
+  if(!saved){
+    if(state.users[i] && state.users[i].username===updatedUser.username) state.users[i] = prevUser;
+    if(wasCurrent) currentUser = state.users.find(u=>u.username===oldUsername) || currentUser;
+    if(newPassword) await ROLES_COL.doc(updatedUser.authUid).delete().catch(()=>{});
+    showToast("ما انحفظ التعديل — كلمة المرور والبيانات ما تغيّرت. حاول مرة ثانية");
+    return;
+  }
+  if(wasCurrent){ $("curUserLbl").textContent=currentUser.username+" ("+currentUser.role+")"; applyRolePermissions(); }
   if(username!==oldUsername || newPassword){
     // a password change points the username at a brand-new synthetic email (new auth account) —
     // the login lookup has to be repointed even when the username itself didn't change, or the
@@ -819,16 +835,12 @@ async function saveUserEdit(i){
     try{
       await USERNAMES_COL.doc(username).set({authEmail: updatedUser.authEmail});
       if(username!==oldUsername) await USERNAMES_COL.doc(oldUsername).delete();
-    }catch(e){ console.error("username/login-email update failed", e); showToast("تعذّر تحديث بيانات الدخول — حاول مرة ثانية"); return; }
+    }catch(e){ console.error("username/login-email update failed", e); showToast("انحفظ التعديل بس تعذّر تحديث بيانات الدخول — أعد حفظ كلمة المرور مرة ثانية"); return; }
   }
-  state.users[i]=updatedUser;
-  if(currentUser && currentUser.username===oldUsername){ currentUser=state.users[i]; $("curUserLbl").textContent=currentUser.username+" ("+currentUser.role+")"; applyRolePermissions(); }
-  normalizeState();
-  const saved = await saveState();
-  // retire the OLD login account only after the state write lands — deleting its roles/{uid}
-  // doc any earlier can make the CURRENTLY signed-in admin fail isAdmin() mid-function (their own
-  // session is still on the old uid until they log back in), rejecting that very saveState() call.
-  if(saved && newPassword && prevUser.authUid) await ROLES_COL.doc(prevUser.authUid).delete().catch(()=>{});
+  // retire the OLD login account only after everything landed — deleting its roles/{uid} doc any
+  // earlier can make the CURRENTLY signed-in admin fail isAdmin() mid-function (their own session is
+  // still on the old uid until they log back in), rejecting that very saveState() call.
+  if(newPassword && prevUser.authUid) await ROLES_COL.doc(prevUser.authUid).delete().catch(()=>{});
   showToast("تم حفظ التعديل"); // no renderAll() here on purpose — re-rendering the whole list would wipe unsaved edits typed into OTHER users' rows
 }
 async function removeUser(i){
