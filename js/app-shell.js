@@ -635,6 +635,17 @@ async function restoreBackup(dateId){
   }catch(e){ console.error("restore failed", e); showToast("تعذّر الاسترجاع — حاول مرة ثانية"); }
 }
 
+async function repairLoginLink(username, email){
+  const rec = state.users.find(x=>x.username===username);
+  if(!rec || !fbAuth.currentUser || fbAuth.currentUser.email!==email || rec.authEmail===email) return null;
+  if(rec.role!=="مدير") return null;       // a staff member's record is the manager's to fix (reset their password again)
+  const prev = {authUid:rec.authUid, authEmail:rec.authEmail};
+  rec.authUid = fbAuth.currentUser.uid; rec.authEmail = email;
+  currentUser = rec;
+  if(!await saveState()){ Object.assign(rec, prev); currentUser = null; return null; }
+  logAudit("login_account_relinked", {username, reason:"password change save had not landed"});
+  return rec;
+}
 async function tryLogin(){
   const u=$("loginUser").value.trim(), p=$("loginPass").value;
   if(!u || !p){ $("loginErr").textContent="أدخل اسم المستخدم وكلمة المرور"; return; }
@@ -653,12 +664,19 @@ async function tryLogin(){
     return;
   }
   await afterSignedIn();
-  const found = state.users.find(x=>x.authUid===fbAuth.currentUser.uid);
+  let found = state.users.find(x=>x.authUid===fbAuth.currentUser.uid);
+  // a password change whose shop-data save never landed leaves the username pointing at the new login
+  // account while the user record still holds the old one. The username record (only a manager can
+  // repoint it) says which account is this person's, so a manager's record is re-linked to it here.
+  if(!found) found = await repairLoginLink(u, email);
   if(!found){
     console.error("signed in but no matching state.users entry for uid", fbAuth.currentUser.uid);
     stopListeningToState();
     await fbAuth.signOut().catch(()=>{});
-    $("loginErr").textContent = "تعذّر العثور على حساب مطابق داخل بيانات المحل — تواصل مع الدعم الفني";
+    const rec = state.users.find(x=>x.username===u);
+    $("loginErr").textContent = rec && rec.role!=="مدير"
+      ? "بيانات دخولك تحتاج تحديث — اطلب من المدير يعيد تعيين كلمة مرورك من إعدادات المستخدمين"
+      : "تعذّر العثور على حساب مطابق داخل بيانات المحل — تواصل مع الدعم الفني";
     return;
   }
   currentUser=found;
