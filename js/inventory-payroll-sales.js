@@ -122,7 +122,10 @@ function renderItemCards(){
           <option value="صيفي" ${c.season==="صيفي"?"selected":""}>صيفي</option>
           <option value="شتوي" ${c.season==="شتوي"?"selected":""}>شتوي</option>
         </select></div>
-      </div>` : "";
+      </div>
+      <div class="field" style="max-width:260px;"><label>عرض القماش — يعبّي الكميات من الإعدادات</label><select class="card-width" data-card="${c.id}">
+        ${FABRIC_WIDTHS.map(w=>`<option value="${w}" ${fabricWidth(c)===w?"selected":""}>${w}</option>`).join("")}
+      </select></div>` : "";
     const priceFields = c.type==="fabric" ? `
       <div class="row-3" style="margin-top:8px;">
         ${BODY_CATEGORIES.map(cat=>`<div class="field"><label>سعر ${cat} (ريال)</label><input type="number" class="card-price" data-card="${c.id}" data-cat="${cat}" value="${c.prices[cat]||""}" placeholder="0"></div>`).join("")}
@@ -228,6 +231,19 @@ function renderItemCards(){
       document.querySelectorAll(`.card-qty[data-card="${c.id}"]`).forEach(sib=>{ if(sib!==inp) sib.value = c.qty[sib.dataset.cat]||""; });
     }
     saveState();
+  }));
+  document.querySelectorAll(".card-width").forEach(sel=> sel.addEventListener("change", async ()=>{
+    const c = findItemCard(sel.dataset.card); if(!c) return;
+    const snapshot = JSON.parse(JSON.stringify(state));
+    const oldWidth = fabricWidth(c);
+    c.width = sel.value;
+    const std = widthFabricQty(c.width);
+    c.qty = c.qty||{};
+    BODY_CATEGORIES.forEach(cat=>{ if(std[cat]>0) c.qty[cat] = std[cat]; });
+    if(await saveStateWithRollback(snapshot)){
+      logAudit("fabric_width_changed", {cardId:c.id, cardName:c.name, from:oldWidth, to:c.width, qty:c.qty});
+      showToast(`صار ${c.name} ${c.width} — الكميات: ${BODY_CATEGORIES.map(cat=>`${cat} ${c.qty[cat]||0}`).join("، ")}`);
+    }
   }));
   document.querySelectorAll(".card-saleprice").forEach(inp=> inp.addEventListener("change", ()=>{
     findItemCard(inp.dataset.card).salePrice = parseFloat(inp.value)||0; saveState();
@@ -519,19 +535,21 @@ function addManualItemCard(){
     origin = $("manualCardOrigin").value; season = $("manualCardSeason").value;
     if(!origin || !season){ showToast("صنف قماش جديد — لازم تحدد الصناعة والموسم قبل الحفظ"); return; }
   }
-  const card = {id:newId(), code:nextItemCode(), name, type, unit: type==="fabric"?state.settings.measureUnit:"piece",
+  const width = type==="fabric" ? (($("manualCardWidth")||{}).value || "عرضين") : undefined;
+  const card = {id:newId(), code:nextItemCode(), name, type, unit: type==="fabric"?state.settings.measureUnit:"piece", width,
     currentCost:cost, openingBalance:qty, stockQty:0, reservedQty:0, active:true, minSalePrice:0, minPrices: type==="fabric"?{"رجال":0,"ولادي":0,"طفل":0}:{},
     origin: type==="fabric" ? origin : undefined, season: type==="fabric" ? season : undefined,
     prices: type==="fabric" ? {"رجال":0,"ولادي":0,"طفل":0} : undefined,
-    qty: type==="fabric" ? {"رجال":0,"ولادي":0,"طفل":0} : undefined,
+    qty: type==="fabric" ? {...widthFabricQty(width)} : undefined,
     salePrice: (type==="product"||type==="fabric") ? 0 : undefined };
+  if(type!=="fabric") delete card.width;
   state.itemCards.push(card);
   $("manualCardName").value=""; $("manualCardQty").value=""; $("manualCardCost").value=""; $("manualCardOrigin").value=""; $("manualCardSeason").value="";
   saveState(); renderAll();
   showToast("تم إضافة الصنف");
 }
 // ---- bulk item import from an Excel/CSV file (admin only): template → preview with a verdict per row → confirm ----
-const ITEM_IMPORT_COLS = ["النوع","اسم الصنف","الكمية","تكلفة الوحدة","سعر البيع","سعر رجال","سعر ولادي","سعر طفل","الصناعة","الموسم"];
+const ITEM_IMPORT_COLS = ["النوع","اسم الصنف","الكمية","تكلفة الوحدة","سعر البيع","سعر رجال","سعر ولادي","سعر طفل","الصناعة","الموسم","العرض"];
 const ITEM_IMPORT_MAX_ROWS = 2000;
 let itemImportPending = null;
 // SheetJS is only fetched when someone actually imports — nobody else pays for its size
@@ -547,7 +565,7 @@ async function downloadItemImportTemplate(){
   try{ await loadXlsxLib(); } catch(e){ showToast("تعذّر تحميل مكتبة الإكسل — تأكد من الاتصال"); return; }
   const ws = XLSX.utils.aoa_to_sheet([
     ITEM_IMPORT_COLS,
-    ["قماش","قماش ياباني أبيض",120,18,"",90,70,55,state.fabricOrigins[0]||"ياباني","صيفي"],
+    ["قماش","قماش ياباني أبيض",120,18,"",90,70,55,state.fabricOrigins[0]||"ياباني","صيفي","عرضين"],
     ["منتج","شماغ أحمر",30,45,95,"","","","",""],
     ["ملحق","أزرار صدف",500,0.3,"","","","","",""],
   ]);
@@ -587,6 +605,7 @@ function buildItemImportRows(aoa){
     const qty = importNum(get(r,"الكمية")), cost = importNum(get(r,"تكلفة الوحدة")), salePrice = importNum(get(r,"سعر البيع"));
     const prices = {"رجال":importNum(get(r,"سعر رجال")),"ولادي":importNum(get(r,"سعر ولادي")),"طفل":importNum(get(r,"سعر طفل"))};
     const origin = String(get(r,"الصناعة")||"").trim(), season = String(get(r,"الموسم")||"").trim();
+    const widthRaw = String(get(r,"العرض")||"").trim(), width = widthRaw || "عرضين";
     let error = null;
     if(!name) error = "اسم الصنف فاضي";
     else if(!type) error = `النوع "${get(r,"النوع")}" غير معروف (قماش / منتج / ملحق)`;
@@ -594,10 +613,11 @@ function buildItemImportRows(aoa){
     else if([qty,cost,salePrice,...Object.values(prices)].some(n=>n<0)) error = "فيه رقم بالسالب";
     else if(type==="fabric" && !state.fabricOrigins.includes(origin)) error = origin ? `الصناعة "${origin}" غير معرّفة في الإعدادات` : "القماش لازم له صناعة";
     else if(type==="fabric" && !["صيفي","شتوي"].includes(season)) error = "القماش لازم له موسم (صيفي / شتوي)";
+    else if(type==="fabric" && !FABRIC_WIDTHS.includes(width)) error = `العرض "${widthRaw}" غير معروف (عرض / عرضين)`;
     else if(state.itemCards.some(c=>c.type===type && c.name===name)) error = "فيه صنف بنفس الاسم والنوع موجود مسبقاً";
     else if(seen.has(type+"|"+name)) error = "مكرر داخل الملف";
     if(!error) seen.add(type+"|"+name);
-    return {line, type, name, qty, cost, salePrice, prices, origin, season, error};
+    return {line, type, name, qty, cost, salePrice, prices, origin, season, width, error};
   });
   return {rows};
 }
@@ -641,8 +661,8 @@ async function confirmItemImport(){
     state.itemCards.push({id:newId(), code:nextItemCode(), name:r.name, type:r.type, unit: r.type==="fabric"?state.settings.measureUnit:"piece",
       currentCost:r.cost, openingBalance:r.qty, stockQty:0, reservedQty:0, active:true, minSalePrice:0, minPrices: r.type==="fabric"?{"رجال":0,"ولادي":0,"طفل":0}:{},
       origin: r.type==="fabric" ? r.origin : undefined, season: r.type==="fabric" ? r.season : undefined,
-      prices: r.type==="fabric" ? r.prices : undefined,
-      qty: r.type==="fabric" ? {"رجال":0,"ولادي":0,"طفل":0} : undefined,
+      prices: r.type==="fabric" ? r.prices : undefined, width: r.type==="fabric" ? r.width : undefined,
+      qty: r.type==="fabric" ? {...widthFabricQty(r.width)} : undefined,
       salePrice: r.type==="product" ? r.salePrice : (r.type==="fabric" ? 0 : undefined),
       createdAt, createdBy:currentUser.username, importBatchId:batchId});
   });
@@ -675,7 +695,8 @@ async function addPurchase(){
       currentCost:0, openingBalance:0, stockQty:0, reservedQty:0, active:true, minSalePrice:0, minPrices: type==="fabric"?{"رجال":0,"ولادي":0,"طفل":0}:{},
       origin: type==="fabric" ? origin : undefined, season: type==="fabric" ? season : undefined,
       prices: type==="fabric" ? {"رجال":0,"ولادي":0,"طفل":0} : undefined,
-      qty: type==="fabric" ? {"رجال":0,"ولادي":0,"طفل":0} : undefined,
+      width: type==="fabric" ? "عرضين" : undefined,
+      qty: type==="fabric" ? {...widthFabricQty("عرضين")} : undefined,
       salePrice: (type==="product"||type==="fabric") ? 0 : undefined };
     state.itemCards.push(card);
   }

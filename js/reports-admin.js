@@ -1333,6 +1333,7 @@ $("setMeasureUnit").addEventListener("change", ()=>{
   state.salesInvoices.forEach(s=> s.items.forEach(it=>{ if(isFabric(it.itemCardId)){ it.qty = it.qty * factor; it.price = it.price / factor; it.costAtSale = (it.costAtSale||0) / factor; } }));
   (state.salesReturns||[]).forEach(r=> r.lines.forEach(l=>{ if(isFabric(l.itemCardId)){ l.qty = l.qty * factor; l.price = l.price / factor; l.costAtSale = (l.costAtSale||0) / factor; } }));
   BODY_CATEGORIES.forEach(cat=> state.settings.defaultFabricQty[cat] = (state.settings.defaultFabricQty[cat]||0) * factor);
+  Object.values(state.settings.fabricQtyByWidth||{}).forEach(q=> BODY_CATEGORIES.forEach(cat=> q[cat] = (q[cat]||0) * factor));
   state.settings.fabricQtyBuffer = state.settings.fabricQtyBuffer * factor;
   state.settings.measureUnit = newUnit;
   saveState(); renderAll();

@@ -457,6 +457,13 @@ function addExpense(data){
 
 // ---------------- garment form ----------------
 function defaultFabricQty(){ return state.settings.defaultFabricQty; }
+const FABRIC_WIDTHS = ["عرضين","عرض"];
+function fabricWidth(c){ return c && c.width==="عرض" ? "عرض" : "عرضين"; }
+// the standard consumption for a width, from the settings (عرضين falls back to the older single default)
+function widthFabricQty(width){
+  const byW = state.settings.fabricQtyByWidth||{};
+  return byW[width] || (width==="عرضين" ? defaultFabricQty() : {}) || {};
+}
 function fabricQtyBuffer(){ return state.settings.fabricQtyBuffer; }
 function renderGarmentFields(prefill=null){
   closeMeasPanel();
@@ -537,7 +544,7 @@ function renderGarmentFields(prefill=null){
       const availNote = div.querySelector(".g-avail-note");
       if(c && c.type==="fabric"){
         if(!priceInp.value || forceUpdate) priceInp.value = c.prices[catSel.value]||"";
-        const standardQty = c.qty[catSel.value] || defaultFabricQty()[catSel.value] || 0;
+        const standardQty = c.qty[catSel.value] || widthFabricQty(fabricWidth(c))[catSel.value] || 0;
         if(standardQty>0){
           qtyInp.dataset.standardQty = standardQty;
           qtyInp.max = (standardQty + fabricQtyBuffer()).toFixed(2);
