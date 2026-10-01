@@ -214,7 +214,7 @@ function computeShiftExpected(username, date){
   (state.repairs||[]).forEach(r=> (r.refunds||[]).forEach(f=>{ if(f.date===date && f.owner===username) otherMoves.push({label:`استرداد صيانة ملغاة ص-${r.number}`, amount:-((f.cash||0)+(f.network||0))}); }));
   state.purchases.forEach(p=>{ if(p.date===date && p.payStatus==="paid" && ownBox(p.sourceBoxId)) otherMoves.push({label:`فاتورة شراء ${p.invoiceNo}`, amount:-p.total}); });
   state.purchaseReturns.forEach(r=>{ if(r.date===date && r.payStatus==="paid" && ownBox(r.boxId)) otherMoves.push({label:"مرتجع مشتريات (مبلغ مسترد)", amount:r.value}); });
-  state.suppliers.forEach(s=> (s.payments||[]).forEach(sp=>{ if(sp.date===date && ownBox(sp.boxId)) otherMoves.push({label:`تسديد مورد ${s.name}`, amount:-sp.amount}); }));
+  state.suppliers.forEach(s=> (s.payments||[]).forEach(sp=>{ if(sp.date===date && ownBox(sp.boxId)) otherMoves.push({label:`تسديد ${(s.kind||"مورد")==="مورد"?"مورد ":""}${s.name}`, amount:-sp.amount}); }));
   state.payrollLedger.forEach(e=>{ if(e.date===date && (e.type==="payment"||e.type==="advance") && ownBox(e.boxId)) otherMoves.push({label:`${e.type==="advance"?"سلفة":"راتب"} ${e.username}`, amount:-e.amount}); });
   const sysOtherNet = otherMoves.reduce((a,m)=>a+m.amount,0);
   const total = sysCash+sysNetwork+sysTransfers-sysTransfersOut+sysTransfersReturned-recordedCashExpenses-recordedNetworkExpenses+sysOtherNet;
@@ -457,6 +457,13 @@ function addExpense(data){
 
 // ---------------- garment form ----------------
 function defaultFabricQty(){ return state.settings.defaultFabricQty; }
+const FABRIC_WIDTHS = ["عرضين","عرض"];
+function fabricWidth(c){ return c && c.width==="عرض" ? "عرض" : "عرضين"; }
+// the standard consumption for a width, from the settings (عرضين falls back to the older single default)
+function widthFabricQty(width){
+  const byW = state.settings.fabricQtyByWidth||{};
+  return byW[width] || (width==="عرضين" ? defaultFabricQty() : {}) || {};
+}
 function fabricQtyBuffer(){ return state.settings.fabricQtyBuffer; }
 function renderGarmentFields(prefill=null){
   closeMeasPanel();
@@ -537,7 +544,7 @@ function renderGarmentFields(prefill=null){
       const availNote = div.querySelector(".g-avail-note");
       if(c && c.type==="fabric"){
         if(!priceInp.value || forceUpdate) priceInp.value = c.prices[catSel.value]||"";
-        const standardQty = c.qty[catSel.value] || defaultFabricQty()[catSel.value] || 0;
+        const standardQty = c.qty[catSel.value] || widthFabricQty(fabricWidth(c))[catSel.value] || 0;
         if(standardQty>0){
           qtyInp.dataset.standardQty = standardQty;
           qtyInp.max = (standardQty + fabricQtyBuffer()).toFixed(2);

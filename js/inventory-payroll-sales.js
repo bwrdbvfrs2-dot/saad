@@ -122,7 +122,10 @@ function renderItemCards(){
           <option value="صيفي" ${c.season==="صيفي"?"selected":""}>صيفي</option>
           <option value="شتوي" ${c.season==="شتوي"?"selected":""}>شتوي</option>
         </select></div>
-      </div>` : "";
+      </div>
+      <div class="field" style="max-width:260px;"><label>عرض القماش — يعبّي الكميات من الإعدادات</label><select class="card-width" data-card="${c.id}">
+        ${FABRIC_WIDTHS.map(w=>`<option value="${w}" ${fabricWidth(c)===w?"selected":""}>${w}</option>`).join("")}
+      </select></div>` : "";
     const priceFields = c.type==="fabric" ? `
       <div class="row-3" style="margin-top:8px;">
         ${BODY_CATEGORIES.map(cat=>`<div class="field"><label>سعر ${cat} (ريال)</label><input type="number" class="card-price" data-card="${c.id}" data-cat="${cat}" value="${c.prices[cat]||""}" placeholder="0"></div>`).join("")}
@@ -228,6 +231,19 @@ function renderItemCards(){
       document.querySelectorAll(`.card-qty[data-card="${c.id}"]`).forEach(sib=>{ if(sib!==inp) sib.value = c.qty[sib.dataset.cat]||""; });
     }
     saveState();
+  }));
+  document.querySelectorAll(".card-width").forEach(sel=> sel.addEventListener("change", async ()=>{
+    const c = findItemCard(sel.dataset.card); if(!c) return;
+    const snapshot = JSON.parse(JSON.stringify(state));
+    const oldWidth = fabricWidth(c);
+    c.width = sel.value;
+    const std = widthFabricQty(c.width);
+    c.qty = c.qty||{};
+    BODY_CATEGORIES.forEach(cat=>{ if(std[cat]>0) c.qty[cat] = std[cat]; });
+    if(await saveStateWithRollback(snapshot)){
+      logAudit("fabric_width_changed", {cardId:c.id, cardName:c.name, from:oldWidth, to:c.width, qty:c.qty});
+      showToast(`صار ${c.name} ${c.width} — الكميات: ${BODY_CATEGORIES.map(cat=>`${cat} ${c.qty[cat]||0}`).join("، ")}`);
+    }
   }));
   document.querySelectorAll(".card-saleprice").forEach(inp=> inp.addEventListener("change", ()=>{
     findItemCard(inp.dataset.card).salePrice = parseFloat(inp.value)||0; saveState();
@@ -385,26 +401,66 @@ async function deleteItemCard(id){
   }
 }
 
+function supplierOpeningDebt(s){ return (s.openingDebts||[]).reduce((a,d)=>a+d.amount,0); }
 function renderSuppliers(){
   const el = $("suppliersList");
-  if(!state.suppliers.length){ el.innerHTML = `<p class="sub">ما فيه موردين بعد.</p>`; return; }
-  el.innerHTML = state.suppliers.map(s=>`<div class="garment-card">
-    <span class="tag">${esc(s.name)}${esc(s.phone?" — "+s.phone:"")}</span>
+  const isAdmin = currentUser && currentUser.role==="مدير";
+  ["newSupplierDebtWrap","newSupplierDebtNoteWrap"].forEach(id=>{ if($(id)) $(id).style.display = isAdmin ? "" : "none"; });
+  if(!state.suppliers.length){ el.innerHTML = `<p class="sub">ما فيه موردين أو دائنين بعد.</p>`; return; }
+  el.innerHTML = state.suppliers.map(s=>{
+    const opening = supplierOpeningDebt(s), paid = (s.payments||[]).reduce((a,p)=>a+p.amount,0);
+    return `<div class="garment-card">
+    <span class="tag">${esc(s.name)} — ${esc(s.kind||"مورد")}${esc(s.phone?" — "+s.phone:"")}</span>
     <p style="margin:6px 0;font-weight:700;color:${s.balance>0?'var(--loss)':'var(--profit)'};">المستحق له: ${s.balance.toFixed(0)} ريال</p>
+    ${opening||paid ? `<p class="sub" style="margin:4px 0;">${opening?`دين سابق مسجّل: ${opening.toFixed(0)} ريال${(s.openingDebts||[]).filter(d=>d.note).map(d=>` (${esc(d.note)})`).join("")}`:""}${opening&&paid?" — ":""}${paid?`المسدّد حتى الآن: ${paid.toFixed(0)} ريال`:""}</p>` : ""}
     ${s.balance>0 ? `
     <div class="row-3">
       <div class="field"><label>مبلغ التسديد</label><input type="number" class="supplier-pay-amount" data-sup="${s.id}" min="0" placeholder="0"></div>
       <div class="field"><label>من صندوقي</label><select class="supplier-pay-box" data-sup="${s.id}">${userBoxes(currentUser.username).map(b=>`<option value="${b.id}">${b.name} (${typeLabel(b.type)}) — ${boxTotal(b).toFixed(0)} ﷼</option>`).join("")}</select></div>
       <div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-gold btn-sm" style="width:100%;" onclick="paySupplier('${s.id}')">تسديد</button></div>
     </div>` : ``}
-  </div>`).join("");
+    ${isAdmin ? `<div class="actions-row" style="margin-top:6px;"><button class="btn btn-ghost btn-sm" onclick="addSupplierOpeningDebt('${s.id}')">إضافة دين سابق</button></div>` : ""}
+  </div>`;
+  }).join("");
 }
-function addSupplier(){
-  const name = $("newSupplierName").value.trim(), phone = $("newSupplierPhone").value.trim();
-  if(!name){ showToast("أدخل اسم المورد"); return; }
-  state.suppliers.push({id:newId(), name, phone, notes:"", balance:0});
-  $("newSupplierName").value=""; $("newSupplierPhone").value="";
-  saveState(); renderAll(); showToast("تم إضافة المورد");
+function readOpeningDebtInputs(){
+  const amount = parseFloat(($("newSupplierDebt")||{}).value)||0, note = (($("newSupplierDebtNote")||{}).value||"").trim();
+  return {amount, note};
+}
+async function addSupplier(){
+  const name = $("newSupplierName").value.trim(), phone = $("newSupplierPhone").value.trim(), kind = ($("newSupplierKind")||{}).value || "مورد";
+  if(!name){ showToast("أدخل الاسم"); return; }
+  if(state.suppliers.some(x=>x.name===name)){ showToast("الاسم موجود من قبل — أضف الدين السابق من بطاقته"); return; }
+  const {amount, note} = readOpeningDebtInputs();
+  if(amount<0){ showToast("المبلغ لازم يكون موجب"); return; }
+  if(amount>0 && (!currentUser || currentUser.role!=="مدير")){ showToast("تسجيل دين سابق للمدير فقط"); return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
+  const s = {id:newId(), name, phone, kind, notes:"", balance:0, openingDebts:[]};
+  if(amount>0){ s.openingDebts.push({id:newId(), date:todayStr(), amount, note, recordedBy:currentUser.username}); s.balance += amount; }
+  state.suppliers.push(s);
+  if(!await saveStateWithRollback(snapshot)) return;
+  if(amount>0) logAudit("supplier_opening_debt", {supplierName:name, kind, amount, note});
+  ["newSupplierName","newSupplierPhone","newSupplierDebt","newSupplierDebtNote"].forEach(id=>{ if($(id)) $(id).value=""; });
+  showToast(amount>0 ? `تمت إضافة ${name} بدين سابق ${amount.toFixed(0)} ريال` : `تمت إضافة ${name}`);
+}
+// a debt from before the app, added to an existing supplier / landlord / person
+async function addSupplierOpeningDebt(supId){
+  const s = state.suppliers.find(x=>x.id===supId); if(!s) return;
+  if(!currentUser || currentUser.role!=="مدير"){ showToast("تسجيل دين سابق للمدير فقط"); return; }
+  const raw = prompt(`كم الدين السابق على المحل لـ${s.name} (ريال)؟`);
+  if(raw===null) return;
+  const amount = parseFloat(raw)||0;
+  if(!(amount>0)){ showToast("أدخل مبلغ صحيح"); return; }
+  const note = (prompt("ملاحظة (اختياري) — مثلاً: إيجار شهرين متأخر") || "").trim();
+  if(!await confirmWithPassword(`تسجيل دين سابق ${amount.toFixed(0)} ريال لـ${s.name}؟ ينضاف على المستحق له ويتسدد من زر «تسديد».\nأدخل كلمة مرورك للتأكيد.`)) return;
+  const snapshot = JSON.parse(JSON.stringify(state));
+  s.openingDebts = s.openingDebts||[];
+  s.openingDebts.push({id:newId(), date:todayStr(), amount, note, recordedBy:currentUser.username});
+  s.balance += amount;
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("supplier_opening_debt", {supplierName:s.name, kind:s.kind||"مورد", amount, note});
+    showToast(`تم تسجيل دين سابق ${amount.toFixed(0)} ريال لـ${s.name}`);
+  }
 }
 async function paySupplier(supId){
   const s = state.suppliers.find(x=>x.id===supId); if(!s) return;
@@ -422,7 +478,7 @@ async function paySupplier(supId){
   s.payments.push({id:newId(), date:todayStr(), amount, boxId:box.id, recordedBy:currentUser.username});
   if(await saveStateWithRollback(snapshot)){
     logAudit("supplier_paid", {supplierName:s.name, amount});
-    showToast("تم تسديد المورد");
+    showToast(`تم تسديد ${amount.toFixed(0)} ريال لـ${s.name} — المتبقي ${s.balance.toFixed(0)}`);
   }
 }
 
@@ -432,7 +488,7 @@ function refreshPurchaseForm(){
   const cards = state.itemCards.filter(c=>c.type===type);
   const curSupplier = $("purchSupplier").value, curSourceBox = $("purchSourceBox").value, curOrigin = $("purchOrigin").value;
   $("purchItemDatalist").innerHTML = cards.map(c=>`<option value="${esc(c.name)}"></option>`).join("");
-  $("purchSupplierDatalist").innerHTML = state.suppliers.map(s=>`<option value="${esc(s.name)}"></option>`).join("");
+  $("purchSupplierDatalist").innerHTML = state.suppliers.filter(s=>(s.kind||"مورد")==="مورد").map(s=>`<option value="${esc(s.name)}"></option>`).join("");
   if(curSupplier){ const s = state.suppliers.find(x=>x.id===curSupplier); if(s) $("purchSupplierSearch").value = s.name; }
   $("purchSourceBox").innerHTML = userBoxes(currentUser.username).map(b=>`<option value="${b.id}" ${b.id===curSourceBox?"selected":""}>${b.name} (${typeLabel(b.type)}) — ${boxTotal(b).toFixed(0)} ﷼</option>`).join("");
   $("purchOrigin").innerHTML = `<option value="">-- اختر --</option>` + state.fabricOrigins.map(o=>`<option value="${esc(o)}" ${o===curOrigin?"selected":""}>${esc(o)}</option>`).join("");
@@ -479,19 +535,21 @@ function addManualItemCard(){
     origin = $("manualCardOrigin").value; season = $("manualCardSeason").value;
     if(!origin || !season){ showToast("صنف قماش جديد — لازم تحدد الصناعة والموسم قبل الحفظ"); return; }
   }
-  const card = {id:newId(), code:nextItemCode(), name, type, unit: type==="fabric"?state.settings.measureUnit:"piece",
+  const width = type==="fabric" ? (($("manualCardWidth")||{}).value || "عرضين") : undefined;
+  const card = {id:newId(), code:nextItemCode(), name, type, unit: type==="fabric"?state.settings.measureUnit:"piece", width,
     currentCost:cost, openingBalance:qty, stockQty:0, reservedQty:0, active:true, minSalePrice:0, minPrices: type==="fabric"?{"رجال":0,"ولادي":0,"طفل":0}:{},
     origin: type==="fabric" ? origin : undefined, season: type==="fabric" ? season : undefined,
     prices: type==="fabric" ? {"رجال":0,"ولادي":0,"طفل":0} : undefined,
-    qty: type==="fabric" ? {"رجال":0,"ولادي":0,"طفل":0} : undefined,
+    qty: type==="fabric" ? {...widthFabricQty(width)} : undefined,
     salePrice: (type==="product"||type==="fabric") ? 0 : undefined };
+  if(type!=="fabric") delete card.width;
   state.itemCards.push(card);
   $("manualCardName").value=""; $("manualCardQty").value=""; $("manualCardCost").value=""; $("manualCardOrigin").value=""; $("manualCardSeason").value="";
   saveState(); renderAll();
   showToast("تم إضافة الصنف");
 }
 // ---- bulk item import from an Excel/CSV file (admin only): template → preview with a verdict per row → confirm ----
-const ITEM_IMPORT_COLS = ["النوع","اسم الصنف","الكمية","تكلفة الوحدة","سعر البيع","سعر رجال","سعر ولادي","سعر طفل","الصناعة","الموسم"];
+const ITEM_IMPORT_COLS = ["النوع","اسم الصنف","الكمية","تكلفة الوحدة","سعر البيع","سعر رجال","سعر ولادي","سعر طفل","الصناعة","الموسم","العرض"];
 const ITEM_IMPORT_MAX_ROWS = 2000;
 let itemImportPending = null;
 // SheetJS is only fetched when someone actually imports — nobody else pays for its size
@@ -507,7 +565,7 @@ async function downloadItemImportTemplate(){
   try{ await loadXlsxLib(); } catch(e){ showToast("تعذّر تحميل مكتبة الإكسل — تأكد من الاتصال"); return; }
   const ws = XLSX.utils.aoa_to_sheet([
     ITEM_IMPORT_COLS,
-    ["قماش","قماش ياباني أبيض",120,18,"",90,70,55,state.fabricOrigins[0]||"ياباني","صيفي"],
+    ["قماش","قماش ياباني أبيض",120,18,"",90,70,55,state.fabricOrigins[0]||"ياباني","صيفي","عرضين"],
     ["منتج","شماغ أحمر",30,45,95,"","","","",""],
     ["ملحق","أزرار صدف",500,0.3,"","","","","",""],
   ]);
@@ -547,6 +605,7 @@ function buildItemImportRows(aoa){
     const qty = importNum(get(r,"الكمية")), cost = importNum(get(r,"تكلفة الوحدة")), salePrice = importNum(get(r,"سعر البيع"));
     const prices = {"رجال":importNum(get(r,"سعر رجال")),"ولادي":importNum(get(r,"سعر ولادي")),"طفل":importNum(get(r,"سعر طفل"))};
     const origin = String(get(r,"الصناعة")||"").trim(), season = String(get(r,"الموسم")||"").trim();
+    const widthRaw = String(get(r,"العرض")||"").trim(), width = widthRaw || "عرضين";
     let error = null;
     if(!name) error = "اسم الصنف فاضي";
     else if(!type) error = `النوع "${get(r,"النوع")}" غير معروف (قماش / منتج / ملحق)`;
@@ -554,10 +613,11 @@ function buildItemImportRows(aoa){
     else if([qty,cost,salePrice,...Object.values(prices)].some(n=>n<0)) error = "فيه رقم بالسالب";
     else if(type==="fabric" && !state.fabricOrigins.includes(origin)) error = origin ? `الصناعة "${origin}" غير معرّفة في الإعدادات` : "القماش لازم له صناعة";
     else if(type==="fabric" && !["صيفي","شتوي"].includes(season)) error = "القماش لازم له موسم (صيفي / شتوي)";
+    else if(type==="fabric" && !FABRIC_WIDTHS.includes(width)) error = `العرض "${widthRaw}" غير معروف (عرض / عرضين)`;
     else if(state.itemCards.some(c=>c.type===type && c.name===name)) error = "فيه صنف بنفس الاسم والنوع موجود مسبقاً";
     else if(seen.has(type+"|"+name)) error = "مكرر داخل الملف";
     if(!error) seen.add(type+"|"+name);
-    return {line, type, name, qty, cost, salePrice, prices, origin, season, error};
+    return {line, type, name, qty, cost, salePrice, prices, origin, season, width, error};
   });
   return {rows};
 }
@@ -601,8 +661,8 @@ async function confirmItemImport(){
     state.itemCards.push({id:newId(), code:nextItemCode(), name:r.name, type:r.type, unit: r.type==="fabric"?state.settings.measureUnit:"piece",
       currentCost:r.cost, openingBalance:r.qty, stockQty:0, reservedQty:0, active:true, minSalePrice:0, minPrices: r.type==="fabric"?{"رجال":0,"ولادي":0,"طفل":0}:{},
       origin: r.type==="fabric" ? r.origin : undefined, season: r.type==="fabric" ? r.season : undefined,
-      prices: r.type==="fabric" ? r.prices : undefined,
-      qty: r.type==="fabric" ? {"رجال":0,"ولادي":0,"طفل":0} : undefined,
+      prices: r.type==="fabric" ? r.prices : undefined, width: r.type==="fabric" ? r.width : undefined,
+      qty: r.type==="fabric" ? {...widthFabricQty(r.width)} : undefined,
       salePrice: r.type==="product" ? r.salePrice : (r.type==="fabric" ? 0 : undefined),
       createdAt, createdBy:currentUser.username, importBatchId:batchId});
   });
@@ -635,7 +695,8 @@ async function addPurchase(){
       currentCost:0, openingBalance:0, stockQty:0, reservedQty:0, active:true, minSalePrice:0, minPrices: type==="fabric"?{"رجال":0,"ولادي":0,"طفل":0}:{},
       origin: type==="fabric" ? origin : undefined, season: type==="fabric" ? season : undefined,
       prices: type==="fabric" ? {"رجال":0,"ولادي":0,"طفل":0} : undefined,
-      qty: type==="fabric" ? {"رجال":0,"ولادي":0,"طفل":0} : undefined,
+      width: type==="fabric" ? "عرضين" : undefined,
+      qty: type==="fabric" ? {...widthFabricQty("عرضين")} : undefined,
       salePrice: (type==="product"||type==="fabric") ? 0 : undefined };
     state.itemCards.push(card);
   }
@@ -732,7 +793,7 @@ function previewPurchaseImage(id){
 function refreshReturnForm(){
   const curCard = $("returnCard").value, curSupplier = $("returnSupplier").value;
   $("returnCard").innerHTML = state.itemCards.map(c=>`<option value="${c.id}" ${c.id===curCard?"selected":""}>${esc(c.name)} (${c.type==="fabric"?"قماش":"منتج"})</option>`).join("");
-  $("returnSupplier").innerHTML = state.suppliers.map(s=>`<option value="${s.id}" ${s.id===curSupplier?"selected":""}>${esc(s.name)}</option>`).join("");
+  $("returnSupplier").innerHTML = state.suppliers.filter(s=>(s.kind||"مورد")==="مورد" || s.id===curSupplier).map(s=>`<option value="${s.id}" ${s.id===curSupplier?"selected":""}>${esc(s.name)}</option>`).join("");
   $("returnBox").innerHTML = userBoxes(currentUser.username).map(b=>`<option value="${b.id}">${b.name} (${typeLabel(b.type)})</option>`).join("");
   $("returnBoxWrap").style.display = $("returnPayStatus").value==="paid" ? "" : "none";
   const card = findItemCard($("returnCard").value);

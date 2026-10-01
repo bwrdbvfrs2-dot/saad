@@ -86,6 +86,8 @@ function normalizeState(){
   if(!state.settings.thermalPaperWidth) state.settings.thermalPaperWidth=58;
   if(state.settings.sensitivePin===undefined) state.settings.sensitivePin="";
   if(!state.settings.defaultFabricQty) state.settings.defaultFabricQty = {"رجال":3.25, "ولادي":2.25, "طفل":1.75};
+  // consumption per thobe for each fabric width — the shop's defaults so far were all for عرضين
+  if(!state.settings.fabricQtyByWidth) state.settings.fabricQtyByWidth = {"عرضين": {...state.settings.defaultFabricQty}, "عرض": {"رجال":5, "ولادي":3.5, "طفل":2.5}};
   if(state.settings.printOriginOnLabel===undefined) state.settings.printOriginOnLabel = true;
   if(state.settings.nextAlterationNumber===undefined) state.settings.nextAlterationNumber = 1;
   if(state.settings.commissionBasis===undefined) state.settings.commissionBasis = "تسليم";
@@ -850,7 +852,7 @@ const NAV_GROUPS = [
   ]},
   {title:"المخزون", color:"#8a6d3b", items:[
     {tab:"itemCards", label:"كروت الأصناف"},
-    {tab:"suppliers", label:"الموردين"},
+    {tab:"suppliers", label:"الموردين والدائنين"},
     {tab:"purchases", label:"فاتورة مشتريات جديدة"},
     {tab:"purchaseReturns", label:"مرتجع مشتريات"},
     {tab:"legacy", label:"الجرد الافتتاحي"},

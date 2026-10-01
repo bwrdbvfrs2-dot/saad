@@ -23,6 +23,7 @@ function renderAll(){
   $("setWaWelcome").checked = !!state.settings.waWelcomeEnabled;
   $("setWaPromo").value = state.settings.waPromoMessage;
   renderExpenseCategories();
+  renderFabricWidthQtyTable();
   $("setMeasureUnit").value = state.settings.measureUnit;
   $("setCommissionBasis").value = state.settings.commissionBasis||"تسليم";
   if($("setRepairWagePercent")) $("setRepairWagePercent").value = state.settings.repairWagePercent||0;
@@ -825,4 +826,21 @@ function renderTailorQcReturns(){
     ${mine.map(({inv,g,idx})=>{ const last = state.qcLog.slice().reverse().find(l=>l.invoiceId===inv.id && l.garmentIndex===idx && l.result==="reject");
       return `<p class="sub" style="margin:6px 0 0;">فاتورة ${esc(inv.number)} — ثوب ${idx+1}${last?`: ${esc(last.reason)}${last.notes?` (${esc(last.notes)})`:""}`:""} — بعد الإصلاح امسحها "تم التفصيل" مرة ثانية</p>`; }).join("")}
   </div>`;
+}
+
+function renderFabricWidthQtyTable(){
+  const el = $("fabricWidthQtyTable"); if(!el) return;
+  if(el.contains(document.activeElement)) return; // don't wipe a number being typed
+  el.innerHTML = `<div class="table-wrap"><table><thead><tr><th>العرض</th>${BODY_CATEGORIES.map(c=>`<th>${c} (${unitLabel()})</th>`).join("")}</tr></thead><tbody>
+    ${FABRIC_WIDTHS.map(w=>`<tr><td>${w}</td>${BODY_CATEGORIES.map(c=>`<td><input type="number" class="fw-qty" data-w="${w}" data-cat="${c}" min="0" step="0.05" value="${widthFabricQty(w)[c]||""}" style="max-width:90px;"></td>`).join("")}</tr>`).join("")}
+  </tbody></table></div>`;
+  el.querySelectorAll(".fw-qty").forEach(inp=> inp.addEventListener("change", async ()=>{
+    const v = parseFloat(inp.value)||0;
+    if(v<=0){ showToast("الكمية لازم تكون أكبر من صفر"); inp.value = widthFabricQty(inp.dataset.w)[inp.dataset.cat]||""; return; }
+    const snapshot = JSON.parse(JSON.stringify(state));
+    const byW = state.settings.fabricQtyByWidth = state.settings.fabricQtyByWidth||{};
+    byW[inp.dataset.w] = {...(byW[inp.dataset.w]||{}), [inp.dataset.cat]: v};
+    if(inp.dataset.w==="عرضين") state.settings.defaultFabricQty[inp.dataset.cat] = v;
+    if(await saveStateWithRollback(snapshot)) showToast(`استهلاك ${inp.dataset.cat} للقماش ${inp.dataset.w}: ${v}`);
+  }));
 }

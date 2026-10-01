@@ -141,7 +141,7 @@ function collectBoxMovements(){
   (state.salesReturns||[]).forEach(r=> add(r.boxId, -r.refundAmount, `استرداد مرتجع مبيعات ${r.saleInvoiceNumber}`, r.date));
   state.purchases.forEach(p=>{ if(p.payStatus==="paid") add(p.sourceBoxId, -p.total, `فاتورة شراء ${p.invoiceNo}`, p.date); });
   state.purchaseReturns.forEach(r=>{ if(r.payStatus==="paid") add(r.boxId, r.value, "مرتجع مشتريات", r.date); });
-  state.suppliers.forEach(s=> (s.payments||[]).forEach(sp=> add(sp.boxId, -sp.amount, `تسديد مورد ${s.name}`, sp.date)));
+  state.suppliers.forEach(s=> (s.payments||[]).forEach(sp=> add(sp.boxId, -sp.amount, `تسديد ${(s.kind||"مورد")==="مورد"?"مورد ":""}${s.name}`, sp.date)));
   state.payrollLedger.forEach(e=>{ if(e.type==="payment"||e.type==="advance") add(e.boxId, -e.amount, `${e.type==="advance"?"سلفة":"راتب"} ${e.username}`, e.date); });
   state.transferRequests.forEach(t=>{
     add(t.fromBoxId, -t.amount, "تحويل مرسل", t.createdAt);
@@ -163,6 +163,7 @@ function computeIntegrityCheck(){
     let e = 0;
     state.purchases.forEach(p=>{ if(p.supplierId===s.id && p.payStatus==="deferred") e += p.total; });
     state.purchaseReturns.forEach(r=>{ if(r.supplierId===s.id && r.payStatus==="deferred") e -= r.value; });
+    (s.openingDebts||[]).forEach(d=> e += d.amount);
     (s.payments||[]).forEach(sp=> e -= sp.amount);
     return {name:s.name, actual:s.balance, rebuilt:e, diff:s.balance-e};
   });

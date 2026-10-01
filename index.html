@@ -450,6 +450,10 @@
 <div class="panel">
   <h2>التفصيل والمنتجات</h2>
   <div id="adminOnly_settingsProducts">
+      <h3 style="margin:0 0 8px;font-size:14px;">استهلاك القماش لكل ثوب حسب عرض القماش</h3>
+      <p class="sub" style="margin-bottom:10px;">لما تختار عرض القماش في كرت الصنف، تتعبّى كمياته من هنا (وتقدر تعدّلها بالكرت لقماش معيّن). تعديل هالأرقام ما يغيّر الكروت الموجودة.</p>
+      <div id="fabricWidthQtyTable"></div>
+      <div class="stitch"></div>
       <h3 style="margin:0 0 8px;font-size:14px;">الملحقات والخدمات</h3>
       <p class="sub" style="margin-bottom:10px;">تُختار لكل ثوب بفاتورة التفصيل (زي التطريز). الفعلية (أزرار، كبكات) تُشترى من المشتريات ولها مخزون. الخدمات الثابتة (غسيل قماش) بدون مخزون، سعرها ثابت.</p>
       <div id="addonsList"></div>
@@ -1400,7 +1404,7 @@
     <div class="field"><label>اسم الصنف</label><input type="text" id="manualCardName" placeholder="مثلاً: قماش مخزون قديم"></div>
     <div class="field"><label id="manualCardQtyLabel">الكمية (رصيد أول المدة)</label><input type="number" id="manualCardQty" min="0" step="0.1" placeholder="0"></div>
   </div>
-  <div class="row-2" id="manualFabricExtraWrap" style="display:none;">
+  <div class="row-3" id="manualFabricExtraWrap" style="display:none;">
     <div class="field"><label>الصناعة (بلد المنشأ) — إلزامي للقماش</label><select id="manualCardOrigin">
       <option value="">-- اختر --</option>
     </select></div>
@@ -1409,6 +1413,7 @@
       <option value="صيفي">صيفي</option>
       <option value="شتوي">شتوي</option>
     </select></div>
+    <div class="field"><label>عرض القماش</label><select id="manualCardWidth"><option value="عرضين">عرضين</option><option value="عرض">عرض</option></select></div>
   </div>
   <div class="row-2">
     <div class="field"><label id="manualCardCostLabel">تكلفة الوحدة (ريال)</label><input type="number" id="manualCardCost" min="0" step="0.01" placeholder="0"></div>
@@ -1434,11 +1439,17 @@
 
 <div class="tab-panel" id="tab-suppliers">
 <div class="panel">
-  <h2>الموردين</h2>
+  <h2>الموردين والدائنين</h2>
+  <p class="sub">كل جهة يطلبها المحل فلوس: مورد، صاحب العقار (إيجار)، أو شخص. الدين السابق (من قبل البرنامج) يسجّله المدير، والسداد من زر «تسديد» من أي صندوق متى ما توفرت السيولة — والسداد ما ينحسب مصروف على الشهر لأنه دين قديم.</p>
   <div class="row-3">
-    <div class="field"><label>اسم المورد</label><input type="text" id="newSupplierName"></div>
+    <div class="field"><label>الاسم</label><input type="text" id="newSupplierName"></div>
+    <div class="field"><label>النوع</label><select id="newSupplierKind"><option value="مورد">مورد</option><option value="إيجار">إيجار</option><option value="شخص">شخص</option><option value="أخرى">أخرى</option></select></div>
     <div class="field"><label>رقم الجوال</label><input type="text" id="newSupplierPhone"></div>
-    <div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-ghost" id="addSupplierBtn" style="width:100%;">إضافة مورد</button></div>
+  </div>
+  <div class="row-3">
+    <div class="field" id="newSupplierDebtWrap"><label>دين سابق على المحل (قبل البرنامج) — للمدير</label><input type="number" id="newSupplierDebt" min="0" placeholder="0"></div>
+    <div class="field" id="newSupplierDebtNoteWrap"><label>ملاحظة الدين (مثلاً: إيجار شهرين متأخر)</label><input type="text" id="newSupplierDebtNote"></div>
+    <div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-ghost" id="addSupplierBtn" style="width:100%;">إضافة</button></div>
   </div>
   <div id="suppliersList"></div>
 </div>
