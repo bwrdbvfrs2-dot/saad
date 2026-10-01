@@ -24,6 +24,10 @@ const STATE_DOC = db.collection("shop").doc("state");
 // one entry per save of shop/state, written in the same transaction — the security rules refuse a save
 // without its entry, and the entry carries the real signed-in account, so no change goes untraced
 const WRITE_LOG_COL = db.collection("writeLog");
+// the type-picker libraries (garment/collar/cufflink… types with their pictures) are most of the shop
+// data by size, and they almost never change — each lives in its own catalog/{key} document instead of
+// riding along with every save of shop/state
+const CATALOG_COL = db.collection("catalog");
 const AUDIT_LOG_COL = db.collection("auditLog"); // separate top-level collection — NEVER written into the shop/state document, so it survives even a full state overwrite
 
 async function logAudit(action, details){
