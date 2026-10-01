@@ -1434,11 +1434,17 @@
 
 <div class="tab-panel" id="tab-suppliers">
 <div class="panel">
-  <h2>الموردين</h2>
+  <h2>الموردين والدائنين</h2>
+  <p class="sub">كل جهة يطلبها المحل فلوس: مورد، صاحب العقار (إيجار)، أو شخص. الدين السابق (من قبل البرنامج) يسجّله المدير، والسداد من زر «تسديد» من أي صندوق متى ما توفرت السيولة — والسداد ما ينحسب مصروف على الشهر لأنه دين قديم.</p>
   <div class="row-3">
-    <div class="field"><label>اسم المورد</label><input type="text" id="newSupplierName"></div>
+    <div class="field"><label>الاسم</label><input type="text" id="newSupplierName"></div>
+    <div class="field"><label>النوع</label><select id="newSupplierKind"><option value="مورد">مورد</option><option value="إيجار">إيجار</option><option value="شخص">شخص</option><option value="أخرى">أخرى</option></select></div>
     <div class="field"><label>رقم الجوال</label><input type="text" id="newSupplierPhone"></div>
-    <div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-ghost" id="addSupplierBtn" style="width:100%;">إضافة مورد</button></div>
+  </div>
+  <div class="row-3">
+    <div class="field" id="newSupplierDebtWrap"><label>دين سابق على المحل (قبل البرنامج) — للمدير</label><input type="number" id="newSupplierDebt" min="0" placeholder="0"></div>
+    <div class="field" id="newSupplierDebtNoteWrap"><label>ملاحظة الدين (مثلاً: إيجار شهرين متأخر)</label><input type="text" id="newSupplierDebtNote"></div>
+    <div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-ghost" id="addSupplierBtn" style="width:100%;">إضافة</button></div>
   </div>
   <div id="suppliersList"></div>
 </div>

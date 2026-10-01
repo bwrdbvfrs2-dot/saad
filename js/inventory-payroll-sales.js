@@ -385,26 +385,66 @@ async function deleteItemCard(id){
   }
 }
 
+function supplierOpeningDebt(s){ return (s.openingDebts||[]).reduce((a,d)=>a+d.amount,0); }
 function renderSuppliers(){
   const el = $("suppliersList");
-  if(!state.suppliers.length){ el.innerHTML = `<p class="sub">ما فيه موردين بعد.</p>`; return; }
-  el.innerHTML = state.suppliers.map(s=>`<div class="garment-card">
-    <span class="tag">${esc(s.name)}${esc(s.phone?" — "+s.phone:"")}</span>
+  const isAdmin = currentUser && currentUser.role==="مدير";
+  ["newSupplierDebtWrap","newSupplierDebtNoteWrap"].forEach(id=>{ if($(id)) $(id).style.display = isAdmin ? "" : "none"; });
+  if(!state.suppliers.length){ el.innerHTML = `<p class="sub">ما فيه موردين أو دائنين بعد.</p>`; return; }
+  el.innerHTML = state.suppliers.map(s=>{
+    const opening = supplierOpeningDebt(s), paid = (s.payments||[]).reduce((a,p)=>a+p.amount,0);
+    return `<div class="garment-card">
+    <span class="tag">${esc(s.name)} — ${esc(s.kind||"مورد")}${esc(s.phone?" — "+s.phone:"")}</span>
     <p style="margin:6px 0;font-weight:700;color:${s.balance>0?'var(--loss)':'var(--profit)'};">المستحق له: ${s.balance.toFixed(0)} ريال</p>
+    ${opening||paid ? `<p class="sub" style="margin:4px 0;">${opening?`دين سابق مسجّل: ${opening.toFixed(0)} ريال${(s.openingDebts||[]).filter(d=>d.note).map(d=>` (${esc(d.note)})`).join("")}`:""}${opening&&paid?" — ":""}${paid?`المسدّد حتى الآن: ${paid.toFixed(0)} ريال`:""}</p>` : ""}
     ${s.balance>0 ? `
     <div class="row-3">
       <div class="field"><label>مبلغ التسديد</label><input type="number" class="supplier-pay-amount" data-sup="${s.id}" min="0" placeholder="0"></div>
       <div class="field"><label>من صندوقي</label><select class="supplier-pay-box" data-sup="${s.id}">${userBoxes(currentUser.username).map(b=>`<option value="${b.id}">${b.name} (${typeLabel(b.type)}) — ${boxTotal(b).toFixed(0)} ﷼</option>`).join("")}</select></div>
       <div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-gold btn-sm" style="width:100%;" onclick="paySupplier('${s.id}')">تسديد</button></div>
     </div>` : ``}
-  </div>`).join("");
+    ${isAdmin ? `<div class="actions-row" style="margin-top:6px;"><button class="btn btn-ghost btn-sm" onclick="addSupplierOpeningDebt('${s.id}')">إضافة دين سابق</button></div>` : ""}
+  </div>`;
+  }).join("");
 }
-function addSupplier(){
-  const name = $("newSupplierName").value.trim(), phone = $("newSupplierPhone").value.trim();
-  if(!name){ showToast("أدخل اسم المورد"); return; }
-  state.suppliers.push({id:newId(), name, phone, notes:"", balance:0});
-  $("newSupplierName").value=""; $("newSupplierPhone").value="";
-  saveState(); renderAll(); showToast("تم إضافة المورد");
+function readOpeningDebtInputs(){
+  const amount = parseFloat(($("newSupplierDebt")||{}).value)||0, note = (($("newSupplierDebtNote")||{}).value||"").trim();
+  return {amount, note};
+}
+async function addSupplier(){
+  const name = $("newSupplierName").value.trim(), phone = $("newSupplierPhone").value.trim(), kind = ($("newSupplierKind")||{}).value || "مورد";
+  if(!name){ showToast("أدخل الاسم"); return; }
+  if(state.suppliers.some(x=>x.name===name)){ showToast("الاسم موجود من قبل — أضف الدين السابق من بطاقته"); return; }
+  const {amount, note} = readOpeningDebtInputs();
+  if(amount<0){ showToast("المبلغ لازم يكون موجب"); return; }
+  if(amount>0 && (!currentUser || currentUser.role!=="مدير")){ showToast("تسجيل دين سابق للمدير فقط"); return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
+  const s = {id:newId(), name, phone, kind, notes:"", balance:0, openingDebts:[]};
+  if(amount>0){ s.openingDebts.push({id:newId(), date:todayStr(), amount, note, recordedBy:currentUser.username}); s.balance += amount; }
+  state.suppliers.push(s);
+  if(!await saveStateWithRollback(snapshot)) return;
+  if(amount>0) logAudit("supplier_opening_debt", {supplierName:name, kind, amount, note});
+  ["newSupplierName","newSupplierPhone","newSupplierDebt","newSupplierDebtNote"].forEach(id=>{ if($(id)) $(id).value=""; });
+  showToast(amount>0 ? `تمت إضافة ${name} بدين سابق ${amount.toFixed(0)} ريال` : `تمت إضافة ${name}`);
+}
+// a debt from before the app, added to an existing supplier / landlord / person
+async function addSupplierOpeningDebt(supId){
+  const s = state.suppliers.find(x=>x.id===supId); if(!s) return;
+  if(!currentUser || currentUser.role!=="مدير"){ showToast("تسجيل دين سابق للمدير فقط"); return; }
+  const raw = prompt(`كم الدين السابق على المحل لـ${s.name} (ريال)؟`);
+  if(raw===null) return;
+  const amount = parseFloat(raw)||0;
+  if(!(amount>0)){ showToast("أدخل مبلغ صحيح"); return; }
+  const note = (prompt("ملاحظة (اختياري) — مثلاً: إيجار شهرين متأخر") || "").trim();
+  if(!await confirmWithPassword(`تسجيل دين سابق ${amount.toFixed(0)} ريال لـ${s.name}؟ ينضاف على المستحق له ويتسدد من زر «تسديد».\nأدخل كلمة مرورك للتأكيد.`)) return;
+  const snapshot = JSON.parse(JSON.stringify(state));
+  s.openingDebts = s.openingDebts||[];
+  s.openingDebts.push({id:newId(), date:todayStr(), amount, note, recordedBy:currentUser.username});
+  s.balance += amount;
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("supplier_opening_debt", {supplierName:s.name, kind:s.kind||"مورد", amount, note});
+    showToast(`تم تسجيل دين سابق ${amount.toFixed(0)} ريال لـ${s.name}`);
+  }
 }
 async function paySupplier(supId){
   const s = state.suppliers.find(x=>x.id===supId); if(!s) return;
@@ -422,7 +462,7 @@ async function paySupplier(supId){
   s.payments.push({id:newId(), date:todayStr(), amount, boxId:box.id, recordedBy:currentUser.username});
   if(await saveStateWithRollback(snapshot)){
     logAudit("supplier_paid", {supplierName:s.name, amount});
-    showToast("تم تسديد المورد");
+    showToast(`تم تسديد ${amount.toFixed(0)} ريال لـ${s.name} — المتبقي ${s.balance.toFixed(0)}`);
   }
 }
 
@@ -432,7 +472,7 @@ function refreshPurchaseForm(){
   const cards = state.itemCards.filter(c=>c.type===type);
   const curSupplier = $("purchSupplier").value, curSourceBox = $("purchSourceBox").value, curOrigin = $("purchOrigin").value;
   $("purchItemDatalist").innerHTML = cards.map(c=>`<option value="${esc(c.name)}"></option>`).join("");
-  $("purchSupplierDatalist").innerHTML = state.suppliers.map(s=>`<option value="${esc(s.name)}"></option>`).join("");
+  $("purchSupplierDatalist").innerHTML = state.suppliers.filter(s=>(s.kind||"مورد")==="مورد").map(s=>`<option value="${esc(s.name)}"></option>`).join("");
   if(curSupplier){ const s = state.suppliers.find(x=>x.id===curSupplier); if(s) $("purchSupplierSearch").value = s.name; }
   $("purchSourceBox").innerHTML = userBoxes(currentUser.username).map(b=>`<option value="${b.id}" ${b.id===curSourceBox?"selected":""}>${b.name} (${typeLabel(b.type)}) — ${boxTotal(b).toFixed(0)} ﷼</option>`).join("");
   $("purchOrigin").innerHTML = `<option value="">-- اختر --</option>` + state.fabricOrigins.map(o=>`<option value="${esc(o)}" ${o===curOrigin?"selected":""}>${esc(o)}</option>`).join("");
@@ -732,7 +772,7 @@ function previewPurchaseImage(id){
 function refreshReturnForm(){
   const curCard = $("returnCard").value, curSupplier = $("returnSupplier").value;
   $("returnCard").innerHTML = state.itemCards.map(c=>`<option value="${c.id}" ${c.id===curCard?"selected":""}>${esc(c.name)} (${c.type==="fabric"?"قماش":"منتج"})</option>`).join("");
-  $("returnSupplier").innerHTML = state.suppliers.map(s=>`<option value="${s.id}" ${s.id===curSupplier?"selected":""}>${esc(s.name)}</option>`).join("");
+  $("returnSupplier").innerHTML = state.suppliers.filter(s=>(s.kind||"مورد")==="مورد" || s.id===curSupplier).map(s=>`<option value="${s.id}" ${s.id===curSupplier?"selected":""}>${esc(s.name)}</option>`).join("");
   $("returnBox").innerHTML = userBoxes(currentUser.username).map(b=>`<option value="${b.id}">${b.name} (${typeLabel(b.type)})</option>`).join("");
   $("returnBoxWrap").style.display = $("returnPayStatus").value==="paid" ? "" : "none";
   const card = findItemCard($("returnCard").value);

@@ -850,7 +850,7 @@ const NAV_GROUPS = [
   ]},
   {title:"المخزون", color:"#8a6d3b", items:[
     {tab:"itemCards", label:"كروت الأصناف"},
-    {tab:"suppliers", label:"الموردين"},
+    {tab:"suppliers", label:"الموردين والدائنين"},
     {tab:"purchases", label:"فاتورة مشتريات جديدة"},
     {tab:"purchaseReturns", label:"مرتجع مشتريات"},
     {tab:"legacy", label:"الجرد الافتتاحي"},
