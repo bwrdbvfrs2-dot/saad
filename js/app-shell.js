@@ -906,7 +906,16 @@ const TAB_ICONS = {
 const GROUP_ICONS = { "الرئيسية":"home", "المبيعات":"shopping-bag", "الخياطة":"scissors", "العملاء":"users",
   "المخزون":"warehouse", "الحسابات":"wallet", "التقارير":"bar-chart-3", "الإعدادات":"settings" };
 function navIcon(tab){ return TAB_ICONS[tab] || "circle"; }
-function refreshLucideIcons(){ if(window.lucide) window.lucide.createIcons(); }
+// only icons not drawn yet: lucide.createIcons() redraws every icon on the page (hundreds, across all the
+// hidden tabs too), and it runs several times per screen refresh — that alone was ~2s per save on an older PC
+function refreshLucideIcons(){
+  if(!window.lucide) return;
+  const fresh = document.querySelectorAll("i[data-lucide]");
+  if(!fresh.length) return;
+  fresh.forEach(el=> el.setAttribute("data-lucide-new", el.getAttribute("data-lucide")));
+  window.lucide.createIcons({icons: window.lucide.icons, nameAttr: "data-lucide-new"});
+  document.querySelectorAll("[data-lucide-new]").forEach(el=> el.removeAttribute("data-lucide-new"));
+}
 function emptyStateHtml(icon, message){
   return `<div class="empty"><div class="big"><i data-lucide="${icon}"></i></div><div>${message}</div></div>`;
 }
