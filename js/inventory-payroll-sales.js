@@ -153,6 +153,7 @@ function renderItemCards(){
         <button class="btn btn-ghost btn-sm" onclick="showItemStatement('${c.id}')">كشف حساب الصنف</button>
         ${c.type==="fabric"||c.type==="product" ? `<button class="btn btn-ghost btn-sm" onclick="openPrintLabelModal('${c.id}')">طباعة ملصق السعر والباركود</button>` : ""}
         <button class="btn btn-danger btn-sm" onclick="writeOffItemCard('${c.id}')">إتلاف الصنف</button>
+        ${isAdmin ? `<button class="btn btn-danger btn-sm" onclick="deleteItemCard('${c.id}')">حذف الصنف</button>` : ""}
       </div>` : "";
     return `<div class="garment-card">
       <div class="ic-header" data-card="${c.id}" style="display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;">
@@ -352,6 +353,32 @@ async function writeOffItemCard(id){
   if(await saveStateWithRollback(snapshot)){
     logAudit("item_written_off", {cardName:card.name, qty:avail});
     showToast("تم إتلاف الصنف وتصفير رصيده");
+  }
+}
+
+// a card entered by mistake can be removed outright — but only while nothing in the shop's records
+// points at it (a purchase, an invoice, a sale, a return, a write-off, an offer, an addon…). Once it
+// has history it can only be stopped or written off, so no past record loses its item.
+function itemCardUsage(id){
+  const {itemCards, openingBalanceAdjustments, openingBalanceEditRequests, ...rest} = state;
+  return JSON.stringify(rest).includes(JSON.stringify(id));
+}
+async function deleteItemCard(id){
+  const card = findItemCard(id);
+  if(!card) return;
+  if(!currentUser || currentUser.role!=="مدير"){ showToast("حذف الصنف للمدير فقط"); return; }
+  if(itemCardUsage(id) || (card.stockQty||0)!==0 || (card.reservedQty||0)!==0){
+    showToast("ما يمدي تحذف هالصنف — انستخدم بمشتريات أو فواتير أو حركات. تقدر توقفه (⏸ إيقاف) أو تعدّل بياناته بدل الحذف");
+    return;
+  }
+  const opening = card.openingBalance||0;
+  if(!await confirmWithPassword(`حذف الصنف "${card.name}" نهائياً؟${opening?` رصيد أول المدة (${opening}) ينحذف معه.`:""} ما انستخدم بأي فاتورة أو حركة، فما راح يتأثر شي ثاني.\nأدخل كلمة مرورك للتأكيد.`)) return;
+  const snapshot = JSON.parse(JSON.stringify(state));
+  state.itemCards = state.itemCards.filter(c=>c.id!==id);
+  state.openingBalanceEditRequests = (state.openingBalanceEditRequests||[]).filter(r=>r.cardId!==id);
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("item_card_deleted", {cardName:card.name, code:card.code, openingBalance:opening});
+    showToast(`تم حذف الصنف "${card.name}"`);
   }
 }
 
