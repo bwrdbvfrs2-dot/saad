@@ -187,7 +187,7 @@ function renderRepairsList(){
       </div>
     </div>`;
   }).join("");
-  if(window.lucide) lucide.createIcons();
+  refreshLucideIcons();
 }
 
 // ---- printing: the customer's receipt, and a small tag that stays on the thobe ----
