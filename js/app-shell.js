@@ -334,6 +334,43 @@ let saveQueue = Promise.resolve();
 let pendingSaves = 0;
 let deferredSnapshot = null;
 let latestOwnRev = 0;
+// ---- catalog (type libraries) kept outside shop/state — see CATALOG_COL ----
+let catalogKeysCache = null;
+function catalogKeys(){ return catalogKeysCache || (catalogKeysCache = Object.keys(defaultTypeLibraries())); }
+const catalogSaved = {}; // key -> {json, items}: the version stored in catalog/{key}
+let catalogDenied = false; // the rules for catalog/ aren't published yet — keep everything in shop/state
+let catalogUnsubscribe = null;
+// resolves once the catalog has loaded (or failed to), so the first shop/state snapshot can use it
+function startListeningToCatalog(){
+  return new Promise(resolve=>{
+    let first = true;
+    catalogUnsubscribe = CATALOG_COL.onSnapshot(snap=>{
+      let changedHere = false;
+      snap.docs.forEach(d=>{
+        const k = d.id, items = d.data().items;
+        if(!catalogKeys().includes(k) || !Array.isArray(items)) return;
+        const json = stableJson(items);
+        if(catalogSaved[k] && catalogSaved[k].json===json) return;
+        catalogSaved[k] = {json, items};
+        // another device changed it — take it, unless this device is mid-save
+        if(!first && state && pendingSaves===0){ state[k] = JSON.parse(JSON.stringify(items)); changedHere = true; }
+      });
+      if(changedHere && currentUser) renderAll();
+      if(first){ first = false; resolve(); }
+    }, err=>{
+      console.error("catalog listen error", err);
+      if(err && err.code==="permission-denied") catalogDenied = true;
+      if(first){ first = false; resolve(); }
+    });
+  });
+}
+function stopListeningToCatalog(){ if(catalogUnsubscribe){ catalogUnsubscribe(); catalogUnsubscribe = null; } }
+// the catalog version wins over a copy still sitting inside shop/state (from before the move, or
+// written back by a device still running an older version of the app)
+function mergeCatalogInto(data){
+  catalogKeys().forEach(k=>{ if(catalogSaved[k]) data[k] = JSON.parse(JSON.stringify(catalogSaved[k].items)); });
+  return data;
+}
 function saveState(){
   // captured now, so a later in-memory change can't leak into this save; queued so this device's
   // own back-to-back saves never race (and reject) each other
@@ -426,7 +463,10 @@ async function commitStatePayload(payload){
   // the write-log entry rides in the same transaction. Until the rules that allow (and require) it
   // are published, that write is refused — so a save refused WITH its entry is retried once without
   // it. Once the new rules are live the retry is refused too, so this never lets a save skip the log.
-  const runSave = withLog => db.runTransaction(async tx=>{
+  // libraries that differ from their catalog/ document are written there in the same transaction;
+  // every library that lives in catalog/ (or moves there now) is left out of shop/state
+  const catalogWrites = catalogKeys().filter(k=> Array.isArray(payload[k]) && (!catalogSaved[k] || catalogSaved[k].json!==stableJson(payload[k])));
+  const runSave = (withLog, withCatalog) => db.runTransaction(async tx=>{
       const cur = await tx.get(STATE_DOC);
       const curRev = (cur.exists && cur.data()._rev) || 0;
       if(curRev !== baseRev){ const err = new Error("shop/state changed since it was loaded"); err.code = "state-conflict"; throw err; }
@@ -439,21 +479,40 @@ async function commitStatePayload(payload){
         payload.users = server.users;
         payload.permissions = server.permissions;
       }
-      tx.set(STATE_DOC, payload);
+      const mainDoc = {...payload};
+      if(withCatalog){
+        catalogKeys().forEach(k=>{ if(catalogSaved[k] || catalogWrites.includes(k)) delete mainDoc[k]; });
+        catalogWrites.forEach(k=> tx.set(CATALOG_COL.doc(k), {items: payload[k], updatedAt: firebase.firestore.FieldValue.serverTimestamp(), by: fbAuth.currentUser ? fbAuth.currentUser.uid : null}));
+      }
+      tx.set(STATE_DOC, mainDoc);
       if(withLog) tx.set(WRITE_LOG_COL.doc(String(payload._rev)), {
         rev: payload._rev,
         uid: fbAuth.currentUser ? fbAuth.currentUser.uid : null,
         username: currentUser ? currentUser.username : "—",
         at: firebase.firestore.FieldValue.serverTimestamp(),
-        ...(cur.exists ? describeStateChange(cur.data(), payload) : {changed:["إنشاء بيانات المحل"], side:[]}),
+        // compared with the libraries as they were, wherever they were stored, so moving them isn't "a change"
+        ...(cur.exists ? describeStateChange(mergeCatalogInto(cur.data()), payload) : {changed:["إنشاء بيانات المحل"], side:[]}),
       });
     });
   try{
-    try{ await runSave(true); }
+    const attempt = async withLog=>{
+      if(!catalogDenied){
+        try{ await runSave(withLog, true); return true; }
+        catch(e){
+          if(!(e && e.code==="permission-denied") || !catalogWrites.length) throw e;
+          // the catalog/ rules may not be published yet: retry once keeping the libraries in shop/state
+          await runSave(withLog, false); catalogDenied = true; return false;
+        }
+      }
+      await runSave(withLog, false); return false;
+    };
+    let catalogWritten;
+    try{ catalogWritten = await attempt(true); }
     catch(e){
       if(!(e && e.code==="permission-denied")) throw e;
-      await runSave(false);
+      catalogWritten = await attempt(false);
     }
+    if(catalogWritten) catalogWrites.forEach(k=>{ catalogSaved[k] = {json: stableJson(payload[k]), items: JSON.parse(JSON.stringify(payload[k]))}; });
     ownCommittedRevs.set(baseRev, payload._rev);
     latestOwnRev = Math.max(latestOwnRev, payload._rev);
     return true;
@@ -504,7 +563,7 @@ let stateUnsubscribe = null;
 async function applyServerSnapshot(snap, isFirstLoad){
   // an older copy than this device's own latest save (its snapshot is on the way) is skipped
   if(!isFirstLoad && ((snap.data()._rev||0) < latestOwnRev)) return;
-  state = snap.data();
+  state = mergeCatalogInto(snap.data());
   typeLibrariesReseeded = false;
   addonSnapshotsBackfilled = false;
   normalizeState();
@@ -538,6 +597,7 @@ function stopListeningToState(){
 // runs once, right after a real sign-in succeeds (fresh login or first-time setup) — everything
 // that used to run unconditionally at boot but actually needs real shop data loaded first
 async function afterSignedIn(){
+  await startListeningToCatalog();
   await startListeningToState();
   applyThemeMode();
   applyShopBranding();
@@ -674,7 +734,7 @@ async function tryLogin(){
   if(!found) found = await repairLoginLink(u, email);
   if(!found){
     console.error("signed in but no matching state.users entry for uid", fbAuth.currentUser.uid);
-    stopListeningToState();
+    stopListeningToState(); stopListeningToCatalog();
     await fbAuth.signOut().catch(()=>{});
     const rec = state.users.find(x=>x.username===u);
     $("loginErr").textContent = rec && rec.role!=="مدير"
@@ -733,7 +793,7 @@ async function logout(){
   openingBalanceSessionGrants.clear();
   currentUser=null; sensitiveUnlocked=false; $("loginUser").value=""; $("loginPass").value=""; $("loginErr").textContent="";
   $("app").classList.add("hidden"); $("loginScreen").classList.remove("hidden");
-  stopListeningToState();
+  stopListeningToState(); stopListeningToCatalog();
   try{ await fbAuth.signOut(); }catch(e){ console.error("sign-out failed", e); }
 }
 function applyRolePermissions(){

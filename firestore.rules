@@ -65,6 +65,19 @@ service cloud.firestore {
         && writeLogged(request.resource.data._rev);
     }
 
+    // the type-picker libraries (garment/collar/… types and their pictures), one document per library,
+    // kept out of shop/state so every save doesn't carry them. Written alongside a save by whoever made
+    // the change; never deleted.
+    match /catalog/{lib} {
+      allow get, list: if isSignedIn();
+      allow create, update: if isSignedIn()
+        && request.resource.data.keys().hasOnly(['items','updatedAt','by'])
+        && request.resource.data.items is list
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
     // the mandatory write log: one entry per save, keyed by the revision it produced. Only created
     // together with that very save, never edited or removed (not even by the manager); only the
     // manager reads it.
