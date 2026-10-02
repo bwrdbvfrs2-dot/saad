@@ -1457,7 +1457,7 @@ function renderInventoryTab(){
 function refreshGarmentItemCardOptions(){
   const cards = activeFabricCards();
   const dl = $("fabricDatalist");
-  if(dl) dl.innerHTML = cards.map(c=>`<option value="${esc(c.name)}"></option>`).join("") + `<option value="أجرة تفصيل (بدون قماش)"></option>`;
+  if(dl) dl.innerHTML = `<option value="أجرة تفصيل (بدون قماش)"></option>` + cards.map(c=>`<option value="${esc(c.name)}"></option>`).join("");
 }
 function refreshSaleLineOptions(){
   const cards = [...activeFabricCards(), ...activeProductCards()];

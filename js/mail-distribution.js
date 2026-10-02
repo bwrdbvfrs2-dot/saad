@@ -259,7 +259,8 @@ async function saveInvoice(){
   if(!number){ showToast("أدخل رقم الفاتورة"); return; }
   const duplicateInv = state.invoices.find(i=>i.number===number && i.id!==editingId);
   if(duplicateInv){ showToast(`رقم الفاتورة ${number} مستخدم مسبقاً (فاتورة العميل: ${duplicateInv.customerName||"—"}) — اختر رقم ثاني`); return; }
-  const date = $("invDate").value || todayStr();
+  // the date can't be chosen: a new invoice is dated today (server date), an edited one keeps its own date
+  const date = editingId ? ((state.invoices.find(i=>i.id===editingId)||{}).date || todayStr()) : todayStr();
   if(!date){ showToast("أدخل تاريخ الفاتورة"); return; }
   const custName = $("custName").value.trim();
   const custMobile = $("custMobile").value.trim();
