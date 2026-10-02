@@ -225,6 +225,7 @@ function renderDailyPreview(){
       <div class="report-card"><div class="st">كاش / شبكة / خصم اليوم</div><div class="amt" style="font-size:13px;">${r.cash.toFixed(0)} / ${r.network.toFixed(0)} / ${r.discount.toFixed(0)} ﷼</div></div>
     </div>`;
   $("dailyReportView").innerHTML = buildDailyReportHtml(day, r);
+  if($("dailyWaTo")){ const cur=$("dailyWaTo").value; $("dailyWaTo").innerHTML = reportRecipientOptions(); $("dailyWaTo").value = cur; }
   const searchInp = $("dailyReceiptSearchInput");
   if(searchInp) searchInp.addEventListener("input", ()=>{
     const q = searchInp.value.trim();
@@ -291,6 +292,52 @@ function buildDailyReportHtml(day, r, username){
   </div>`;
   return html;
 }
+// ---- sending a daily report by WhatsApp: to a manager or an accountant, picked from a list ----
+function reportRecipients(){ return state.users.filter(u=> u.role==="مدير" || u.role==="محاسب"); }
+function reportRecipientOptions(){
+  const list = reportRecipients();
+  if(!list.length) return `<option value="">— ما فيه مدير أو محاسب —</option>`;
+  return `<option value="">— اختر المستلم —</option>` + list.map(u=> u.mobile
+    ? `<option value="${esc(u.username)}">${esc(u.username)} (${esc(u.role)}) — ${esc(u.mobile)}</option>`
+    : `<option value="${esc(u.username)}" disabled>${esc(u.username)} (${esc(u.role)}) — ما له جوال، أضفه من إعدادات المستخدمين</option>`).join("");
+}
+function dailyReportText(day, r, username){
+  const n = v=> (v||0).toFixed(0);
+  const L = [];
+  if(state.settings.shopName) L.push(`*${state.settings.shopName}*`);
+  L.push(username ? `التقرير اليومي — ${username}` : "التقرير اليومي الشامل");
+  L.push(`التاريخ: ${day}`);
+  L.push("");
+  const add = (label, count, extra)=>{ if(count) L.push(`• ${label}: ${count}${extra?` — ${extra}`:""}`); };
+  add("فواتير جديدة", r.newInvoices.length, `${n(r.newInvoices.reduce((a,i)=>a+invoiceSaleTotal(i),0))} ﷼`);
+  add("تسليمات", r.deliveredThisMonth.length + r.deliveredOverdue.length);
+  add("تسليمات الجرد الافتتاحي", r.legacyDelivered.length);
+  add("دفعات فواتير التفصيل", r.paymentRows.length, `كاش ${n(r.cash)} / شبكة ${n(r.network)}${r.discount?` / خصم ${n(r.discount)}`:""}`);
+  add("فواتير مبيعات", r.salesToday.length, `${n(r.salesToday.reduce((a,x)=>a+saleNetTotal(x),0))} ﷼`);
+  add("صيانة خارجية (استلام)", r.repairsToday.length);
+  add("سندات قبض وصرف", r.vouchersToday.length);
+  add("مصروفات", r.expensesToday.length, `${n(r.expensesTotal)} ﷼`);
+  add("مرتجعات", r.refundsToday.length + r.saleReturnsToday.length, `${n(r.refundsToday.reduce((a,x)=>a+(x.refundAmount||0),0) + r.saleReturnsToday.reduce((a,x)=>a+(x.refundAmount||0),0))} ﷼`);
+  add("تعديلات رصيد أول المدة", r.openingAdjustmentsToday.length);
+  if(!L.some(x=>x.startsWith("• "))) L.push("ما فيه أي حركة في هذا اليوم.");
+  const f = r.flows;
+  L.push("");
+  L.push(`الكاش: داخل ${n(f.cashIn)} / خارج ${n(f.cashOut)}`);
+  L.push(`الشبكة: داخل ${n(f.netIn)} / خارج ${n(f.netOut)}`);
+  L.push(`*صافي حركة الصناديق: ${n(f.cashIn-f.cashOut+f.netIn-f.netOut)} ﷼*`);
+  L.push("");
+  L.push(`أرسله: ${currentUser ? currentUser.username : ""}`);
+  return L.join("\n");
+}
+function sendDailyReportWhatsApp(selId, day, username){
+  const to = ($(selId)||{}).value;
+  if(!to){ showToast("اختر المستلم من القائمة"); return; }
+  const u = state.users.find(x=>x.username===to);
+  if(!u || !u.mobile){ showToast("المستلم ما له جوال — أضفه من إعدادات المستخدمين"); return; }
+  const r = buildDailyReport(day, username);
+  window.open(waLink(u.mobile, dailyReportText(day, r, username)), "_blank");
+  logAudit("daily_report_sent_whatsapp", {to, day, ofUser: username||"shop"});
+}
 // ---- the signed-in user's own day (the manager can look at anyone's) ----
 function myDailyTarget(){
   const sel = $("myDailyUser");
@@ -315,6 +362,7 @@ function renderMyDaily(){
       <div class="report-card"><div class="st">استلم كاش / شبكة</div><div class="amt" style="font-size:13px;">${r.cash.toFixed(0)} / ${r.network.toFixed(0)} ﷼</div></div>
     </div>`;
   $("myDailyView").innerHTML = buildDailyReportHtml(day, r, who);
+  if($("myDailyWaTo")){ const cur=$("myDailyWaTo").value; $("myDailyWaTo").innerHTML = reportRecipientOptions(); $("myDailyWaTo").value = cur; }
 }
 function printMyDaily(){
   renderMyDaily();
@@ -722,6 +770,7 @@ function renderUsers(){
       </div>`}
       <div class="row-2" style="margin-top:8px;">
         <div class="field" style="margin-bottom:0;"><label>تاريخ بداية العمل (تُمنع السلف قبل إقفال أول شهر عمل)</label><input type="date" class="edit-joined" data-idx="${i}" value="${u.joinedDate||""}"></div>
+        <div class="field" style="margin-bottom:0;"><label>جوال الموظف (لإرسال التقارير واتساب)</label><input type="tel" class="edit-mobile" data-idx="${i}" value="${esc(u.mobile||"")}" placeholder="05xxxxxxxx" maxlength="10" inputmode="numeric"></div>
       </div>
       <div class="row-3" style="margin-top:8px;">
         <div class="field" style="margin-bottom:0;"><label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" class="edit-discount-enabled" data-idx="${i}" ${u.discountEnabled?"checked":""}> تفعيل صلاحية الخصم</label></div>
@@ -810,7 +859,10 @@ async function saveUserEdit(i){
   const prevUser = state.users[i];
   const joinedInp = document.querySelector(`.edit-joined[data-idx="${i}"]`);
   const joinedDate = joinedInp && joinedInp.value ? joinedInp.value : (prevUser.joinedDate||undefined);
-  const updatedUser = {...prevUser, username,role,joinedDate,baseSalary,commissionEnabled,commissionRate,discountEnabled,discountType,discountValue,dailyCapacity,productionCapacity,wageMen,wageChild,wageChildSmall};
+  const mobileInp = document.querySelector(`.edit-mobile[data-idx="${i}"]`);
+  const mobile = mobileInp ? mobileInp.value.trim() : (prevUser.mobile||"");
+  if(mobile && !/^05\d{8}$/.test(mobile)){ showToast("جوال الموظف لازم يكون بصيغة 05XXXXXXXX"); return; }
+  const updatedUser = {...prevUser, mobile, username,role,joinedDate,baseSalary,commissionEnabled,commissionRate,discountEnabled,discountType,discountValue,dailyCapacity,productionCapacity,wageMen,wageChild,wageChildSmall};
   if(newPassword){
     // client-side Firebase Auth can't set another account's password directly — create a fresh
     // login account carrying the new password and retire the old one
@@ -1058,6 +1110,8 @@ $("printDailyBtn").addEventListener("click", printDaily);
 $("myDailyDate").addEventListener("change", renderMyDaily);
 $("myDailyUser").addEventListener("change", renderMyDaily);
 $("printMyDailyBtn").addEventListener("click", printMyDaily);
+$("myDailyWaBtn").addEventListener("click", ()=> sendDailyReportWhatsApp("myDailyWaTo", $("myDailyDate").value || todayStr(), myDailyTarget()));
+$("dailyWaBtn").addEventListener("click", ()=> sendDailyReportWhatsApp("dailyWaTo", $("dailyDate").value || todayStr(), null));
 $("findMissingReceiptBtn").addEventListener("click", findMissingReceiptInvoices);
 $("addLegacyBtn").addEventListener("click", addLegacyItem);
 function isInvoiceFormDirty(){
@@ -1102,6 +1156,7 @@ function performTabSwitch(name){
   if(name==="bot") renderBotTab();
   if(name==="repairs") renderRepairsTab();
   if(name==="report-myDaily") renderMyDaily();
+  if(name==="report-daily") renderDailyPreview();
   if(name==="invoice" && !editingId){
     // refresh dropdowns (e.g. newly-added measurement options) without discarding data already entered
     renderGarmentFields(readGarmentFields());
