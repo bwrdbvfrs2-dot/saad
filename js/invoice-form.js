@@ -562,7 +562,7 @@ function renderGarmentFields(prefill=null){
         }
         if(!qtyInp.value || forceUpdate) qtyInp.value = standardQty || "";
         if(availNote){
-          const avail = (c.stockQty||0) - (c.reservedQty||0);
+          const avail = cardAvailableQty(c); // the opening balance (manual or imported cards) counts too
           availNote.style.display = "";
           availNote.textContent = `الرصيد المتاح من "${c.name}": ${avail.toFixed(2)} ${unitLabel()}`;
           availNote.style.color = avail>0 ? "var(--profit)" : "var(--loss)";
