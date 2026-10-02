@@ -925,13 +925,24 @@
 
   <h3 style="margin:0 0 10px;font-size:14px;">قوائم البث والعروض الخاصة</h3>
   <p class="sub" style="margin-bottom:10px;">اعرض عملاءك حسب التصنيف والنشاط والتعثر، وابعث لهم عرض واتساب فردي مع تتبع من استلم الرسالة. القائمة تُبنى من الكود الرئيسي للعميل (رقم الجوال)، ما تكرر الأفراد المشتركين بنفس الرقم.</p>
-  <div class="row-3">
+  <div class="row-2">
+    <div class="field"><label>مصدر القائمة</label><select id="bcSource"><option value="customers">عملاء المحل</option><option value="imported">قائمة أرقام من ملف إكسل</option></select></div>
+  </div>
+  <div id="bcImportWrap" style="display:none;" class="garment-card">
+    <p class="sub" style="margin:0 0 8px;">ارفع ملف إكسل أو CSV فيه عمود <b>الجوال</b> وعمود <b>الاسم</b> (اختياري). اللي له اسم تنكتب له «مرحبا فلان» أو «مرحبا أبو فلان»، واللي بدون اسم «مرحبا». القائمة تنحفظ على هذا الجهاز.</p>
+    <div class="row-2">
+      <div class="field"><label>ملف الأرقام (xlsx أو csv)</label><input type="file" id="bcImportFile" accept=".xlsx,.xls,.csv"></div>
+      <div class="field" style="display:flex;align-items:flex-end;gap:6px;"><button class="btn btn-ghost btn-sm" id="bcImportTemplateBtn" style="flex:1;">تحميل قالب</button><button class="btn btn-ghost btn-sm" id="bcImportClearBtn" style="flex:1;">مسح القائمة</button></div>
+    </div>
+    <p class="sub" id="bcImportInfo" style="margin:4px 0 0;"></p>
+  </div>
+  <div class="row-3" id="bcCustomerFilters">
     <div class="field"><label>تصنيف العميل</label><select id="bcTierFilter"><option value="all">الكل</option><option value="bronze">برونزي</option><option value="silver">فضي</option><option value="gold">ذهبي</option></select></div>
     <div class="field"><label>نشاط العميل</label><select id="bcActivityFilter"><option value="all">الكل</option><option value="active">نشط</option><option value="dormant">خامل</option></select></div>
     <div class="field"><label>تعثر العميل</label><select id="bcDebtFilter"><option value="all">الكل</option><option value="overdue">عليه متأخرات</option><option value="clean">ماعليه متأخرات</option></select></div>
   </div>
   <div class="field"><label>بحث بالاسم أو الجوال</label><input type="text" id="bcSearchInput" placeholder="اكتب اسم أو رقم..."></div>
-  <div class="field"><label>نص الرسالة (سيُضاف تلقائياً "مرحباً [اسم العميل]" في البداية)</label><input type="text" id="bcMessageInput" placeholder="اتركه فاضي لاستخدام رسالة العرض الافتراضية من الإعدادات"></div>
+  <div class="field"><label>نص الرسالة (تنضاف تلقائياً «مرحبا [الاسم]» في البداية — أو «مرحبا» لو ما له اسم)</label><input type="text" id="bcMessageInput" placeholder="اتركه فاضي لاستخدام رسالة العرض الافتراضية من الإعدادات"></div>
   <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0;">
     <span id="broadcastCountLabel" class="sub"></span>
     <span style="display:flex;gap:8px;">

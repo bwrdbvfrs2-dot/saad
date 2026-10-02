@@ -11,7 +11,70 @@ function customerIsOverdue(mobile){
   const alert = getCustomerStandingAlert(mobile);
   return !!alert;
 }
+// ---- an imported list of numbers (Excel/CSV), kept on this device only ----
+const BC_IMPORT_KEY = "bcImportedContacts";
+function bcImported(){ try{ return JSON.parse(localStorage.getItem(BC_IMPORT_KEY)||"[]"); }catch(e){ return []; } }
+function bcSaveImported(list){ try{ localStorage.setItem(BC_IMPORT_KEY, JSON.stringify(list)); return true; }catch(e){ showToast("تعذّر حفظ القائمة على هذا الجهاز"); return false; } }
+// «مرحبا محمد» / «مرحبا أبو خالد» / «مرحبا» — a kunya (أبو/أم …) keeps its second word
+function campaignGreeting(name){
+  const w = String(name||"").trim().split(/\s+/).filter(Boolean);
+  if(!w.length) return "مرحبا";
+  const kunya = /^(أبو|ابو|أبا|ابا|أم|ام|بو)$/.test(w[0]) && w[1];
+  return `مرحبا ${kunya ? w[0]+" "+w[1] : w[0]}`;
+}
+function campaignMessage(name, template){ return `${campaignGreeting(name)}، ${template}`; }
+function bcSourceIsImported(){ return ($("bcSource")||{}).value==="imported"; }
+async function importBroadcastFile(file){
+  if(!file) return;
+  if(file.size > 5*1024*1024){ showToast("حجم الملف أكبر من 5 ميجا"); return; }
+  try{ await loadXlsxLib(); }catch(e){ showToast("تعذّر تحميل مكتبة الإكسل"); return; }
+  let aoa;
+  try{
+    const wb = XLSX.read(await file.arrayBuffer(), {type:"array"});
+    aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, defval:"", raw:true});
+  }catch(e){ showToast("تعذّرت قراءة الملف — تأكد إنه إكسل أو CSV"); return; }
+  const cols = detectLeadColumns(aoa);
+  if(!cols){ showToast("ما لقيت عمود فيه أرقام جوالات سعودية في الملف"); return; }
+  const body = (cols.headerRow ? aoa.slice(1) : aoa).filter(r=> r.some(v=>String(v??"").trim()!==""));
+  const list = bcImported(), have = new Set(list.map(x=>x.mobile));
+  let added = 0, bad = 0, dup = 0;
+  body.forEach(r=>{
+    const mobile = normalizeSaudiMobile(r[cols.phone]);
+    if(!mobile){ bad++; return; }
+    if(have.has(mobile)){ dup++; return; }
+    have.add(mobile); added++;
+    list.push({mobile, name: cols.name>=0 ? String(r[cols.name]??"").trim().slice(0,60) : ""});
+  });
+  if(!bcSaveImported(list)) return;
+  $("bcImportFile").value = "";
+  logAudit("broadcast_list_imported", {fileName:file.name, added, invalid:bad, duplicates:dup});
+  showToast(`انضاف ${added} رقم${bad?` — ${bad} رقم غلط ما انضاف`:""}${dup?` — ${dup} مكرر`:""}`);
+  broadcastPage = 0; renderBroadcastList();
+}
+async function downloadBroadcastTemplate(){
+  try{ await loadXlsxLib(); }catch(e){ showToast("تعذّر تحميل مكتبة الإكسل"); return; }
+  const ws = XLSX.utils.aoa_to_sheet([["الجوال","الاسم"],["0551234567","محمد"],["0559876543","أبو خالد"],["0501112233",""]]);
+  ws["!cols"] = [{wch:16},{wch:22}];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "الأرقام");
+  const blob = new Blob([XLSX.write(wb, {type:"array", bookType:"xlsx"})], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "broadcast-numbers-template.xlsx"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 30000);
+}
+async function clearBroadcastImported(){
+  if(!bcImported().length){ showToast("القائمة فاضية"); return; }
+  if(!await showConfirm("مسح قائمة الأرقام المستوردة من هذا الجهاز؟")) return;
+  bcSaveImported([]); renderBroadcastList();
+}
 function buildBroadcastList(){
+  const q0 = ($("bcSearchInput").value||"").trim();
+  if(bcSourceIsImported()){
+    let list = bcImported().map(x=>({mobile:x.mobile, name:x.name, label:x.name||"—"}));
+    if(q0) list = list.filter(x=> x.mobile.includes(q0) || (x.name||"").includes(q0));
+    return list;
+  }
+  return buildCustomerBroadcastList().map(c=>({mobile:c.mobile, name:c.individuals[0]?.name || "", label:`${c.code} — ${customerDisplayName(c)}`, code:c.code}));
+}
+function buildCustomerBroadcastList(){
   const tierFilter = $("bcTierFilter").value;
   const activityFilter = $("bcActivityFilter").value;
   const debtFilter = $("bcDebtFilter").value;
@@ -41,18 +104,21 @@ function renderBroadcastList(){
   if(broadcastPage < 0) broadcastPage = 0;
   const pageItems = list.slice(broadcastPage*BROADCAST_PAGE_SIZE, (broadcastPage+1)*BROADCAST_PAGE_SIZE);
   const template = $("bcMessageInput").value || state.settings.waPromoMessage;
+  const imported = bcSourceIsImported();
+  $("bcImportWrap").style.display = imported ? "" : "none";
+  $("bcCustomerFilters").style.display = imported ? "none" : "";
+  if(imported){ const all = bcImported(); $("bcImportInfo").textContent = all.length ? `في القائمة ${all.length} رقم — ${all.filter(x=>x.name).length} منها بأسماء.` : "القائمة فاضية — ارفع ملف."; }
   wrap.innerHTML = pageItems.length ? pageItems.map(c=>{
     const sent = state.broadcastCampaign.sentMobiles.includes(c.mobile);
-    const greetName = c.individuals[0]?.name || "";
-    const personalizedMsg = `مرحباً ${greetName}، ${template}`;
+    const personalizedMsg = campaignMessage(c.name, template);
     return `<div class="item-row" style="justify-content:space-between;">
-      <span>${c.code} — ${esc(customerDisplayName(c))} — ${esc(c.mobile)}</span>
+      <span>${esc(c.label)} — ${esc(c.mobile)} <span class="sub">(${esc(campaignGreeting(c.name))})</span></span>
       <span style="display:flex;align-items:center;gap:8px;">
         ${sent ? `<span style="color:var(--profit);font-weight:700;">أُرسلت</span>` : ""}
         <a href="${waLink(c.mobile, personalizedMsg)}" target="_blank" class="icon-btn" style="${sent?'opacity:0.5;':''}" onclick="markBroadcastSent('${c.mobile}')" title="إرسال واتساب"><i data-lucide="message-circle"></i></a>
       </span>
     </div>`;
-  }).join("") : `<p class="sub">ما فيه عملاء مطابقين لهذا الفلتر.</p>`;
+  }).join("") : `<p class="sub">${imported ? "ما فيه أرقام — ارفع ملف إكسل." : "ما فيه عملاء مطابقين لهذا الفلتر."}</p>`;
   $("broadcastPageLabel").textContent = `صفحة ${broadcastPage+1} من ${totalPages}`;
 }
 function markBroadcastSent(mobile){
@@ -64,11 +130,7 @@ function exportBroadcastToExcel(){
   if(!list.length){ showToast("ما فيه عملاء بالقائمة الحالية للتصدير"); return; }
   const template = $("bcMessageInput").value || state.settings.waPromoMessage;
   const rows = [["الكود","الاسم","رقم الجوال","نص الرسالة"]];
-  list.forEach(c=>{
-    const greetName = c.individuals[0]?.name || "";
-    const personalizedMsg = `مرحباً ${greetName}، ${template}`;
-    rows.push([c.code, customerDisplayName(c), c.mobile, personalizedMsg]);
-  });
+  list.forEach(c=> rows.push([c.code||"", c.name||"", c.mobile, campaignMessage(c.name, template)]));
   const csvContent = rows.map(r=> r.map(cell=> `"${String(cell).replace(/"/g,'""')}"`).join(",")).join("\r\n");
   const blob = new Blob(["\uFEFF"+csvContent], {type:"text/csv;charset=utf-8;"});
   const url = URL.createObjectURL(blob);
@@ -1601,6 +1663,10 @@ $("setWaPromo").addEventListener("input", ()=>{
   });
   ["bcTierFilter","bcActivityFilter","bcDebtFilter"].forEach(id=> $(id).addEventListener("change", ()=>{ broadcastPage=0; renderBroadcastList(); }));
   $("bcSearchInput").addEventListener("input", ()=>{ broadcastPage=0; renderBroadcastList(); });
+  $("bcSource").addEventListener("change", ()=>{ broadcastPage=0; renderBroadcastList(); });
+  $("bcImportFile").addEventListener("change", e=> importBroadcastFile(e.target.files[0]));
+  $("bcImportTemplateBtn").addEventListener("click", downloadBroadcastTemplate);
+  $("bcImportClearBtn").addEventListener("click", clearBroadcastImported);
   $("bcMessageInput").addEventListener("input", renderBroadcastList);
   $("resetBroadcastBtn").addEventListener("click", resetBroadcastCampaign);
   $("exportBroadcastExcelBtn").addEventListener("click", exportBroadcastToExcel);
