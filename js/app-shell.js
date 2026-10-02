@@ -927,11 +927,15 @@ function emptyStateHtml(icon, message){
   return `<div class="empty"><div class="big"><i data-lucide="${icon}"></i></div><div>${message}</div></div>`;
 }
 let sidebarOpenGroup = null;
+let sidebarLastActiveTab = null;
 function renderSidebar(){
   const nav = $("sidebarNav");
   if(!nav || !currentUser) return;
   const activeTab = document.querySelector(".tab-panel.active")?.id?.replace("tab-","");
-  if(!sidebarOpenGroup){
+  // the open screen's group opens when the screen changes — not on every redraw, or a group the user just
+  // closed (the one holding the open screen) sprang straight back open
+  if(activeTab!==sidebarLastActiveTab){
+    sidebarLastActiveTab = activeTab;
     const g = NAV_GROUPS.find(g=>g.items.some(it=>it.tab===activeTab));
     if(g) sidebarOpenGroup = g.title;
   }
