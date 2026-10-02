@@ -233,11 +233,18 @@ function normalizeState(){
   // migration: ensure newly-added report sections appear for existing installs
   Object.values(state.permissions).forEach(p=>{ if(p.reportSections && !p.reportSections.includes("fullLog")) p.reportSections.push("fullLog"); });
   if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("dashboard")) state.permissions["مدير"].tabs.push("dashboard");
-  if(state.permissions["محاسب"] && !state.permissions["محاسب"].tabs.includes("dashboard")) state.permissions["محاسب"].tabs.push("dashboard");
-  Object.values(state.permissions).forEach(p=>{ if(p.tabs && !p.tabs.includes("shiftClose")) p.tabs.push("shiftClose"); });
-  Object.values(state.permissions).forEach(p=>{ if(p.tabs && !p.tabs.includes("vouchers")) p.tabs.push("vouchers"); });
-  Object.values(state.permissions).forEach(p=>{ if(p.tabs && !p.tabs.includes("production")) p.tabs.push("production"); });
-  Object.values(state.permissions).forEach(p=>{ if(p.tabs && !p.tabs.includes("mail")) p.tabs.push("mail"); });
+  // tabs added in earlier versions, handed to the staff roles once per role — they used to be pushed back
+  // on every load, so the manager couldn't take any of them away from a role
+  const ONE_TIME_ROLE_TABS = {
+    "*": ["shiftClose","vouchers","production","mail"],
+    "محاسب": ["dashboard","report-noFabricWage","report-topExpenses","report-expenseSubItems","expenses","customerDebts"],
+    "كاشير": ["customerDebts"],
+  };
+  Object.entries(state.permissions).forEach(([role,p])=>{
+    if(!p.tabs || p.baseTabsGranted) return;
+    [...ONE_TIME_ROLE_TABS["*"], ...(ONE_TIME_ROLE_TABS[role]||[])].forEach(t=>{ if(!p.tabs.includes(t)) p.tabs.push(t); });
+    p.baseTabsGranted = true;
+  });
   if(!state.settings.qcTabGranted){ // one-time: hand the new quality-check tab to every employee role
     Object.values(state.permissions).forEach(p=>{ if(p.tabs && !p.tabs.includes("qc")) p.tabs.push("qc"); });
     state.settings.qcTabGranted = true;
@@ -269,17 +276,14 @@ function normalizeState(){
   if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("report-topExpenses")) state.permissions["مدير"].tabs.push("report-topExpenses");
   if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("report-auditLog")) state.permissions["مدير"].tabs.push("report-auditLog");
   if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("report-noFabricWage")) state.permissions["مدير"].tabs.push("report-noFabricWage");
-  if(state.permissions["محاسب"] && !state.permissions["محاسب"].tabs.includes("report-noFabricWage")) state.permissions["محاسب"].tabs.push("report-noFabricWage");
-  if(state.permissions["محاسب"] && !state.permissions["محاسب"].tabs.includes("report-topExpenses")) state.permissions["محاسب"].tabs.push("report-topExpenses");
   if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("report-expenseSubItems")) state.permissions["مدير"].tabs.push("report-expenseSubItems");
-  if(state.permissions["محاسب"] && !state.permissions["محاسب"].tabs.includes("report-expenseSubItems")) state.permissions["محاسب"].tabs.push("report-expenseSubItems");
-  if(state.permissions["محاسب"] && !state.permissions["محاسب"].tabs.includes("expenses")) state.permissions["محاسب"].tabs.push("expenses");
-  if(state.permissions["محاسب"] && !state.permissions["محاسب"].tabs.includes("customerDebts")) state.permissions["محاسب"].tabs.push("customerDebts");
-  if(state.permissions["كاشير"] && !state.permissions["كاشير"].tabs.includes("customerDebts")) state.permissions["كاشير"].tabs.push("customerDebts");
   // migrate old reportSections sub-permissions into full standalone report tabs
   const REPORT_TAB_KEYS = ["broadcastCampaign","tailorMonthly","fullLog","search","undelivered","garmentInventory","salesRanking","vatCalc","returns","customers","daily","missingReceipt"];
+  // one-time per role (the mark lives on the role, like the repairs grant): running it on every load put back
+  // every report tab the manager had taken away, since the old section list still listed it
   Object.values(state.permissions).forEach(p=>{
-    if(!p.tabs) return;
+    if(!p.tabs || p.reportTabsMigrated) return;
+    p.reportTabsMigrated = true;
     const oldSections = p.reportSections || REPORT_TAB_KEYS; // if no old data, grant all (matches previous default-open behavior)
     REPORT_TAB_KEYS.forEach(key=>{
       const tabName = "report-"+key;
