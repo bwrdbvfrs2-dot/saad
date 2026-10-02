@@ -288,3 +288,14 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 /* the on-screen tables' 760px minimum must never apply to anything printed or shared as an image —
    on 58/80mm paper it pushed the qty/price/total columns off the edge */
 #printArea table, #receiptShareRoot table, #labelShareRoot table{ min-width:0 !important; }
+/* drop-down holding checkboxes (add-ons per thobe) — looks like a select when closed */
+.dd-select{position:relative;}
+.dd-select > summary{list-style:none;cursor:pointer;background:var(--surface2);border:1px solid var(--border);color:var(--ivory);border-radius:var(--r-sm);padding:10px 12px 10px 30px;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dd-select > summary::-webkit-details-marker{display:none;}
+.dd-select > summary::after{content:"▾";position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);}
+.dd-select[open] > summary{border-color:var(--gold);}
+.dd-menu{position:absolute;z-index:30;top:calc(100% + 4px);right:0;left:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);box-shadow:0 10px 24px -10px rgba(0,0,0,.35);padding:4px;max-height:260px;overflow:auto;}
+.dd-option{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:14px;margin:0;}
+.dd-option:hover{background:var(--surface2);}
+.dd-option input{width:auto;margin:0;accent-color:var(--gold);}
+.dd-option .dd-price{margin-right:auto;color:var(--muted);font-size:12px;}
