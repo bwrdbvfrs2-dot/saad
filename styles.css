@@ -299,3 +299,38 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 .dd-option:hover{background:var(--surface2);}
 .dd-option input{width:auto;margin:0;accent-color:var(--gold);}
 .dd-option .dd-price{margin-right:auto;color:var(--muted);font-size:12px;}
+/* ---- daily report (screen + print) ---- */
+.daily-report .dr-head{text-align:center;padding:10px 0 12px;margin-bottom:10px;border-bottom:2px solid var(--gold);}
+.daily-report .dr-shop{font-weight:800;font-size:16px;}
+.daily-report .dr-name{font-weight:700;font-size:15px;margin-top:2px;}
+.daily-report .dr-date{color:var(--muted);font-size:13px;margin-top:2px;}
+.daily-report .dr-section{margin:14px 0;}
+.daily-report .dr-title{display:flex;align-items:center;gap:8px;font-size:14px;margin:0 0 6px;padding:6px 10px;background:var(--surface3);border-right:4px solid var(--gold);border-radius:4px;}
+.daily-report .dr-count{font-size:11px;font-weight:700;background:var(--gold);color:#fff;border-radius:10px;padding:1px 8px;}
+.daily-report .dr-table{width:100%;border-collapse:collapse;}
+.daily-report .dr-table th,.daily-report .dr-table td{border:1px solid var(--border);padding:6px 8px;text-align:right;}
+.daily-report .dr-table th{background:var(--surface3);font-weight:700;}
+.daily-report .dr-table tbody tr:nth-child(even) td{background:var(--surface2);}
+.daily-report .dr-table tfoot td{font-weight:800;background:var(--surface3);border-top:2px solid var(--gold);}
+.daily-report .dr-empty{text-align:center;color:var(--muted);padding:18px;border:1px dashed var(--border);border-radius:6px;}
+.daily-report .dr-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px;}
+.daily-report .dr-box{border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center;background:var(--surface2);}
+.daily-report .dr-net{border:2px solid var(--gold);}
+.daily-report .dr-lbl{font-size:12px;color:var(--muted);}
+.daily-report .dr-val{font-size:16px;font-weight:800;margin-top:2px;}
+.daily-report .dr-note{font-size:11px;color:var(--muted);margin-top:6px;}
+@media print{
+  #printArea .daily-report{font-size:11px;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  #printArea .daily-report .dr-head{border-bottom:2px solid #000;}
+  #printArea .daily-report .dr-date,#printArea .daily-report .dr-lbl,#printArea .daily-report .dr-note{color:#333 !important;}
+  #printArea .daily-report .dr-section{page-break-inside:auto;}
+  #printArea .daily-report .dr-title{font-size:12px !important;margin:12px 0 4px !important;background:#e6e6e6 !important;border-right:4px solid #000;color:#000 !important;}
+  #printArea .daily-report .dr-count{background:#000 !important;color:#fff !important;}
+  #printArea .daily-report table.dr-table th,#printArea .daily-report table.dr-table td{border:1px solid #444 !important;font-size:10.5px !important;padding:4px 6px !important;}
+  #printArea .daily-report table.dr-table th{background:#d9d9d9 !important;}
+  #printArea .daily-report table.dr-table tbody tr:nth-child(even) td{background:#f3f3f3 !important;}
+  #printArea .daily-report table.dr-table tfoot td{background:#e6e6e6 !important;font-weight:800;border-top:2px solid #000 !important;}
+  #printArea .daily-report .dr-box{background:#f3f3f3 !important;border:1px solid #444 !important;}
+  #printArea .daily-report .dr-net{border:2px solid #000 !important;}
+  #printArea .daily-report .no-print{display:none !important;}
+}
