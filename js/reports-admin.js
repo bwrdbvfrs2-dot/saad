@@ -22,6 +22,64 @@ function campaignGreeting(name){
   const kunya = /^(أبو|ابو|أبا|ابا|أم|ام|بو)$/.test(w[0]) && w[1];
   return `مرحبا ${kunya ? w[0]+" "+w[1] : w[0]}`;
 }
+// ---- an offer picture sent with every campaign message (kept on this device) ----
+const BC_IMAGE_KEY = "bcOfferImage";
+let bcImageBlob = null; // PNG, ready before any click so copying it keeps the click's permission
+function bcImageData(){ try{ return localStorage.getItem(BC_IMAGE_KEY)||""; }catch(e){ return ""; } }
+function bcPrepareImageBlob(){
+  const data = bcImageData();
+  bcImageBlob = null;
+  if(!data) return;
+  const img = new Image();
+  img.onload = ()=>{ const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext("2d").drawImage(img,0,0); c.toBlob(b=>{ bcImageBlob = b; }, "image/png"); };
+  img.src = data;
+}
+async function bcSetImage(file){
+  if(!file) return;
+  // shrunk to at most 1280px and saved as JPEG, so it fits in the browser's storage
+  const data = await new Promise((res, rej)=>{
+    const fr = new FileReader(); fr.onerror = rej;
+    fr.onload = ()=>{ const img = new Image(); img.onerror = rej; img.onload = ()=>{
+      const k = Math.min(1, 1280/Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth*k); c.height = Math.round(img.naturalHeight*k);
+      const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0,0,c.width,c.height); g.drawImage(img,0,0,c.width,c.height);
+      res(c.toDataURL("image/jpeg", 0.88)); }; img.src = fr.result; };
+    fr.readAsDataURL(file);
+  }).catch(()=>null);
+  $("bcImageFile").value = "";
+  if(!data){ showToast("تعذّرت قراءة الصورة"); return; }
+  try{ localStorage.setItem(BC_IMAGE_KEY, data); }catch(e){ showToast("الصورة كبيرة على ذاكرة المتصفح — جرّب صورة أصغر"); return; }
+  bcPrepareImageBlob(); renderBroadcastImage();
+  showToast("تمت إضافة صورة العرض");
+}
+function bcClearImage(){ try{ localStorage.removeItem(BC_IMAGE_KEY); }catch(e){} bcImageBlob = null; renderBroadcastImage(); }
+function renderBroadcastImage(){
+  const data = bcImageData();
+  $("bcImagePreview").style.display = data ? "" : "none";
+  if(data) $("bcImagePreview").src = data;
+  $("bcImageClearBtn").style.display = data ? "" : "none";
+  $("bcImageHint").style.display = data ? "" : "none";
+}
+// one contact: with a picture → share sheet (phones) or copy picture + open the chat (PC); without → the chat
+function sendBroadcastTo(mobile){
+  const item = buildBroadcastList().find(x=>x.mobile===mobile);
+  const template = $("bcMessageInput").value || state.settings.waPromoMessage;
+  const msg = campaignMessage(item ? item.name : "", template);
+  const markSent = ()=>{ markBroadcastSent(mobile); };
+  if(bcImageData()){
+    if(bcImageBlob && canShareImageFiles()){
+      navigator.share({files:[new File([bcImageBlob], "offer.png", {type:"image/png"})], text: msg}).then(markSent).catch(()=>{});
+      return;
+    }
+    if(bcImageBlob && window.ClipboardItem && navigator.clipboard && navigator.clipboard.write){
+      navigator.clipboard.write([new ClipboardItem({"image/png": bcImageBlob})])
+        .then(()=> showToast("صورة العرض منسوخة ✓ — في المحادثة اضغط Ctrl+V وأرسلها، ثم أرسل الرسالة"))
+        .catch(()=> showToast("ما قدرت أنسخ الصورة — حمّلها من المعاينة واسحبها للمحادثة"));
+    }
+  }
+  window.open(waLink(mobile, msg), "_blank");
+  markSent();
+}
 function campaignMessage(name, template){ return `${campaignGreeting(name)}، ${template}`; }
 function bcSourceIsImported(){ return ($("bcSource")||{}).value==="imported"; }
 async function importBroadcastFile(file){
@@ -115,7 +173,7 @@ function renderBroadcastList(){
       <span>${esc(c.label)} — ${esc(c.mobile)} <span class="sub">(${esc(campaignGreeting(c.name))})</span></span>
       <span style="display:flex;align-items:center;gap:8px;">
         ${sent ? `<span style="color:var(--profit);font-weight:700;">أُرسلت</span>` : ""}
-        <a href="${waLink(c.mobile, personalizedMsg)}" target="_blank" class="icon-btn" style="${sent?'opacity:0.5;':''}" onclick="markBroadcastSent('${c.mobile}')" title="إرسال واتساب"><i data-lucide="message-circle"></i></a>
+        <button type="button" class="icon-btn" style="${sent?'opacity:0.5;':''}" onclick="sendBroadcastTo('${c.mobile}')" title="${esc(personalizedMsg)}"><i data-lucide="message-circle"></i></button>
       </span>
     </div>`;
   }).join("") : `<p class="sub">${imported ? "ما فيه أرقام — ارفع ملف إكسل." : "ما فيه عملاء مطابقين لهذا الفلتر."}</p>`;
@@ -1667,6 +1725,9 @@ $("setWaPromo").addEventListener("input", ()=>{
   $("bcImportFile").addEventListener("change", e=> importBroadcastFile(e.target.files[0]));
   $("bcImportTemplateBtn").addEventListener("click", downloadBroadcastTemplate);
   $("bcImportClearBtn").addEventListener("click", clearBroadcastImported);
+  $("bcImageFile").addEventListener("change", e=> bcSetImage(e.target.files[0]));
+  $("bcImageClearBtn").addEventListener("click", bcClearImage);
+  bcPrepareImageBlob(); renderBroadcastImage();
   $("bcMessageInput").addEventListener("input", renderBroadcastList);
   $("resetBroadcastBtn").addEventListener("click", resetBroadcastCampaign);
   $("exportBroadcastExcelBtn").addEventListener("click", exportBroadcastToExcel);
