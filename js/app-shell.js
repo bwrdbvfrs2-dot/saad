@@ -222,7 +222,7 @@ function normalizeState(){
   if(!state.alterationReasons) state.alterationReasons=[];
   if(!state.alterationResponsibles || !state.alterationResponsibles.length) state.alterationResponsibles=["الخياط","القصاص","ماخذ المقاسات","الزبون نفسه"];
   if(!state.permissions){
-    const allTabs = ["invoice","dashboard","advisoryBalances","sensitiveFinancials","shiftClose","vouchers","production","mail","salesInvoice","invoicesList","distribution","scan","alteration","repairs","debts","customerDebts","legacy","itemCards","suppliers","purchases","purchaseReturns","balances","expenses","payroll","report-broadcastCampaign","report-tailorMonthly","report-fullLog","report-search","report-undelivered","report-garmentInventory","report-noFabricWage","report-salesRanking","report-vatCalc","report-returns","report-customers","report-daily","report-missingReceipt","report-topExpenses","report-expenseSubItems","report-auditLog","growth","archive","settingsShop","settingsFinance","settingsUsers","settingsProducts","settingsMarketing"];
+    const allTabs = ["invoice","dashboard","advisoryBalances","sensitiveFinancials","shiftClose","vouchers","production","mail","salesInvoice","invoicesList","distribution","scan","alteration","repairs","debts","customerDebts","legacy","itemCards","suppliers","purchases","purchaseReturns","balances","expenses","payroll","report-broadcastCampaign","report-tailorMonthly","report-fullLog","report-search","report-undelivered","report-garmentInventory","report-noFabricWage","report-salesRanking","report-vatCalc","report-returns","report-customers","report-daily","report-myDaily","report-missingReceipt","report-topExpenses","report-expenseSubItems","report-auditLog","growth","archive","settingsShop","settingsFinance","settingsUsers","settingsProducts","settingsMarketing"];
     const allSections = ["fullLog","search","undelivered","garmentInventory","salesRanking","vatCalc","returns","customers","daily","missingReceipt"];
     state.permissions = {
       "مدير": { tabs: [...allTabs], reportSections: [...allSections] },
@@ -250,6 +250,12 @@ function normalizeState(){
     if(!p.tabs || p.repairsTabGranted) return;
     if(!p.tabs.includes("repairs")) p.tabs.push("repairs");
     p.repairsTabGranted = true;
+  });
+  // one-time: every role gets its own daily report (same per-role mark as the repairs grant above)
+  Object.values(state.permissions).forEach(p=>{
+    if(!p.tabs || p.myDailyTabGranted) return;
+    if(!p.tabs.includes("report-myDaily")) p.tabs.push("report-myDaily");
+    p.myDailyTabGranted = true;
   });
   // وطني بوت: the manager's alone for now — staff get their handed-off conversations in a later phase
   if(state.permissions["مدير"] && !state.permissions["مدير"].tabs.includes("bot")) state.permissions["مدير"].tabs.push("bot");
@@ -874,7 +880,8 @@ const NAV_GROUPS = [
     {tab:"report-fullLog", label:"السجل الشامل"},
     {tab:"report-search", label:"البحث بحالة الفواتير والتطريز"},
     {tab:"report-salesRanking", label:"الأكثر والأقل مبيعاً"},
-    {tab:"report-daily", label:"التقرير اليومي"},
+    {tab:"report-myDaily", label:"التقرير اليومي"},
+    {tab:"report-daily", label:"التقرير اليومي الشامل"},
     {tab:"report-tailorMonthly", label:"تقرير الخياط الشهري"},
     {tab:"report-noFabricWage", label:"أجرة تفصيل بدون قماش"},
     {tab:"report-auditLog", label:"سجل التدقيق"},
@@ -899,7 +906,7 @@ const TAB_ICONS = {
   shiftClose:"calculator", payroll:"banknote", archive:"lock", advisoryBalances:"clipboard",
   sensitiveFinancials:"shield", "report-vatCalc":"percent", "report-topExpenses":"trending-down", "report-expenseSubItems":"receipt",
   "report-fullLog":"scroll-text", "report-search":"search", "report-salesRanking":"trophy",
-  "report-daily":"calendar", "report-tailorMonthly":"hard-hat", "report-auditLog":"history", growth:"trending-up",
+  "report-daily":"calendar", "report-myDaily":"calendar-check", "report-tailorMonthly":"hard-hat", "report-auditLog":"history", growth:"trending-up",
   settingsShop:"store", settingsFinance:"circle-dollar-sign", settingsUsers:"user-cog",
   settingsProducts:"shirt", settingsMarketing:"gift", mail:"mail-open", bot:"bot", repairs:"wrench",
 };

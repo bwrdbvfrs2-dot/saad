@@ -793,7 +793,7 @@ async function addDistPayment(inv){
       if(g.status==="ملغي" || g.status==="تسليم" || g.status==="معلقة") return;
       if(g.status==="جديد" || g.status==="قص") return; // ما تفصّل بعد — ما يصير يتسلم تلقائياً حتى لو الفاتورة اتسددت بالكامل
       if(g.status==="تفصيل" && state.settings.qcEnabled) return; // ينتظر فحص الجودة
-      g.status="تسليم"; if(!g.readyDate) g.readyDate=todayStr(); if(!g.deliveredDate) g.deliveredDate=todayStr(); autoDelivered++;
+      g.status="تسليم"; if(!g.readyDate) g.readyDate=todayStr(); if(!g.deliveredDate){ g.deliveredDate=todayStr(); g.deliveredBy=currentUser.username; } autoDelivered++;
     });
   }
   if(!await saveStateWithRollback(snapshot)) return; // form (payment inputs) stays as-is so the cashier can just retry
@@ -814,7 +814,7 @@ async function creditDeliverGarment(invId, idx){
   const snapshot = JSON.parse(JSON.stringify(state));
   g.status="تسليم";
   if(!g.readyDate) g.readyDate=todayStr();
-  if(!g.deliveredDate) g.deliveredDate=todayStr();
+  if(!g.deliveredDate){ g.deliveredDate=todayStr(); g.deliveredBy=currentUser.username; }
   if(!g.creditDelivered){ g.creditDelivered=true; g.creditAmount=amount; g.creditPaid=0; }
   if(!await saveStateWithRollback(snapshot)) return;
   logAudit("garment_credit_delivered", {invoiceNumber:inv.number, garmentIdx:idx, amount});

@@ -177,36 +177,39 @@ function showCustomerReport(mobile, filterName){
 }
 
 // ---------------- daily report ----------------
-function buildDailyReport(day){
-  const newInvoices = state.invoices.filter(i=>i.date===day);
+// username given: only what that person did that day (their invoices, deliveries, payments taken, their
+// boxes' movements…); without it, the whole shop's day
+function buildDailyReport(day, username){
+  const mine = who=> !username || who===username;
+  const newInvoices = state.invoices.filter(i=>i.date===day && mine(i.createdBy));
   const deliveredThisMonth = [];
   const deliveredOverdue = [];
   state.invoices.forEach(inv=> inv.garments.forEach(g=>{
-    if(g.deliveredDate===day){
+    if(g.deliveredDate===day && mine(g.deliveredBy)){
       if(inv.originMonth===state.settings.currentMonth) deliveredThisMonth.push({inv,g});
       else deliveredOverdue.push({inv,g});
     }
   }));
-  const legacyDelivered = state.legacyItems.filter(x=>x.lastDeliveryDate===day || x.deliveredDate===day);
-  const vouchersToday = state.vouchers.filter(v=>v.date===day);
-  const expensesToday = state.expenses.filter(e=>e.date===day);
+  const legacyDelivered = username ? [] : state.legacyItems.filter(x=>x.lastDeliveryDate===day || x.deliveredDate===day);
+  const vouchersToday = state.vouchers.filter(v=>v.date===day && mine(v.recordedBy));
+  const expensesToday = state.expenses.filter(e=>e.date===day && mine(e.recordedBy));
   const expensesTotal = expensesToday.reduce((a,e)=>a+e.amount,0);
-  const openingAdjustmentsToday = (state.openingBalanceAdjustments||[]).filter(a=>a.date===day);
+  const openingAdjustmentsToday = (state.openingBalanceAdjustments||[]).filter(a=>a.date===day && mine(a.username));
   let cash=0, network=0, discount=0; const paymentRows=[];
   state.invoices.forEach(inv=> (inv.payments||[]).forEach(p=>{
-    if(p.date===day){ cash+=p.cash||0; network+=p.network||0; discount+=p.discount||0; paymentRows.push({inv,p}); }
+    if(p.date===day && mine(p.recordedBy)){ cash+=p.cash||0; network+=p.network||0; discount+=p.discount||0; paymentRows.push({inv,p}); }
   }));
   // ready-made sales, their returns and tailoring refunds of the day — none of these were in the report
-  const salesToday = state.salesInvoices.filter(s=>(s.payment&&s.payment.date||s.date)===day);
+  const salesToday = state.salesInvoices.filter(s=>(s.payment&&s.payment.date||s.date)===day && mine(s.recordedBy));
   // external repairs: new ones taken in today, and every repair payment received today
-  const repairsToday = (state.repairs||[]).filter(r=>r.date===day);
+  const repairsToday = (state.repairs||[]).filter(r=>r.date===day && mine(r.createdBy));
   const repairPaymentsToday = [];
-  (state.repairs||[]).forEach(r=> (r.payments||[]).forEach(p=>{ if(p.date===day) repairPaymentsToday.push({r,p}); }));
-  const saleReturnsToday = (state.salesReturns||[]).filter(r=>r.date===day);
-  const refundsToday = state.invoiceReturns.filter(r=>r.date===day && r.refundAmount);
+  (state.repairs||[]).forEach(r=> (r.payments||[]).forEach(p=>{ if(p.date===day && mine(p.recordedBy)) repairPaymentsToday.push({r,p}); }));
+  const saleReturnsToday = (state.salesReturns||[]).filter(r=>r.date===day && mine(r.recordedBy));
+  const refundsToday = state.invoiceReturns.filter(r=>r.date===day && r.refundAmount && mine(r.recordedBy));
   // every box movement of the day, split by box type — the real in/out of cash and of network
   const boxType = id=> (findCashBox(id)||{}).type;
-  const moves = collectBoxMovements().filter(m=>m.date===day);
+  const moves = collectBoxMovements().filter(m=>m.date===day && (!username || (findCashBox(m.boxId)||{}).owner===username));
   const sumType = (t, sign)=> moves.filter(m=>boxType(m.boxId)===t && Math.sign(m.amount)===sign).reduce((a,m)=>a+m.amount,0);
   const flows = {cashIn:sumType("cash",1), cashOut:-sumType("cash",-1), netIn:sumType("network",1), netOut:-sumType("network",-1)};
   return {newInvoices, deliveredThisMonth, deliveredOverdue, legacyDelivered, vouchersToday, expensesToday, expensesTotal, openingAdjustmentsToday, cash, network, discount, paymentRows, salesToday, saleReturnsToday, refundsToday, flows, moves, repairsToday, repairPaymentsToday};
@@ -230,8 +233,8 @@ function renderDailyPreview(){
     });
   });
 }
-function buildDailyReportHtml(day, r){
-  let html = `<h2>التقرير اليومي — ${day}</h2>`;
+function buildDailyReportHtml(day, r, username){
+  let html = username ? `<h2>التقرير اليومي — ${esc(username)} — ${day}</h2>` : `<h2>التقرير اليومي الشامل — ${day}</h2>`;
   html += `<h3>فواتير جديدة اليوم (${r.newInvoices.length})</h3><table><thead><tr><th>رقم</th><th>العميل</th><th>عدد الثياب</th><th>الإجمالي</th></tr></thead><tbody>`;
   r.newInvoices.forEach(inv=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${inv.garments.length}</td><td>${invoiceSaleTotal(inv).toFixed(0)} ﷼</td></tr>`);
   if(!r.newInvoices.length) html+=`<tr><td colspan="4">لا يوجد</td></tr>`;
@@ -244,10 +247,12 @@ function buildDailyReportHtml(day, r){
   r.deliveredOverdue.forEach(({inv,g})=> html+=`<tr><td>${esc(inv.number)}</td><td>${monthDisplay(inv.originMonth)}</td><td>${esc(g.fabricType)}</td><td>${garmentSalePrice(g).toFixed(0)} ﷼</td><td>${g.deliveryReceipt||"—"}</td></tr>`);
   if(!r.deliveredOverdue.length) html+=`<tr><td colspan="5">لا يوجد</td></tr>`;
   html += `</tbody></table>`;
+  if(!username){
   html += `<h3>تسليمات الجرد الافتتاحي اليوم (${r.legacyDelivered.length})</h3><table><thead><tr><th>اسم العميل</th><th>الجوال</th><th>الوصف</th><th>المتبقي وقت التسليم</th></tr></thead><tbody>`;
   r.legacyDelivered.forEach(x=> html+=`<tr><td>${esc(x.name)}</td><td>${esc(x.mobile)}</td><td>${esc(x.desc)}</td><td>${x.remaining?x.remaining.toFixed(0)+" ﷼":"—"}</td></tr>`);
   if(!r.legacyDelivered.length) html+=`<tr><td colspan="4">لا يوجد</td></tr>`;
   html += `</tbody></table>`;
+  }
   html += `<h3>سندات القبض والصرف اليوم (${r.vouchersToday.length})</h3><table><thead><tr><th>رقم السند</th><th>النوع</th><th>المبلغ</th><th>الطرف</th><th>السبب</th></tr></thead><tbody>`;
   r.vouchersToday.forEach(v=> html+=`<tr><td>${v.voucherNo}</td><td>${v.type==="receipt"?"قبض":"صرف"}</td><td>${v.amount.toFixed(0)} ﷼</td><td>${esc(v.party)}</td><td>${esc(v.reason)}</td></tr>`);
   if(!r.vouchersToday.length) html+=`<tr><td colspan="5">لا يوجد</td></tr>`;
@@ -288,8 +293,37 @@ function buildDailyReportHtml(day, r){
     <div class="report-card"><div class="st">الشبكة — داخل / خارج (بعد رسوم البنك)</div><div class="amt" style="font-size:14px;">${f.netIn.toFixed(0)} / ${f.netOut.toFixed(0)} ﷼</div></div>
     <div class="report-card"><div class="st">صافي حركة الصناديق اليوم</div><div class="amt">${(f.cashIn-f.cashOut+f.netIn-f.netOut).toFixed(0)} ﷼</div></div>
   </div>
-  <p class="sub" style="margin-top:6px;">صافي الكاش اليوم: ${(f.cashIn-f.cashOut).toFixed(0)} ﷼ — يشمل كل الحركات المسجّلة (دفعات، مبيعات، سندات، مصروفات، مرتجعات، مشتريات، موردين، رواتب، تحويلات).</p>`;
+  <p class="sub" style="margin-top:6px;">صافي الكاش اليوم${username?` بصناديق ${esc(username)}`:""}: ${(f.cashIn-f.cashOut).toFixed(0)} ﷼ — يشمل كل الحركات المسجّلة (دفعات، مبيعات، سندات، مصروفات، مرتجعات، مشتريات، موردين، رواتب، تحويلات).</p>`;
   return html;
+}
+// ---- the signed-in user's own day (the manager can look at anyone's) ----
+function myDailyTarget(){
+  const sel = $("myDailyUser");
+  return (currentUser && currentUser.role==="مدير" && sel && sel.value) ? sel.value : (currentUser ? currentUser.username : "");
+}
+function renderMyDaily(){
+  if(!currentUser || !$("myDailyView")) return;
+  const isAdmin = currentUser.role==="مدير";
+  const sel = $("myDailyUser");
+  if(sel){
+    $("myDailyUserWrap").style.display = isAdmin ? "" : "none";
+    if(isAdmin){ const cur = sel.value || currentUser.username; sel.innerHTML = state.users.map(u=>`<option value="${esc(u.username)}" ${u.username===cur?"selected":""}>${esc(u.username)} (${esc(u.role)})</option>`).join(""); }
+  }
+  if(!$("myDailyDate").value) $("myDailyDate").value = todayStr();
+  const day = $("myDailyDate").value, who = myDailyTarget();
+  const r = buildDailyReport(day, who);
+  $("myDailyPreview").innerHTML = `
+    <div class="report-grid" style="grid-template-columns:repeat(4,1fr);">
+      <div class="report-card"><div class="st">فواتير سجّلها</div><div class="amt">${r.newInvoices.length}</div></div>
+      <div class="report-card"><div class="st">ثياب سلّمها</div><div class="amt">${r.deliveredThisMonth.length + r.deliveredOverdue.length}</div></div>
+      <div class="report-card"><div class="st">فواتير مبيعات</div><div class="amt">${r.salesToday.length}</div></div>
+      <div class="report-card"><div class="st">استلم كاش / شبكة</div><div class="amt" style="font-size:13px;">${r.cash.toFixed(0)} / ${r.network.toFixed(0)} ﷼</div></div>
+    </div>`;
+  $("myDailyView").innerHTML = buildDailyReportHtml(day, r, who);
+}
+function printMyDaily(){
+  renderMyDaily();
+  printHtml($("myDailyView").innerHTML);
 }
 function printDaily(){
   const day = $("dailyDate").value || todayStr();
@@ -1026,6 +1060,9 @@ $("printCustomersBtn").addEventListener("click", printCustomers);
 $("exportCustomersBtn").addEventListener("click", exportCustomersCsv);
 $("dailyDate").addEventListener("change", renderDailyPreview);
 $("printDailyBtn").addEventListener("click", printDaily);
+$("myDailyDate").addEventListener("change", renderMyDaily);
+$("myDailyUser").addEventListener("change", renderMyDaily);
+$("printMyDailyBtn").addEventListener("click", printMyDaily);
 $("findMissingReceiptBtn").addEventListener("click", findMissingReceiptInvoices);
 $("addLegacyBtn").addEventListener("click", addLegacyItem);
 function isInvoiceFormDirty(){
@@ -1069,6 +1106,7 @@ function performTabSwitch(name){
   if(name==="sensitiveFinancials") renderSensitiveGate();
   if(name==="bot") renderBotTab();
   if(name==="repairs") renderRepairsTab();
+  if(name==="report-myDaily") renderMyDaily();
   if(name==="invoice" && !editingId){
     // refresh dropdowns (e.g. newly-added measurement options) without discarding data already entered
     renderGarmentFields(readGarmentFields());

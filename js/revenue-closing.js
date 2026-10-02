@@ -552,7 +552,7 @@ async function completeGarmentAdvance(inv, idx, next, snapshot){
     g.status = next;
     if(g.status==="قص" && !g.cutDate) g.cutDate = todayStr();
     if(g.status==="جاهز" && !g.readyDate) g.readyDate = todayStr();
-    if(g.status==="تسليم" && !g.deliveredDate) g.deliveredDate = todayStr();
+    if(g.status==="تسليم" && !g.deliveredDate){ g.deliveredDate = todayStr(); g.deliveredBy = currentUser.username; }
   });
   if(!await saveStateWithRollback(snapshot)){ if(waPopup) waPopup.close(); return false; }
   $("quickScanInput").value=""; $("quickScanPicker").innerHTML="";
@@ -924,7 +924,7 @@ async function saveDistribution(inv){
     g.status=newStatus; g.tailor=intents[i].newTailor;
     if(g.status==="قص" && !g.cutDate) g.cutDate = todayStr();
     if(g.status==="جاهز" && !g.readyDate) g.readyDate = todayStr();
-    if(g.status==="تسليم" && !g.deliveredDate) g.deliveredDate = todayStr();
+    if(g.status==="تسليم" && !g.deliveredDate){ g.deliveredDate = todayStr(); g.deliveredBy = currentUser.username; }
   });
   if(!await saveStateWithRollback(snapshot)){ if(waPopup) waPopup.close(); return; }
   showToast("تم حفظ التوزيع");
