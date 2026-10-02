@@ -334,3 +334,17 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   #printArea .daily-report .dr-net{border:2px solid #000 !important;}
   #printArea .daily-report .no-print{display:none !important;}
 }
+/* a report captured as a picture for WhatsApp: always the printed (white) look, whatever the theme */
+.share-capture{font-family:var(--font-main);}
+.share-capture .daily-report{color:#000;font-size:13px;}
+.share-capture .daily-report .no-print{display:none !important;}
+.share-capture .daily-report .dr-head{border-bottom:2px solid #000;}
+.share-capture .daily-report .dr-date,.share-capture .daily-report .dr-lbl,.share-capture .daily-report .dr-note{color:#333;}
+.share-capture .daily-report .dr-title{background:#e6e6e6;border-right:4px solid #000;color:#000;}
+.share-capture .daily-report .dr-count{background:#000;color:#fff;}
+.share-capture .daily-report .dr-table th,.share-capture .daily-report .dr-table td{border:1px solid #444;color:#000;background:#fff;}
+.share-capture .daily-report .dr-table th{background:#d9d9d9;}
+.share-capture .daily-report .dr-table tbody tr:nth-child(even) td{background:#f3f3f3;}
+.share-capture .daily-report .dr-table tfoot td{background:#e6e6e6;border-top:2px solid #000;}
+.share-capture .daily-report .dr-box{background:#f3f3f3;border:1px solid #444;color:#000;}
+.share-capture .daily-report .dr-net{border:2px solid #000;}
