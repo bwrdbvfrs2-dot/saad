@@ -465,6 +465,11 @@ function widthFabricQty(width){
   return byW[width] || (width==="عرضين" ? defaultFabricQty() : {}) || {};
 }
 function fabricQtyBuffer(){ return state.settings.fabricQtyBuffer; }
+// what the closed add-ons drop-down shows: the chosen ones by name, or that none is chosen
+function addonsSummaryText(ids){
+  const names = (ids||[]).map(id=> (state.addonDefs.find(a=>a.id===id)||{}).name).filter(Boolean);
+  return names.length ? names.join("، ") : "— بدون ملحقات —";
+}
 function renderGarmentFields(prefill=null){
   closeMeasPanel();
   const holder=$("garmentsHolder"); holder.innerHTML="";
@@ -478,7 +483,7 @@ function renderGarmentFields(prefill=null){
     const currentFabricName = currentCard ? currentCard.name : ((g.itemCardId==="__none__" || (editingId && !g.itemCardId)) ? NO_FABRIC_LABEL : "");
     const addonsHtml = state.addonDefs.filter(a=>a.active!==false).map(a=>{
       const checked = (g.addons||[]).includes(a.id);
-      return `<label style="display:flex;align-items:center;gap:6px;margin:4px 0;font-size:13px;"><input type="checkbox" class="g-addon" data-addon="${a.id}" ${checked?"checked":""}> ${esc(a.name)} (${addonUnitPrice(a).toFixed(0)} ريال)</label>`;
+      return `<label class="dd-option"><input type="checkbox" class="g-addon" data-addon="${a.id}" data-name="${esc(a.name)}" ${checked?"checked":""}> <span>${esc(a.name)}</span><span class="dd-price">${addonUnitPrice(a).toFixed(0)} ريال</span></label>`;
     }).join("");
     div.innerHTML=`
       <span class="tag">ثوب ${i+1}</span>
@@ -501,7 +506,7 @@ function renderGarmentFields(prefill=null){
       <button type="button" class="btn btn-ghost btn-sm meas-toggle-btn" data-idx="${i}">كرت المقاس (اضغط للفتح)</button>
       ${i>0 ? `<p class="sub" style="font-size:11px;margin:4px 0 0;">نفس مقاس الثوب اللي قبله؟ اترك كرته فاضي — ينسخ تلقائياً عند الحفظ (من نفس الفئة فقط)</p>` : ""}
       ${renderMeasurementPanelHtml(g, i)}
-      ${addonsHtml ? `<div class="stitch" style="margin:10px 0;"></div><label style="font-size:12px;color:var(--muted);">ملحقات وخدمات إضافية</label>${addonsHtml}` : ""}
+      ${addonsHtml ? `<div class="field" style="margin-top:10px;"><label>الملحقات والخدمات الإضافية</label><details class="dd-select g-addons-dd"><summary class="g-addons-summary">${addonsSummaryText(g.addons)}</summary><div class="dd-menu">${addonsHtml}</div></details></div>` : ""}
     `;
     holder.appendChild(div);
     div.querySelector(".meas-toggle-btn").addEventListener("click", ()=> openMeasPanel(i));
@@ -537,7 +542,11 @@ function renderGarmentFields(prefill=null){
     cb.addEventListener("change", ()=>{ wrap.style.display = cb.checked?"":"none"; updateLiveTotals(); });
     div.querySelector(".g-price").addEventListener("input", updateLiveTotals);
     div.querySelector(".g-embroPrice").addEventListener("input", updateLiveTotals);
-    div.querySelectorAll(".g-addon").forEach(cbx=> cbx.addEventListener("change", updateLiveTotals));
+    div.querySelectorAll(".g-addon").forEach(cbx=> cbx.addEventListener("change", ()=>{
+      const sum = div.querySelector(".g-addons-summary");
+      if(sum) sum.textContent = addonsSummaryText(Array.from(div.querySelectorAll(".g-addon:checked")).map(c=>c.dataset.addon));
+      updateLiveTotals();
+    }));
     const itemSel = div.querySelector(".g-itemCard"), catSel = div.querySelector(".g-category"), priceInp = div.querySelector(".g-price"), qtyInp = div.querySelector(".g-qty");
     function applyDefaults(forceUpdate){
       const c = findItemCard(itemSel.value);
@@ -694,21 +703,21 @@ function renderInvoiceOffersSelector(){
   const activeOffers = state.offers.filter(o=>o.active);
   if(!activeOffers.length){ wrap.innerHTML=""; return; }
   const garments = readGarmentFields();
-  wrap.innerHTML = `<div class="stitch"></div><label style="font-size:12px;color:var(--muted);">باقات العروض المتاحة (اختر واحدة بحد أقصى — ما يمكن الجمع بين عرضين)</label>` +
-    activeOffers.map(o=>{
-      const eligible = checkOfferEligibility(garments, o);
-      const checked = selectedOfferIds.includes(o.id);
-      return `<div class="embro-toggle" style="margin:6px 0;">
-        <input type="radio" name="offer-select-radio" class="offer-select" data-offer="${o.id}" ${checked?"checked":""} ${!eligible?"disabled":""}>
-        <label style="margin:0;font-size:13px;${!eligible?"color:var(--muted);":""}">${esc(o.name)} ${eligible?"ينطبق":"— ما ينطبق حالياً"}</label>
-      </div>`;
-    }).join("") + (selectedOfferIds.length ? `<button type="button" class="btn btn-ghost btn-sm" id="clearSelectedOfferBtn" style="margin-top:4px;">إلغاء اختيار العرض</button>` : "");
-  document.querySelectorAll(".offer-select").forEach(cb=> cb.addEventListener("change", ()=>{
-    if(cb.checked){ selectedOfferIds = [cb.dataset.offer]; resetGarmentPricesToBase(); }
+  // one drop-down: the offers this invoice qualifies for first, the rest listed but greyed out
+  const withElig = activeOffers.map(o=>({o, eligible: checkOfferEligibility(garments, o)}));
+  const sorted = [...withElig.filter(x=>x.eligible), ...withElig.filter(x=>!x.eligible)];
+  const cur = selectedOfferIds[0] || "";
+  const eligibleCount = withElig.filter(x=>x.eligible).length;
+  wrap.innerHTML = `<div class="stitch"></div><div class="field"><label>باقة العرض (وحدة بس — ما تنجمع مع عرض ثاني)${eligibleCount?` — ينطبق ${eligibleCount}`:""}</label>
+    <select id="invoiceOfferSelect"><option value="">— بدون عرض —</option>
+      ${sorted.map(({o,eligible})=>`<option value="${o.id}" ${o.id===cur?"selected":""} ${!eligible && o.id!==cur?"disabled":""}>${esc(o.name)}${eligible?"":" — ما ينطبق حالياً"}</option>`).join("")}
+    </select></div>`;
+  $("invoiceOfferSelect").addEventListener("change", e=>{
+    const v = e.target.value;
+    selectedOfferIds = v ? [v] : [];
+    if(v) resetGarmentPricesToBase();
     renderInvoiceOffersSelector(); updatePriceFieldsLockState(); updateLiveTotals();
-  }));
-  const clearBtn = $("clearSelectedOfferBtn");
-  if(clearBtn) clearBtn.addEventListener("click", ()=>{ selectedOfferIds = []; renderInvoiceOffersSelector(); updatePriceFieldsLockState(); updateLiveTotals(); });
+  });
   updatePriceFieldsLockState();
 }
 
@@ -871,3 +880,7 @@ async function submitInvoiceReturn(){
   $("returnInvNumber").value=""; $("returnReason").value=""; $("returnAmount").value=""; $("returnResponsible").value=""; $("returnResponsibleSearch").value="";
   showToast((lostCost>0 ? `تم تسجيل المرتجع — خسارة قماش/تصنيع مقصوص فعلياً: ${lostCost.toFixed(0)} ريال (${wasCut.join("، ")})` : "تم تسجيل المرتجع") + requestMsg);
 }
+// an open add-ons drop-down closes when clicking anywhere outside it
+document.addEventListener("click", e=>{
+  document.querySelectorAll(".dd-select[open]").forEach(d=>{ if(!d.contains(e.target)) d.removeAttribute("open"); });
+});

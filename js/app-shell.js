@@ -878,7 +878,6 @@ const NAV_GROUPS = [
     {tab:"sensitiveFinancials", label:"الإحصائيات المالية الحساسة"},
     {tab:"report-vatCalc", label:"حاسبة الضريبة"},
     {tab:"report-topExpenses", label:"أعلى المصاريف"},
-    {tab:"report-expenseSubItems", label:"تقرير المصروفات حسب البند"},
   ]},
   {title:"التقارير", color:"#7d5fb0", items:[
     {tab:"report-fullLog", label:"السجل الشامل"},
@@ -888,6 +887,7 @@ const NAV_GROUPS = [
     {tab:"report-daily", label:"التقرير اليومي الشامل"},
     {tab:"report-tailorMonthly", label:"تقرير الخياط الشهري"},
     {tab:"report-noFabricWage", label:"أجرة تفصيل بدون قماش"},
+    {tab:"report-expenseSubItems", label:"تقرير المصروفات حسب البند"},
     {tab:"report-auditLog", label:"سجل التدقيق"},
     {tab:"growth", label:"النمو"},
   ]},

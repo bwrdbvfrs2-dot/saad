@@ -1002,12 +1002,12 @@ function renderSaleOffers(){
   const offers = state.offers.filter(o=>o.active);
   if(!offers.length){ wrap.innerHTML = ""; return; }
   const lines = saleFormLines();
-  wrap.innerHTML = `<label style="font-size:12px;color:var(--muted);">باقات العروض (اختر واحدة بحد أقصى)</label>` + offers.map(o=>{
-    const ev = saleOfferEvaluation(o, lines);
-    return `<div class="embro-toggle" style="margin:6px 0;"><input type="radio" name="sale-offer-radio" class="sale-offer-select" data-offer="${o.id}" ${saleOfferId===o.id?"checked":""} ${!ev.eligible?"disabled":""}>
-      <label style="margin:0;font-size:13px;${!ev.eligible?"color:var(--muted);":""}">${esc(o.name)} ${ev.eligible ? (o.type==="quantity_discount" ? `— خصم ${fmtSar(ev.discount)} ﷼` : `— هدية: ${esc(ev.gift.name)} ×${ev.gift.qty}`) : "— ما ينطبق حالياً"}</label></div>`;
-  }).join("") + (saleOfferId ? `<button type="button" class="btn btn-ghost btn-sm" onclick="saleOfferId=null; updateSaleTotal();">إلغاء اختيار العرض</button>` : "");
-  wrap.querySelectorAll(".sale-offer-select").forEach(r=> r.addEventListener("change", ()=>{ if(r.checked){ saleOfferId = r.dataset.offer; resetSaleLinePricesToBase(); updateSaleTotal(); } }));
+  const evs = offers.map(o=>({o, ev: saleOfferEvaluation(o, lines)}));
+  const sorted = [...evs.filter(x=>x.ev.eligible), ...evs.filter(x=>!x.ev.eligible)];
+  wrap.innerHTML = `<div class="field"><label>باقة العرض (وحدة بس)</label><select id="saleOfferSelect"><option value="">— بدون عرض —</option>
+    ${sorted.map(({o,ev})=>`<option value="${o.id}" ${saleOfferId===o.id?"selected":""} ${!ev.eligible && saleOfferId!==o.id?"disabled":""}>${esc(o.name)} ${ev.eligible ? (o.type==="quantity_discount" ? `— خصم ${fmtSar(ev.discount)} ﷼` : `— هدية: ${esc(ev.gift.name)} ×${ev.gift.qty}`) : "— ما ينطبق حالياً"}</option>`).join("")}
+  </select></div>`;
+  $("saleOfferSelect").addEventListener("change", e=>{ const v = e.target.value; saleOfferId = v || null; if(v) resetSaleLinePricesToBase(); updateSaleTotal(); });
 }
 function saleDealActive(){ return !!salePromo || !!(saleOfferId && state.offers.find(o=>o.id===saleOfferId && o.active)) || (parseFloat(($("saleDirectDiscount")||{}).value)||0) > 0; }
 function resetSaleLinePricesToBase(){
