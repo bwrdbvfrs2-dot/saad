@@ -233,67 +233,62 @@ function renderDailyPreview(){
     });
   });
 }
+// a section only appears when it has something in it — an empty day isn't a page of "لا يوجد" tables
+function dailySection(title, headers, rows, opts={}){
+  if(!rows.length) return "";
+  return `<section class="dr-section">
+    <h3 class="dr-title">${title}<span class="dr-count">${rows.length}</span></h3>
+    <table class="dr-table"${opts.id?` id="${opts.id}"`:""}><thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody>${opts.foot?`<tfoot><tr>${opts.foot}</tr></tfoot>`:""}</table>
+  </section>`;
+}
 function buildDailyReportHtml(day, r, username){
-  let html = username ? `<h2>التقرير اليومي — ${esc(username)} — ${day}</h2>` : `<h2>التقرير اليومي الشامل — ${day}</h2>`;
-  html += `<h3>فواتير جديدة اليوم (${r.newInvoices.length})</h3><table><thead><tr><th>رقم</th><th>العميل</th><th>عدد الثياب</th><th>الإجمالي</th></tr></thead><tbody>`;
-  r.newInvoices.forEach(inv=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${inv.garments.length}</td><td>${invoiceSaleTotal(inv).toFixed(0)} ﷼</td></tr>`);
-  if(!r.newInvoices.length) html+=`<tr><td colspan="4">لا يوجد</td></tr>`;
-  html += `</tbody></table>`;
-  html += `<h3>تسليمات اليوم — من الشهر الحالي (${r.deliveredThisMonth.length})</h3><table><thead><tr><th>رقم الفاتورة</th><th>نوع القماش</th><th>السعر</th><th>رقم الإيصال</th></tr></thead><tbody>`;
-  r.deliveredThisMonth.forEach(({inv,g})=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(g.fabricType)}</td><td>${garmentSalePrice(g).toFixed(0)} ﷼</td><td>${g.deliveryReceipt||"—"}</td></tr>`);
-  if(!r.deliveredThisMonth.length) html+=`<tr><td colspan="4">لا يوجد</td></tr>`;
-  html += `</tbody></table>`;
-  html += `<h3>تسليمات اليوم — متعثرة من أشهر سابقة (${r.deliveredOverdue.length})</h3><table><thead><tr><th>رقم الفاتورة</th><th>الشهر الأصلي</th><th>نوع القماش</th><th>السعر</th><th>رقم الإيصال</th></tr></thead><tbody>`;
-  r.deliveredOverdue.forEach(({inv,g})=> html+=`<tr><td>${esc(inv.number)}</td><td>${monthDisplay(inv.originMonth)}</td><td>${esc(g.fabricType)}</td><td>${garmentSalePrice(g).toFixed(0)} ﷼</td><td>${g.deliveryReceipt||"—"}</td></tr>`);
-  if(!r.deliveredOverdue.length) html+=`<tr><td colspan="5">لا يوجد</td></tr>`;
-  html += `</tbody></table>`;
-  if(!username){
-  html += `<h3>تسليمات الجرد الافتتاحي اليوم (${r.legacyDelivered.length})</h3><table><thead><tr><th>اسم العميل</th><th>الجوال</th><th>الوصف</th><th>المتبقي وقت التسليم</th></tr></thead><tbody>`;
-  r.legacyDelivered.forEach(x=> html+=`<tr><td>${esc(x.name)}</td><td>${esc(x.mobile)}</td><td>${esc(x.desc)}</td><td>${x.remaining?x.remaining.toFixed(0)+" ﷼":"—"}</td></tr>`);
-  if(!r.legacyDelivered.length) html+=`<tr><td colspan="4">لا يوجد</td></tr>`;
-  html += `</tbody></table>`;
-  }
-  html += `<h3>سندات القبض والصرف اليوم (${r.vouchersToday.length})</h3><table><thead><tr><th>رقم السند</th><th>النوع</th><th>المبلغ</th><th>الطرف</th><th>السبب</th></tr></thead><tbody>`;
-  r.vouchersToday.forEach(v=> html+=`<tr><td>${v.voucherNo}</td><td>${v.type==="receipt"?"قبض":"صرف"}</td><td>${v.amount.toFixed(0)} ﷼</td><td>${esc(v.party)}</td><td>${esc(v.reason)}</td></tr>`);
-  if(!r.vouchersToday.length) html+=`<tr><td colspan="5">لا يوجد</td></tr>`;
-  html += `</tbody></table>`;
-  html += `<h3>المصروفات اليوم (${r.expensesToday.length}) — الإجمالي: ${r.expensesTotal.toFixed(0)} ﷼</h3><table><thead><tr><th>البند</th><th>المبلغ</th><th>صُرف لـ</th><th>ملاحظات</th></tr></thead><tbody>`;
-  r.expensesToday.forEach(e=>{ const cat = state.expenseCategories.find(c=>c.id===e.categoryId); html+=`<tr><td>${cat?esc(cat.label):"—"}</td><td>${e.amount.toFixed(0)} ﷼</td><td>${esc(e.paidTo||"—")}</td><td>${esc(e.notes||"—")}</td></tr>`; });
-  if(!r.expensesToday.length) html+=`<tr><td colspan="4">لا يوجد</td></tr>`;
-  html += `</tbody></table>`;
-  html += `<h3>تعديلات رصيد أول المدة اليوم (${r.openingAdjustmentsToday.length})</h3><table><thead><tr><th>الصنف</th><th>من</th><th>إلى</th><th>بواسطة</th></tr></thead><tbody>`;
-  r.openingAdjustmentsToday.forEach(a=> html+=`<tr><td>${esc(a.cardName)}</td><td>${a.oldValue.toFixed(1)}</td><td>${a.newValue.toFixed(1)}</td><td>${esc(a.username)}</td></tr>`);
-  if(!r.openingAdjustmentsToday.length) html+=`<tr><td colspan="4">لا يوجد</td></tr>`;
-  html += `</tbody></table>`;
-  html += `<div id="dailyReceiptSearchWrap" class="no-print"><div class="field"><label>بحث برقم الإيصال (كاش أو شبكة)</label><input type="text" id="dailyReceiptSearchInput" placeholder="اكتب رقم الإيصال..."></div></div>`;
-  html += `<h3>الدفعات اليوم — كاش: ${r.cash.toFixed(0)} ﷼ / شبكة: ${r.network.toFixed(0)} ﷼ / خصم: ${r.discount.toFixed(0)} ﷼</h3><table id="dailyPaymentsTable"><thead><tr><th>رقم الفاتورة</th><th>كاش</th><th>سند الكاش</th><th>شبكة</th><th>سند الشبكة</th><th>خصم</th></tr></thead><tbody>`;
-  r.paymentRows.forEach(({inv,p})=> html+=`<tr data-receipt="${esc((p.cashReceiptNo||"")+" "+(p.networkReceiptNo||p.receipt||""))}"><td>${esc(inv.number)}</td><td>${p.cash.toFixed(0)} ﷼</td><td>${p.cashReceiptNo||"—"}</td><td>${p.network.toFixed(0)} ﷼</td><td>${p.networkReceiptNo||p.receipt||"—"}</td><td>${p.discount?p.discount.toFixed(0)+" ﷼":"—"}</td></tr>`);
-  if(!r.paymentRows.length) html+=`<tr><td colspan="6">لا يوجد</td></tr>`;
-  html += `</tbody></table>`;
-  const saleTotal = s=> saleNetTotal(s);
-  html += `<h3>فواتير المبيعات (أصناف جاهزة) اليوم (${r.salesToday.length})</h3><table><thead><tr><th>رقم</th><th>العميل</th><th>كاش</th><th>شبكة</th><th>الإجمالي</th></tr></thead><tbody>`;
-  r.salesToday.forEach(s=> html+=`<tr><td>${esc(s.number)}</td><td>${esc(s.customerName||"—")}</td><td>${((s.payment||{}).cash||0).toFixed(0)} ﷼</td><td>${((s.payment||{}).network||0).toFixed(0)} ﷼</td><td>${saleTotal(s).toFixed(0)} ﷼</td></tr>`);
-  if(!r.salesToday.length) html+=`<tr><td colspan="5">لا يوجد</td></tr>`;
-  html += `</tbody></table>`;
-  html += `<h3>الصيانة الخارجية اليوم — استلام ${r.repairsToday.length} ودفعات ${r.repairPaymentsToday.length}</h3><table><thead><tr><th>الرقم</th><th>العميل</th><th>المطلوب</th><th>كاش</th><th>شبكة</th></tr></thead><tbody>`;
-  r.repairPaymentsToday.forEach(({r:rp,p})=> html+=`<tr><td>ص-${rp.number}</td><td>${esc(rp.customerName||"—")}</td><td>${esc(rp.description||"")}</td><td>${(p.cash||0).toFixed(0)} ﷼</td><td>${(p.network||0).toFixed(0)} ﷼</td></tr>`);
-  r.repairsToday.filter(rp=>!r.repairPaymentsToday.some(x=>x.r===rp)).forEach(rp=> html+=`<tr><td>ص-${rp.number}</td><td>${esc(rp.customerName||"—")}</td><td>${esc(rp.description||"")}</td><td>—</td><td>—</td></tr>`);
-  if(!r.repairsToday.length && !r.repairPaymentsToday.length) html+=`<tr><td colspan="5">لا يوجد</td></tr>`;
-  html += `</tbody></table>`;
-  html += `<h3>المرتجعات والمبالغ المستردة اليوم (${r.refundsToday.length + r.saleReturnsToday.length})</h3><table><thead><tr><th>النوع</th><th>الفاتورة</th><th>المبلغ المسترد</th><th>السبب</th></tr></thead><tbody>`;
-  r.refundsToday.forEach(x=> html+=`<tr><td>مرتجع فاتورة تفصيل</td><td>${esc(x.invoiceNumber)}</td><td>${x.refundAmount.toFixed(0)} ﷼</td><td>${esc(x.reason||"—")}</td></tr>`);
-  r.saleReturnsToday.forEach(x=> html+=`<tr><td>مرتجع مبيعات</td><td>${esc(x.saleInvoiceNumber)}</td><td>${x.refundAmount.toFixed(0)} ﷼</td><td>${esc(x.reason||"—")}</td></tr>`);
-  if(!r.refundsToday.length && !r.saleReturnsToday.length) html+=`<tr><td colspan="4">لا يوجد</td></tr>`;
-  html += `</tbody></table>`;
-  // real movement of every box today (all sources: payments, sales, vouchers, expenses, refunds,
-  // purchases, suppliers, salaries, transfers) — the old "net = cash − expenses" ignored most of these
+  const sar = n=> `${(n||0).toFixed(0)} ﷼`;
+  const shop = state.settings.shopName || "";
+  let html = `<div class="daily-report">
+    <div class="dr-head"><div class="dr-shop">${esc(shop)}</div>
+      <div class="dr-name">${username ? `التقرير اليومي — ${esc(username)}` : "التقرير اليومي الشامل"}</div>
+      <div class="dr-date">${day}</div></div>`;
+  const parts = [];
+  parts.push(dailySection("فواتير جديدة", ["رقم","العميل","عدد الثياب","الإجمالي"],
+    r.newInvoices.map(inv=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${inv.garments.length}</td><td>${sar(invoiceSaleTotal(inv))}</td></tr>`),
+    {foot:`<td colspan="3">الإجمالي</td><td>${sar(r.newInvoices.reduce((a,i)=>a+invoiceSaleTotal(i),0))}</td>`}));
+  parts.push(dailySection("تسليمات — من الشهر الحالي", ["رقم الفاتورة","نوع القماش","السعر","رقم الإيصال"],
+    r.deliveredThisMonth.map(({inv,g})=>`<tr><td>${esc(inv.number)}</td><td>${esc(g.fabricType)}</td><td>${sar(garmentSalePrice(g))}</td><td>${g.deliveryReceipt||"—"}</td></tr>`)));
+  parts.push(dailySection("تسليمات — متعثرة من أشهر سابقة", ["رقم الفاتورة","الشهر الأصلي","نوع القماش","السعر","رقم الإيصال"],
+    r.deliveredOverdue.map(({inv,g})=>`<tr><td>${esc(inv.number)}</td><td>${monthDisplay(inv.originMonth)}</td><td>${esc(g.fabricType)}</td><td>${sar(garmentSalePrice(g))}</td><td>${g.deliveryReceipt||"—"}</td></tr>`)));
+  if(!username) parts.push(dailySection("تسليمات الجرد الافتتاحي", ["اسم العميل","الجوال","الوصف","المتبقي وقت التسليم"],
+    r.legacyDelivered.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.mobile)}</td><td>${esc(x.desc)}</td><td>${x.remaining?sar(x.remaining):"—"}</td></tr>`)));
+  const payRows = r.paymentRows.map(({inv,p})=>`<tr data-receipt="${esc((p.cashReceiptNo||"")+" "+(p.networkReceiptNo||p.receipt||""))}"><td>${esc(inv.number)}</td><td>${sar(p.cash)}</td><td>${p.cashReceiptNo||"—"}</td><td>${sar(p.network)}</td><td>${p.networkReceiptNo||p.receipt||"—"}</td><td>${p.discount?sar(p.discount):"—"}</td></tr>`);
+  if(payRows.length) parts.push(`<div id="dailyReceiptSearchWrap" class="no-print"><div class="field"><label>بحث برقم الإيصال (كاش أو شبكة)</label><input type="text" id="dailyReceiptSearchInput" placeholder="اكتب رقم الإيصال..."></div></div>`);
+  parts.push(dailySection("دفعات فواتير التفصيل", ["رقم الفاتورة","كاش","سند الكاش","شبكة","سند الشبكة","خصم"], payRows,
+    {id:"dailyPaymentsTable", foot:`<td>الإجمالي</td><td>${sar(r.cash)}</td><td></td><td>${sar(r.network)}</td><td></td><td>${r.discount?sar(r.discount):"—"}</td>`}));
+  parts.push(dailySection("فواتير المبيعات (أصناف جاهزة)", ["رقم","العميل","كاش","شبكة","الإجمالي"],
+    r.salesToday.map(x=>`<tr><td>${esc(x.number)}</td><td>${esc(x.customerName||"—")}</td><td>${sar((x.payment||{}).cash)}</td><td>${sar((x.payment||{}).network)}</td><td>${sar(saleNetTotal(x))}</td></tr>`)));
+  const repairRows = r.repairPaymentsToday.map(({r:rp,p})=>`<tr><td>ص-${rp.number}</td><td>${esc(rp.customerName||"—")}</td><td>${esc(rp.description||"")}</td><td>${sar(p.cash)}</td><td>${sar(p.network)}</td></tr>`)
+    .concat(r.repairsToday.filter(rp=>!r.repairPaymentsToday.some(x=>x.r===rp)).map(rp=>`<tr><td>ص-${rp.number}</td><td>${esc(rp.customerName||"—")}</td><td>${esc(rp.description||"")}</td><td>—</td><td>—</td></tr>`));
+  parts.push(dailySection("الصيانة الخارجية", ["الرقم","العميل","المطلوب","كاش","شبكة"], repairRows));
+  parts.push(dailySection("سندات القبض والصرف", ["رقم السند","النوع","المبلغ","الطرف","السبب"],
+    r.vouchersToday.map(v=>`<tr><td>${v.voucherNo}</td><td>${v.type==="receipt"?"قبض":"صرف"}</td><td>${sar(v.amount)}</td><td>${esc(v.party)}</td><td>${esc(v.reason)}</td></tr>`)));
+  parts.push(dailySection("المصروفات", ["البند","المبلغ","صُرف لـ","ملاحظات"],
+    r.expensesToday.map(e=>{ const cat = state.expenseCategories.find(c=>c.id===e.categoryId); return `<tr><td>${cat?esc(cat.label):"—"}${e.subItemLabel?" — "+esc(e.subItemLabel):""}</td><td>${sar(e.amount)}</td><td>${esc(e.paidTo||"—")}</td><td>${esc(e.notes||"—")}</td></tr>`; }),
+    {foot:`<td>الإجمالي</td><td>${sar(r.expensesTotal)}</td><td colspan="2"></td>`}));
+  parts.push(dailySection("المرتجعات والمبالغ المستردة", ["النوع","الفاتورة","المبلغ المسترد","السبب"],
+    r.refundsToday.map(x=>`<tr><td>مرتجع فاتورة تفصيل</td><td>${esc(x.invoiceNumber)}</td><td>${sar(x.refundAmount)}</td><td>${esc(x.reason||"—")}</td></tr>`)
+    .concat(r.saleReturnsToday.map(x=>`<tr><td>مرتجع مبيعات</td><td>${esc(x.saleInvoiceNumber)}</td><td>${sar(x.refundAmount)}</td><td>${esc(x.reason||"—")}</td></tr>`))));
+  parts.push(dailySection("تعديلات رصيد أول المدة", ["الصنف","من","إلى","بواسطة"],
+    r.openingAdjustmentsToday.map(a=>`<tr><td>${esc(a.cardName)}</td><td>${a.oldValue.toFixed(1)}</td><td>${a.newValue.toFixed(1)}</td><td>${esc(a.username)}</td></tr>`)));
+  const body = parts.filter(Boolean).join("");
+  html += body || `<p class="dr-empty">ما فيه أي حركة في هذا اليوم${username?` لـ${esc(username)}`:""}.</p>`;
+  // real movement of every box (all sources: payments, sales, vouchers, expenses, refunds, purchases,
+  // suppliers, salaries, transfers) — always shown, it's the day's bottom line
   const f = r.flows;
-  html += `<div class="report-grid" style="grid-template-columns:repeat(3,1fr);margin-top:14px;">
-    <div class="report-card"><div class="st">الكاش — داخل / خارج</div><div class="amt" style="font-size:14px;">${f.cashIn.toFixed(0)} / ${f.cashOut.toFixed(0)} ﷼</div></div>
-    <div class="report-card"><div class="st">الشبكة — داخل / خارج (بعد رسوم البنك)</div><div class="amt" style="font-size:14px;">${f.netIn.toFixed(0)} / ${f.netOut.toFixed(0)} ﷼</div></div>
-    <div class="report-card"><div class="st">صافي حركة الصناديق اليوم</div><div class="amt">${(f.cashIn-f.cashOut+f.netIn-f.netOut).toFixed(0)} ﷼</div></div>
+  html += `<div class="dr-summary">
+    <div class="dr-box"><div class="dr-lbl">الكاش — داخل / خارج</div><div class="dr-val">${f.cashIn.toFixed(0)} / ${f.cashOut.toFixed(0)} ﷼</div></div>
+    <div class="dr-box"><div class="dr-lbl">الشبكة — داخل / خارج (بعد رسوم البنك)</div><div class="dr-val">${f.netIn.toFixed(0)} / ${f.netOut.toFixed(0)} ﷼</div></div>
+    <div class="dr-box dr-net"><div class="dr-lbl">صافي حركة الصناديق${username?` (${esc(username)})`:""}</div><div class="dr-val">${(f.cashIn-f.cashOut+f.netIn-f.netOut).toFixed(0)} ﷼</div></div>
   </div>
-  <p class="sub" style="margin-top:6px;">صافي الكاش اليوم${username?` بصناديق ${esc(username)}`:""}: ${(f.cashIn-f.cashOut).toFixed(0)} ﷼ — يشمل كل الحركات المسجّلة (دفعات، مبيعات، سندات، مصروفات، مرتجعات، مشتريات، موردين، رواتب، تحويلات).</p>`;
+  <p class="dr-note">صافي الكاش: ${(f.cashIn-f.cashOut).toFixed(0)} ﷼ — يشمل كل الحركات المسجّلة (دفعات، مبيعات، سندات، مصروفات، مرتجعات، مشتريات، موردين، رواتب، تحويلات).</p>
+  </div>`;
   return html;
 }
 // ---- the signed-in user's own day (the manager can look at anyone's) ----
