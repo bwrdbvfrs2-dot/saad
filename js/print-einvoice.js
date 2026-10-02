@@ -463,12 +463,68 @@ ${itemsLines}
 
 شكراً لثقتك بنا 🌹`;
 }
+// ---- sending a picture (invoice / report) to WhatsApp ----
+// Phones and newer PCs: the system share sheet with the image attached (pick WhatsApp, then the chat).
+// Older PCs (the shop's Windows 7): the image is copied to the clipboard and saved to Downloads, and the
+// customer's chat opens in WhatsApp — paste it (Ctrl+V) or drag it in. wa.me links can only carry text.
+function canShareImageFiles(){
+  try{ return !!(navigator.canShare && navigator.canShare({files:[new File([""], "x.png", {type:"image/png"})]})); }catch(e){ return false; }
+}
+async function nodeToPngBlob(node){
+  await loadHtml2CanvasLib();
+  const canvas = await window.html2canvas(node, {backgroundColor:"#ffffff", scale:Math.max(2, window.devicePixelRatio||1), useCORS:true, logging:false});
+  return await new Promise(res=> canvas.toBlob(res, "image/png"));
+}
+// chat: a window opened right at the click (before any await) so popup blockers let it through
+async function deliverImageToWhatsApp(blob, fileName, mobile, text, chat){
+  const file = new File([blob], fileName, {type:"image/png"});
+  if(!chat && canShareImageFiles()){
+    try{ await navigator.share({files:[file], text}); return true; }
+    catch(e){ if(e && e.name==="AbortError") return false; }
+  }
+  let copied = false;
+  try{ if(window.ClipboardItem && navigator.clipboard && navigator.clipboard.write){ await navigator.clipboard.write([new ClipboardItem({"image/png": blob})]); copied = true; } }catch(e){ /* clipboard not allowed — the downloaded file still works */ }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = fileName; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=> URL.revokeObjectURL(a.href), 60000);
+  const url = mobile ? waLink(mobile, text) : "https://web.whatsapp.com/";
+  if(chat && !chat.closed) chat.location.href = url; else window.open(url, "_blank");
+  showToast(copied ? "الصورة منسوخة ✓ — في محادثة الواتساب اضغط Ctrl+V ثم إرسال (ونزلت نسخة في التنزيلات)" : "انحفظت الصورة في التنزيلات — اسحبها لمحادثة الواتساب اللي انفتحت وأرسلها");
+  return true;
+}
+// renders HTML off screen on a white page, captures it as a PNG
+async function htmlToPngBlob(html, width, cls){
+  const holder = document.createElement("div");
+  holder.className = "share-capture" + (cls?" "+cls:"");
+  holder.style.cssText = `position:fixed;left:-10000px;top:0;width:${width}px;background:#fff;color:#000;padding:16px;direction:rtl;`;
+  holder.innerHTML = html;
+  document.body.appendChild(holder);
+  try{ return await nodeToPngBlob(holder); } finally { holder.remove(); }
+}
 async function shareReceiptViaWhatsApp(invId){
   const inv = state.invoices.find(i=>i.id===invId);
   if(!inv) return;
   if(!inv.customerMobile){ showToast("ما فيه رقم جوال مسجّل لهذا العميل"); return; }
-  const message = buildInvoiceTextMessage(inv);
-  window.open(waLink(inv.customerMobile, message), "_blank");
+  const chat = canShareImageFiles() ? null : window.open("", "_blank");
+  showToast("جاري تجهيز صورة الفاتورة…");
+  try{
+    // the same receipt as the printed one (barcode + QR), captured from the print area shown off screen
+    await renderReceiptIntoPrintArea(inv);
+    const pa = $("printArea"), prev = pa.getAttribute("style")||"";
+    // wider than the thermal roll, so the columns don't run into each other on a phone screen
+    pa.setAttribute("style", "display:block;position:fixed;left:-10000px;top:0;background:#fff;width:440px;");
+    const root = pa.querySelector("#receiptShareRoot");
+    if(root){ root.style.maxWidth = "420px"; root.style.fontSize = "15px"; }
+    let blob;
+    try{ blob = await nodeToPngBlob(root || pa); } finally { pa.setAttribute("style", prev); pa.innerHTML = ""; }
+    const text = `مرحباً ${inv.customerName||""}، مرفق فاتورتك رقم ${inv.number} من ${state.settings.shopName||"محلنا"} — المتبقي ${invoiceRemaining(inv).toFixed(0)} ريال. شكراً لثقتك 🌹`;
+    await deliverImageToWhatsApp(blob, `invoice-${String(inv.number).replace(/[^\w-]/g,"")}.png`, inv.customerMobile, text, chat);
+  }catch(e){
+    console.error("receipt image failed", e);
+    // no internet for the image library etc. — fall back to the text message
+    const url = waLink(inv.customerMobile, buildInvoiceTextMessage(inv));
+    if(chat && !chat.closed) chat.location.href = url; else window.open(url, "_blank");
+    showToast("تعذّر تجهيز الصورة — انرسلت الفاتورة نص");
+  }
 }
 async function showEinvoiceDetails(invId){
   const inv = state.invoices.find(i=>i.id===invId);

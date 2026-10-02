@@ -329,13 +329,25 @@ function dailyReportText(day, r, username){
   L.push(`أرسله: ${currentUser ? currentUser.username : ""}`);
   return L.join("\n");
 }
-function sendDailyReportWhatsApp(selId, day, username){
+// the report goes as a picture of the full report, with the text summary as its message
+async function sendDailyReportWhatsApp(selId, day, username){
   const to = ($(selId)||{}).value;
   if(!to){ showToast("اختر المستلم من القائمة"); return; }
   const u = state.users.find(x=>x.username===to);
   if(!u || !u.mobile){ showToast("المستلم ما له جوال — أضفه من إعدادات المستخدمين"); return; }
+  const chat = canShareImageFiles() ? null : window.open("", "_blank");
   const r = buildDailyReport(day, username);
-  window.open(waLink(u.mobile, dailyReportText(day, r, username)), "_blank");
+  const text = dailyReportText(day, r, username);
+  showToast("جاري تجهيز صورة التقرير…");
+  try{
+    const blob = await htmlToPngBlob(buildDailyReportHtml(day, r, username), 820);
+    await deliverImageToWhatsApp(blob, `daily-report-${day}.png`, u.mobile, text, chat);
+  }catch(e){
+    console.error("report image failed", e);
+    const url = waLink(u.mobile, text);
+    if(chat && !chat.closed) chat.location.href = url; else window.open(url, "_blank");
+    showToast("تعذّر تجهيز الصورة — انرسل التقرير نص");
+  }
   logAudit("daily_report_sent_whatsapp", {to, day, ofUser: username||"shop"});
 }
 // ---- the signed-in user's own day (the manager can look at anyone's) ----
