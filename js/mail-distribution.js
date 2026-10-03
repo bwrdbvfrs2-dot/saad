@@ -251,6 +251,7 @@ function renderReturnsLog(){
   el.innerHTML = html;
 }
 async function saveInvoice(){
+  if(measOnlyEdit && editingId) return saveInvoiceMeasurementsOnly();
   const isNewInvoice = !editingId;
   // the number box is read-only and auto-filled; take the live counter for a new invoice so a number
   // another device used after this form was opened isn't reused (it'd be rejected as a duplicate)
@@ -420,6 +421,12 @@ async function saveInvoice(){
     loyaltyPointsEarned: oldInv ? (oldInv.loyaltyPointsEarned||0) : 0,
   };
   ensureCustomerIndividual(invData.customerMobile, invData.customerName);
+  // every thobe's measurements go to the customer's record too, so the next invoice can load them —
+  // this used to happen only through the separate "حفظ المقاس" button
+  invData.garments.forEach(g=>{
+    if(g.status==="ملغي" || !g.measurements || !Object.keys(g.measurements).length) return;
+    recordMeasurementSnapshot(invData.customerMobile, invData.customerName, {date: todayStr(), measurements: {...g.measurements}, category: g.category}, measurementSeasonFor(g.itemCardId));
+  });
   if(isNewInvoice){
     const vip = isCustomerVip(custMobile);
     const saleTotal = garments.filter(g=>g.status!=="ملغي").reduce((a,g)=>a+garmentSalePrice(g),0);

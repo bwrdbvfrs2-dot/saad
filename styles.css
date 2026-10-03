@@ -348,3 +348,9 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 .share-capture .daily-report .dr-table tfoot td{background:#e6e6e6;border-top:2px solid #000;}
 .share-capture .daily-report .dr-box{background:#f3f3f3;border:1px solid #444;color:#000;}
 .share-capture .daily-report .dr-net{border:2px solid #000;}
+/* measurements-only edit: everything in the invoice form is greyed and inert except the measurement cards, save and cancel */
+#tab-invoice.meas-only .panel input, #tab-invoice.meas-only .panel select, #tab-invoice.meas-only .panel textarea, #tab-invoice.meas-only .panel button, #tab-invoice.meas-only .panel .dd-select{pointer-events:none;opacity:.5;}
+#tab-invoice.meas-only .meas-panel input, #tab-invoice.meas-only .meas-panel select, #tab-invoice.meas-only .meas-panel textarea, #tab-invoice.meas-only .meas-panel button,
+#tab-invoice.meas-only .panel button.meas-toggle-btn, #tab-invoice.meas-only #saveInvoiceBtn, #tab-invoice.meas-only #resetFormBtn{pointer-events:auto;opacity:1;}
+#tab-invoice.meas-only #saveAndPrintBtn, #tab-invoice.meas-only #saveAndSendBtn{display:none;}
+#tab-invoice.meas-only .meas-toggle-btn, #tab-invoice.meas-only #saveInvoiceBtn, #tab-invoice.meas-only #resetFormBtn{position:relative;z-index:5;}
