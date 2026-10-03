@@ -410,6 +410,10 @@ async function saveInvoice(){
     payments: JSON.parse(JSON.stringify(paymentsListTemp)),
     garments,
     createdBy: oldInv ? oldInv.createdBy : currentUser.username,
+    createdAt: oldInv ? (oldInv.createdAt || null) : serverNowIso(),
+    // who last changed it (an edit by the manager, say) — the first saver stays in createdBy
+    lastEditedBy: oldInv ? currentUser.username : null,
+    lastEditedAt: oldInv ? serverNowIso() : null,
     notes: $("invNotes").value.trim(),
     expectedDeliveryDate: $("invDeliveryDate").value || null,
     appliedOffers, freeGifts,
