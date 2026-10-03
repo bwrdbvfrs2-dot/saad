@@ -19,7 +19,7 @@ function renderAll(){
   $("setMinDepositValue").value = state.settings.minDepositValue||"";
   $("minDepositValueWrap").style.display = state.settings.minDepositType==="none" ? "none" : "";
   $("depositBypassRow").style.display = state.settings.minDepositType==="none" ? "none" : "";
-  $("depositBypassStatus").textContent = state.settings.depositBypassHash ? "✓ فيه كود مفعّل" : "ما فيه كود — ما يقدر أحد يتجاوز العربون";
+  $("depositBypassStatus").textContent = depositBypassStatusText();
   $("minDepositValueLabel").textContent = state.settings.minDepositType==="percent" ? "النسبة (%)" : "المبلغ (ريال)";
   $("setBankFee").value = state.settings.bankFeePercent;
   if($("setVisaFee") && document.activeElement!==$("setVisaFee")) $("setVisaFee").value = (state.settings.bankFeeVisaPercent===null || state.settings.bankFeeVisaPercent===undefined) ? "" : state.settings.bankFeeVisaPercent;

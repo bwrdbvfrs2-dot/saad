@@ -360,6 +360,7 @@
     </div>
     <div class="row-2" id="depositBypassRow" style="display:none;">
       <div class="field"><label>كود تجاوز العربون (تعطيه للكاشير وقت الحاجة)</label><input type="password" id="setDepositBypassCode" placeholder="اكتب كود جديد واضغط حفظ" autocomplete="new-password"></div>
+      <div class="field"><label>صلاحية الكود</label><div style="display:flex;gap:6px;"><select id="setDepositBypassMode"><option value="once">مرة واحدة (ينتهي بعد أول فاتورة)</option><option value="hours">لمدة معيّنة (ساعات)</option></select><input type="number" id="setDepositBypassHours" min="1" step="1" value="24" style="display:none;max-width:90px;" title="عدد الساعات"></div></div>
       <div class="field" style="display:flex;align-items:flex-end;gap:6px;"><button class="btn btn-ghost btn-sm" id="saveDepositBypassBtn">حفظ الكود</button><button class="btn btn-ghost btn-sm" id="clearDepositBypassBtn">إلغاء الكود</button><span class="sub" id="depositBypassStatus"></span></div>
     </div>
     <div class="stitch"></div>

@@ -799,6 +799,22 @@ async function sha256Hex(text){
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
 }
+// the deposit bypass code counts only while it has a hash and (for a timed code) its end time hasn't passed
+function depositBypassActive(){
+  const s = state.settings;
+  if(!s.depositBypassHash) return false;
+  if(s.depositBypassMode==="hours" && (!s.depositBypassExpiresAt || new Date(s.depositBypassExpiresAt).getTime() <= serverNowMs())) return false;
+  return true;
+}
+function depositBypassStatusText(){
+  const s = state.settings;
+  if(!depositBypassActive()) return s.depositBypassHash ? "انتهت مدة الكود — اكتب كود جديد" : "ما فيه كود — ما يقدر أحد يتجاوز العربون";
+  if(s.depositBypassMode==="hours"){
+    const end = new Date(s.depositBypassExpiresAt);
+    return `✓ كود مفعّل لين ${end.toLocaleString("ar-SA-u-ca-gregory-nu-latn",{dateStyle:"short",timeStyle:"short"})}`;
+  }
+  return "✓ كود مفعّل — لمرة وحدة";
+}
 // asks for a code in the password modal; resolves true only when check(code) passes
 function askForCode(message, placeholder, errorText, check){
   return new Promise(resolve=>{
@@ -1500,17 +1516,22 @@ $("setCuttingCardTemplate").addEventListener("change", ()=>{
   state.settings.cuttingCardTemplate = $("setCuttingCardTemplate").value;
   saveState(); renderAll();
 });
+$("setDepositBypassMode").addEventListener("change", ()=>{ $("setDepositBypassHours").style.display = $("setDepositBypassMode").value==="hours" ? "" : "none"; });
 $("saveDepositBypassBtn").addEventListener("click", async ()=>{
   const code = $("setDepositBypassCode").value.trim();
   if(code.length < 4){ showToast("الكود لازم يكون 4 خانات أو أكثر"); return; }
+  const mode = $("setDepositBypassMode").value, hours = parseInt($("setDepositBypassHours").value,10)||0;
+  if(mode==="hours" && hours<1){ showToast("اكتب عدد الساعات"); return; }
   state.settings.depositBypassHash = await sha256Hex(code);
+  state.settings.depositBypassMode = mode;
+  state.settings.depositBypassExpiresAt = mode==="hours" ? new Date(serverNowMs() + hours*3600000).toISOString() : "";
   $("setDepositBypassCode").value = "";
-  if(await saveState()){ logAudit("deposit_bypass_code_set", {}); showToast("تم حفظ كود تجاوز العربون"); }
+  if(await saveState()){ logAudit("deposit_bypass_code_set", {mode, hours: mode==="hours" ? hours : null}); showToast(mode==="once" ? "تم حفظ الكود — صالح لفاتورة وحدة بس" : `تم حفظ الكود — صالح ${hours} ساعة`); }
   renderAll();
 });
 $("clearDepositBypassBtn").addEventListener("click", async ()=>{
   if(!state.settings.depositBypassHash) return;
-  state.settings.depositBypassHash = "";
+  state.settings.depositBypassHash = ""; state.settings.depositBypassExpiresAt = "";
   if(await saveState()){ logAudit("deposit_bypass_code_cleared", {}); showToast("تم إلغاء كود تجاوز العربون"); }
   renderAll();
 });

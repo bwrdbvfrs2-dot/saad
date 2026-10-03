@@ -402,11 +402,13 @@ async function saveInvoice(){
     const minRequired = state.settings.minDepositType==="percent" ? saleTotalCheck*(state.settings.minDepositValue||0)/100 : (state.settings.minDepositValue||0);
     if(minRequired>0 && paidCheck < minRequired - 0.01){
       const msg = `لازم تحصّل عربون لا يقل عن ${minRequired.toFixed(0)} ريال قبل حفظ الفاتورة (الحد الأدنى المحدد من الإعدادات)`;
-      if(!state.settings.depositBypassHash){ showToast(msg); return; }
+      if(!depositBypassActive()){ showToast(msg); return; }
       const ok = await askForCode(`${msg}\n\nعشان تحفظها بعربون أقل، اكتب كود تجاوز العربون من المدير:`, "كود تجاوز العربون", "الكود غير صحيح",
-        async code=> !!code && await sha256Hex(code) === state.settings.depositBypassHash);
+        async code=> !!code && depositBypassActive() && await sha256Hex(code) === state.settings.depositBypassHash);
       if(!ok){ showToast(msg); return; }
-      depositBypassed = {required: +minRequired.toFixed(2), paid: +paidCheck.toFixed(2)};
+      // a one-time code is burnt in the same save as the invoice it lets through
+      if(state.settings.depositBypassMode!=="hours") state.settings.depositBypassHash = "";
+      depositBypassed = {required: +minRequired.toFixed(2), paid: +paidCheck.toFixed(2), codeMode: state.settings.depositBypassMode||"once"};
     }
   }
   const invData = {
