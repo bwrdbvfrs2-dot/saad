@@ -393,6 +393,7 @@ async function saveInvoice(){
       }
     });
   }
+  let depositBypassed = null;
   const activeGarmentsForDeposit = garments.filter(g=>g.status!=="ملغي");
   const allNoFabric = activeGarmentsForDeposit.length>0 && activeGarmentsForDeposit.every(g=>!g.itemCardId);
   if(isNewInvoice && state.settings.minDepositType!=="none" && !allNoFabric){
@@ -400,8 +401,12 @@ async function saveInvoice(){
     const paidCheck = paymentsListTemp.reduce((a,p)=>a+p.cash+p.network+(p.discount||0),0);
     const minRequired = state.settings.minDepositType==="percent" ? saleTotalCheck*(state.settings.minDepositValue||0)/100 : (state.settings.minDepositValue||0);
     if(minRequired>0 && paidCheck < minRequired - 0.01){
-      showToast(`لازم تحصّل عربون لا يقل عن ${minRequired.toFixed(0)} ريال قبل حفظ الفاتورة (الحد الأدنى المحدد من الإعدادات)`);
-      return;
+      const msg = `لازم تحصّل عربون لا يقل عن ${minRequired.toFixed(0)} ريال قبل حفظ الفاتورة (الحد الأدنى المحدد من الإعدادات)`;
+      if(!state.settings.depositBypassHash){ showToast(msg); return; }
+      const ok = await askForCode(`${msg}\n\nعشان تحفظها بعربون أقل، اكتب كود تجاوز العربون من المدير:`, "كود تجاوز العربون", "الكود غير صحيح",
+        async code=> !!code && await sha256Hex(code) === state.settings.depositBypassHash);
+      if(!ok){ showToast(msg); return; }
+      depositBypassed = {required: +minRequired.toFixed(2), paid: +paidCheck.toFixed(2)};
     }
   }
   const invData = {
@@ -498,6 +503,7 @@ async function saveInvoice(){
   const saved = await saveState();
   if(saved){
     logAudit(editingId ? "invoice_edited" : "invoice_created", {invoiceNumber:number, saleTotal: invoiceSaleTotal(invData), paid: invoicePaid(invData)});
+    if(depositBypassed) logAudit("deposit_bypassed", {invoiceNumber:number, customerName:custName, ...depositBypassed});
     if(!editingId){ selectedOfferIds = []; appliedPromoCode = null; }
     showToast(editingId ? "تم تحديث الفاتورة" : (appliedOffers.length ? `تم حفظ الفاتورة — تطبيق: ${appliedOffers.join("، ")}` : "تم حفظ الفاتورة"));
     if(!editingId){

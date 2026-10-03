@@ -795,6 +795,29 @@ function showConfirm(message){
     yesBtn.addEventListener("click", onYes); noBtn.addEventListener("click", onNo);
   });
 }
+async function sha256Hex(text){
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+// asks for a code in the password modal; resolves true only when check(code) passes
+function askForCode(message, placeholder, errorText, check){
+  return new Promise(resolve=>{
+    const input=$("passwordModalInput"), err=$("passwordModalError"), yesBtn=$("passwordModalYes"), noBtn=$("passwordModalNo");
+    const oldPh = input.placeholder, oldErr = err.textContent;
+    $("passwordModalText").textContent = message;
+    input.value = ""; input.placeholder = placeholder; err.textContent = errorText; err.style.display = "none";
+    $("passwordModalOverlay").classList.remove("hidden"); input.focus();
+    function cleanup(v){
+      $("passwordModalOverlay").classList.add("hidden"); input.placeholder = oldPh; err.textContent = oldErr; input.value = "";
+      yesBtn.removeEventListener("click", onYes); noBtn.removeEventListener("click", onNo); input.removeEventListener("keydown", onKey);
+      resolve(v);
+    }
+    async function onYes(){ if(await check(input.value.trim())) cleanup(true); else { err.style.display = ""; input.value=""; input.focus(); } }
+    function onNo(){ cleanup(false); }
+    function onKey(e){ if(e.key==="Enter") onYes(); }
+    yesBtn.addEventListener("click", onYes); noBtn.addEventListener("click", onNo); input.addEventListener("keydown", onKey);
+  });
+}
 function confirmWithPassword(message){
   return new Promise(resolve=>{
     $("passwordModalText").textContent = message;
@@ -1476,6 +1499,20 @@ $("setCommissionBasis").addEventListener("change", ()=>{
 $("setCuttingCardTemplate").addEventListener("change", ()=>{
   state.settings.cuttingCardTemplate = $("setCuttingCardTemplate").value;
   saveState(); renderAll();
+});
+$("saveDepositBypassBtn").addEventListener("click", async ()=>{
+  const code = $("setDepositBypassCode").value.trim();
+  if(code.length < 4){ showToast("الكود لازم يكون 4 خانات أو أكثر"); return; }
+  state.settings.depositBypassHash = await sha256Hex(code);
+  $("setDepositBypassCode").value = "";
+  if(await saveState()){ logAudit("deposit_bypass_code_set", {}); showToast("تم حفظ كود تجاوز العربون"); }
+  renderAll();
+});
+$("clearDepositBypassBtn").addEventListener("click", async ()=>{
+  if(!state.settings.depositBypassHash) return;
+  state.settings.depositBypassHash = "";
+  if(await saveState()){ logAudit("deposit_bypass_code_cleared", {}); showToast("تم إلغاء كود تجاوز العربون"); }
+  renderAll();
 });
 $("setMinDepositValue").addEventListener("input", ()=>{
   state.settings.minDepositValue = parseFloat($("setMinDepositValue").value)||0;
