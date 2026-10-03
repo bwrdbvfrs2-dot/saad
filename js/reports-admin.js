@@ -1165,6 +1165,7 @@ $("saveInvoiceBtn").addEventListener("click", saveInvoice);
 $("saveAndPrintBtn").addEventListener("click", saveInvoiceAndPrint);
 $("saveAndSendBtn").addEventListener("click", saveInvoiceAndSend);
 $("holdInvoiceBtn").addEventListener("click", holdCurrentInvoice);
+$("holdSaleBtn").addEventListener("click", holdCurrentSale);
 $("resetFormBtn").addEventListener("click", async ()=>{
   if(isInvoiceFormDirty()){
     const wantsSave = await showConfirm("عندك فاتورة لسا ما انحفظت. تبي تحفظها قبل ما تفرّغ النموذج؟");

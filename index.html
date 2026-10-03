@@ -707,9 +707,10 @@
   <p class="sub">لبيع المنتجات الجاهزة (شماغ، عطر، مسبحة...) — منفصلة تماماً عن فاتورة التفصيل، بدون خياط أو توزيع أو تسليم. تُدفع بالكامل وقت الحفظ.</p>
   <div class="row-3">
     <div class="field"><label>رقم الفاتورة (تلقائي — غير قابل للتعديل)</label><input type="text" id="saleNumber" readonly style="opacity:0.75;cursor:not-allowed;"></div>
-    <div class="field"><label>التاريخ</label><input type="date" id="saleDate"></div>
+    <div class="field"><label>التاريخ (تلقائي — ما يتغيّر)</label><input type="date" id="saleDate" readonly tabindex="-1" style="opacity:.75;cursor:not-allowed;"></div>
     <div class="field"></div>
   </div>
+  <div id="heldSalesWrap" style="display:none;margin-bottom:12px;"></div>
   <div class="row-2">
     <div class="field"><label>اسم العميل</label><input type="text" id="saleCustName" list="custNameDatalist" autocomplete="off"></div>
     <div class="field"><label>رقم جوال العميل</label><input type="tel" id="saleCustMobile" placeholder="05xxxxxxxx" maxlength="10" inputmode="numeric" autocomplete="off"></div>
@@ -745,7 +746,10 @@
     <span>الإجمالي: <b id="saleLiveSubtotal">0 ﷼</b> — الخصم: <b id="saleLiveDiscount">0 ﷼</b></span>
     <span class="amt">الصافي: <span id="saleLiveTotal">0 ﷼</span></span>
   </div>
-  <button class="btn btn-gold" id="saveSaleBtn">حفظ فاتورة المبيعات</button>
+  <div class="actions-row">
+    <button class="btn btn-gold" id="saveSaleBtn">حفظ فاتورة المبيعات</button>
+    <button class="btn btn-ghost" id="holdSaleBtn" title="العميل بيرجع يدفع — تنحفظ الأصناف بدون رقم فاتورة">تعليق الفاتورة</button>
+  </div>
   <div class="stitch"></div>
   <h3 style="margin:0 0 10px;font-size:14px;">سجل فواتير المبيعات</h3>
   <div class="table-wrap"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>العميل</th><th>الإجمالي</th></tr></thead><tbody id="salesInvoicesBody"></tbody></table></div>

@@ -27,6 +27,7 @@ function renderAll(){
   $("setWaPromo").value = state.settings.waPromoMessage;
   renderExpenseCategories();
   if(typeof renderHeldInvoices==="function") renderHeldInvoices();
+  if(typeof renderHeldSales==="function") renderHeldSales();
   renderFabricWidthQtyTable();
   $("setMeasureUnit").value = state.settings.measureUnit;
   $("setCommissionBasis").value = state.settings.commissionBasis||"تسليم";
