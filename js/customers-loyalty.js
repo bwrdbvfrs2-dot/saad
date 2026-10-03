@@ -207,6 +207,27 @@ function garmentMeasurementSeasonFromItemCardId(itemCardId){
   if(!card || !card.season) return null;
   return card.season==="شتوي" ? "winter" : "summer";
 }
+// a thobe's measurement season: its fabric's season, or — for the customer's own fabric (أجرة تفصيل بدون
+// قماش) or a card with no season — the time of year (November to March counts as winter)
+function measurementSeasonFor(itemCardId){
+  const fromCard = garmentMeasurementSeasonFromItemCardId(itemCardId);
+  if(fromCard) return fromCard;
+  const m = serverDate().getMonth()+1;
+  return (m>=11 || m<=3) ? "winter" : "summer";
+}
+// keeps the customer's last 3 measurements per season; a second save on the same day replaces that
+// day's entry instead of pushing an older real one out
+function recordMeasurementSnapshot(mobile, name, snapshot, seasonKey){
+  if(!mobile || !name || !snapshot || !Object.keys(snapshot.measurements||{}).length) return false;
+  ensureCustomerIndividual(mobile, name);
+  const individual = findIndividualRecord(mobile, name);
+  if(!individual) return false;
+  if(!individual.measurementHistory) individual.measurementHistory = {summer:[], winter:[]};
+  const list = individual.measurementHistory[seasonKey] || [];
+  if(list[0] && list[0].date===snapshot.date) list[0] = snapshot; else list.unshift(snapshot);
+  individual.measurementHistory[seasonKey] = list.slice(0,3);
+  return true;
+}
 function seasonLabelAr(key){ return key==="winter" ? "شتوي" : "صيفي"; }
 function findIndividualRecord(mobile, name){
   const cust = findCustomerByMobile(mobile);
@@ -238,17 +259,10 @@ function saveMeasurementSnapshotToHistory(idx){
   }
   const card = $("garmentsHolder").children[idx];
   const itemCardId = card ? card.querySelector(".g-itemCard").value : "";
-  const seasonKey = garmentMeasurementSeasonFromItemCardId(itemCardId);
-  ensureCustomerIndividual(mobile, name);
-  const individual = findIndividualRecord(mobile, name);
-  if(!individual.measurementHistory) individual.measurementHistory = {summer:[], winter:[]};
-  if(seasonKey){
-    const list = individual.measurementHistory[seasonKey] || [];
-    list.unshift(snapshot);
-    individual.measurementHistory[seasonKey] = list.slice(0,3);
-  }
+  const seasonKey = measurementSeasonFor(itemCardId);
+  recordMeasurementSnapshot(mobile, name, snapshot, seasonKey);
   saveState();
-  showToast(seasonKey ? `تم حفظ المقاس (${seasonLabelAr(seasonKey)}) بسجل العميل` : "تم الحفظ — بدون تصنيف موسمي لأن القماش المختار ما له موسم محدد بكرت الصنف");
+  showToast(`تم حفظ المقاس (${seasonLabelAr(seasonKey)}) بسجل العميل`);
 }
 // picks whichever of the two seasons' latest snapshot has the more recent date — lets a customer get
 // their absolute last measurement regardless of season, independent of the currently selected fabric
