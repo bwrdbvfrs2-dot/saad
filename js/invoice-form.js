@@ -802,6 +802,7 @@ function computeExpectedDeliveryDate(newGarmentsCount){
   return d;
 }
 function resetForm(){
+  if(typeof setMeasOnlyEdit==="function" && measOnlyEdit) setMeasOnlyEdit(false);
   editingId=null; paymentsListTemp=[]; selectedOfferIds=[]; appliedPromoCode=null;
   $("formTitle").textContent="فاتورة جديدة";
   $("invNumber").value = state.settings.nextInvoiceNumber;
@@ -815,8 +816,52 @@ function editInvoice(id){
   if(!currentUser || currentUser.role!=="مدير"){ showToast("تعديل الفواتير متاح للمدير فقط"); return; }
   const inv = state.invoices.find(i=>i.id===id); if(!inv) return;
   if(isMonthClosed(inv.originMonth)){ showToast("هذا الشهر مقفول — ما يمكن التعديل"); return; }
+  setMeasOnlyEdit(false);
+  loadInvoiceIntoForm(inv);
+}
+// ---- measurements-only edit (any employee): the invoice opens in the form, only the measurement cards
+// can be changed, and saving touches nothing but each thobe's measurements and their notes ----
+let measOnlyEdit = false;
+function setMeasOnlyEdit(on){
+  measOnlyEdit = !!on;
+  $("tab-invoice").classList.toggle("meas-only", measOnlyEdit);
+  if($("measOnlyNote")) $("measOnlyNote").style.display = measOnlyEdit ? "" : "none";
+}
+function editInvoiceMeasurements(id){
+  const inv = state.invoices.find(i=>i.id===id); if(!inv) return;
+  if(isMonthClosed(inv.originMonth)){ showToast("هذا الشهر مقفول — ما يمكن تعديل المقاسات"); return; }
+  if(!inv.garments.some(g=>g.status!=="ملغي" && g.status!=="تسليم")){ showToast("كل ثياب هذي الفاتورة تسلّمت أو انلغت — ما فيه مقاس يتعدّل"); return; }
+  loadInvoiceIntoForm(inv);
+  setMeasOnlyEdit(true);
+  $("formTitle").textContent = "تعديل المقاسات — فاتورة "+inv.number;
+  showToast("افتح «كرت المقاس» لكل ثوب وعدّل، ثم اضغط حفظ");
+}
+async function saveInvoiceMeasurementsOnly(){
+  const inv = state.invoices.find(i=>i.id===editingId); if(!inv){ setMeasOnlyEdit(false); return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
+  const read = readGarmentFields(inv.garments);
+  const changed = [], alreadyCut = [];
+  inv.garments.forEach((g,i)=>{
+    if(g.status==="ملغي" || g.status==="تسليم" || !read[i]) return;
+    const before = stableJson([g.measurements||{}, g.measurementNotes||""]);
+    const after = [read[i].measurements||{}, read[i].measurementNotes||""];
+    if(stableJson(after)===before) return;
+    g.measurements = after[0]; g.measurementNotes = after[1];
+    g.measurementsEditedBy = currentUser.username; g.measurementsEditedAt = serverNowIso();
+    recordMeasurementSnapshot(inv.customerMobile, inv.customerName, {date: todayStr(), measurements: {...g.measurements}, category: g.category}, measurementSeasonFor(g.itemCardId));
+    changed.push(i+1);
+    if(g.status!=="جديد") alreadyCut.push(i+1);
+  });
+  if(!changed.length){ showToast("ما تغيّر أي مقاس"); return; }
+  inv.lastEditedBy = currentUser.username; inv.lastEditedAt = serverNowIso();
+  if(!await saveStateWithRollback(snapshot)) return;
+  logAudit("invoice_measurements_edited", {invoiceNumber:inv.number, garments:changed});
+  setMeasOnlyEdit(false); resetForm();
+  showToast(`تم حفظ مقاسات فاتورة ${inv.number} (ثوب ${changed.join("، ")})${alreadyCut.length?` — تنبيه: ثوب ${alreadyCut.join("، ")} انقص من قبل، بلّغ القصاص`:""}`);
+}
+function loadInvoiceIntoForm(inv){
   switchTab("invoice");
-  editingId=id; paymentsListTemp = JSON.parse(JSON.stringify(inv.payments||[]));
+  editingId=inv.id; paymentsListTemp = JSON.parse(JSON.stringify(inv.payments||[]));
   $("formTitle").textContent="تعديل الفاتورة: "+inv.number;
   $("invNumber").value=inv.number; $("invDate").value=inv.date; $("invCount").value=inv.garments.length;
   $("invDeliveryDate").value = inv.expectedDeliveryDate || "";

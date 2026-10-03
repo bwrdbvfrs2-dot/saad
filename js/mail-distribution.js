@@ -251,6 +251,7 @@ function renderReturnsLog(){
   el.innerHTML = html;
 }
 async function saveInvoice(){
+  if(measOnlyEdit && editingId) return saveInvoiceMeasurementsOnly();
   const isNewInvoice = !editingId;
   // the number box is read-only and auto-filled; take the live counter for a new invoice so a number
   // another device used after this form was opened isn't reused (it'd be rejected as a duplicate)
