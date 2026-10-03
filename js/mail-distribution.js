@@ -410,6 +410,10 @@ async function saveInvoice(){
     payments: JSON.parse(JSON.stringify(paymentsListTemp)),
     garments,
     createdBy: oldInv ? oldInv.createdBy : currentUser.username,
+    createdAt: oldInv ? (oldInv.createdAt || null) : serverNowIso(),
+    // who last changed it (an edit by the manager, say) — the first saver stays in createdBy
+    lastEditedBy: oldInv ? currentUser.username : null,
+    lastEditedAt: oldInv ? serverNowIso() : null,
     notes: $("invNotes").value.trim(),
     expectedDeliveryDate: $("invDeliveryDate").value || null,
     appliedOffers, freeGifts,
@@ -755,6 +759,7 @@ function renderDistributionArea(inv){
       <div class="field"><label>شبكة (ريال)</label><input type="number" id="distPayNetwork" min="0" placeholder="0"></div>
       <div class="field"><label>رقم سند الشبكة (إلزامي لو فيه شبكة)</label><input type="text" id="distPayReceipt"></div>
     </div>
+    <div class="row-3"><div class="field"><label>نوع البطاقة</label><select id="distPayCard" class="card-type-select">${cardTypeOptionsHtml()}</select></div></div>
     ${(userDiscountEnabled(currentUser)||isCustomerVip(inv.customerMobile))?`<div class="field"><label>خصم (ريال)${isCustomerVip(inv.customerMobile)?` — عميل VIP: بدون حد أقصى`:` — الحد الأقصى لك: ${userMaxDiscountAmount(currentUser,total).toFixed(0)} ريال`}</label><input type="number" id="distPayDiscount" min="0" placeholder="0"></div>`:""}
     <button class="btn btn-ghost btn-sm" id="addDistPaymentBtn">إضافة دفعة</button>
     <div class="stitch"></div>
@@ -785,7 +790,7 @@ async function addDistPayment(inv){
   });
   inv.payments = inv.payments || [];
   const cashReceiptNo = cash>0 ? nextVoucherNo() : null;
-  const newPayment = {id:newId(), date:todayStr(), cash, network, cashReceiptNo, networkReceiptNo, discount};
+  const newPayment = {id:newId(), date:todayStr(), cash, network, cashReceiptNo, networkReceiptNo, discount, cardType: network>0 ? readCardType("distPayCard") : undefined};
   inv.payments.push(newPayment);
   applyPaymentToBalances(newPayment);
   let autoDelivered=0;

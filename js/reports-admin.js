@@ -274,7 +274,9 @@ function buildDailyReport(day, username){
   const moves = collectBoxMovements().filter(m=>m.date===day && (!username || (findCashBox(m.boxId)||{}).owner===username));
   const sumType = (t, sign)=> moves.filter(m=>boxType(m.boxId)===t && Math.sign(m.amount)===sign).reduce((a,m)=>a+m.amount,0);
   const flows = {cashIn:sumType("cash",1), cashOut:-sumType("cash",-1), netIn:sumType("network",1), netOut:-sumType("network",-1)};
-  return {newInvoices, deliveredThisMonth, deliveredOverdue, legacyDelivered, vouchersToday, expensesToday, expensesTotal, openingAdjustmentsToday, cash, network, discount, paymentRows, salesToday, saleReturnsToday, refundsToday, flows, moves, repairsToday, repairPaymentsToday};
+  const cardDay = (typeof allCardPayments==="function" ? allCardPayments() : []).filter(p=> p.date===day && mine(p.recordedBy));
+  const cardGross = cardDay.reduce((a,p)=>a+(p.network||0),0), cardFees = cardDay.reduce((a,p)=>a+networkFeeOf(p),0);
+  return {cardGross, cardFees, newInvoices, deliveredThisMonth, deliveredOverdue, legacyDelivered, vouchersToday, expensesToday, expensesTotal, openingAdjustmentsToday, cash, network, discount, paymentRows, salesToday, saleReturnsToday, refundsToday, flows, moves, repairsToday, repairPaymentsToday};
 }
 function renderDailyPreview(){
   const day = $("dailyDate").value || todayStr();
@@ -350,6 +352,7 @@ function buildDailyReportHtml(day, r, username){
     <div class="dr-box"><div class="dr-lbl">الشبكة — داخل / خارج (بعد رسوم البنك)</div><div class="dr-val">${f.netIn.toFixed(0)} / ${f.netOut.toFixed(0)} ﷼</div></div>
     <div class="dr-box dr-net"><div class="dr-lbl">صافي حركة الصناديق${username?` (${esc(username)})`:""}</div><div class="dr-val">${(f.cashIn-f.cashOut+f.netIn-f.netOut).toFixed(0)} ﷼</div></div>
   </div>
+  ${r.cardFees ? `<p class="dr-note">الشبكة كاملة (مثل جهاز الشبكة): ${fmtSar(r.cardGross)} ﷼ — خصم البنك (عمولة الشبكة): ${fmtSar(r.cardFees)} ﷼ — الصافي: ${fmtSar(r.cardGross-r.cardFees)} ﷼</p>` : ""}
   <p class="dr-note">صافي الكاش: ${(f.cashIn-f.cashOut).toFixed(0)} ﷼ — يشمل كل الحركات المسجّلة (دفعات، مبيعات، سندات، مصروفات، مرتجعات، مشتريات، موردين، رواتب، تحويلات).</p>
   </div>`;
   return html;
@@ -386,6 +389,7 @@ function dailyReportText(day, r, username){
   L.push("");
   L.push(`الكاش: داخل ${n(f.cashIn)} / خارج ${n(f.cashOut)}`);
   L.push(`الشبكة: داخل ${n(f.netIn)} / خارج ${n(f.netOut)}`);
+  if(r.cardFees) L.push(`الشبكة كاملة ${n(r.cardGross)} — عمولة البنك ${r.cardFees.toFixed(2)}`);
   L.push(`*صافي حركة الصناديق: ${n(f.cashIn-f.cashOut+f.netIn-f.netOut)} ﷼*`);
   L.push("");
   L.push(`أرسله: ${currentUser ? currentUser.username : ""}`);
@@ -1601,7 +1605,13 @@ $("setSensitivePin").addEventListener("input", ()=>{
 });
 $("sensitivePinSubmitBtn").addEventListener("click", submitSensitivePin);
 $("setBankFee").addEventListener("input", ()=>{
-  state.settings.bankFeePercent = parseFloat($("setBankFee").value)||0; saveState();
+  state.settings.bankFeePercent = parseFloat($("setBankFee").value)||0; saveState(); refreshCardTypeSelects();
+});
+$("setVisaFee").addEventListener("change", ()=>{
+  const v = $("setVisaFee").value.trim();
+  state.settings.bankFeeVisaPercent = v==="" || isNaN(parseFloat(v)) ? null : parseFloat(v);
+  saveState(); refreshCardTypeSelects();
+  showToast(state.settings.bankFeeVisaPercent===null ? "انشالت نسبة الفيزا — ما يقدر أحد يختار فيزا" : `نسبة خصم الفيزا: ${state.settings.bankFeeVisaPercent}%`);
 });
 $("setWaWelcome").addEventListener("change", ()=>{
   state.settings.waWelcomeEnabled = $("setWaWelcome").checked; saveState();

@@ -1129,7 +1129,7 @@ async function saveSaleInvoice(){
   const freeGifts = [];
   if(d.gift){ const g = findItemCard(d.gift.itemCardId); if(g){ g.stockQty = (g.stockQty||0) - d.gift.qty; freeGifts.push({...d.gift, costAtSale: g.currentCost||0}); } }
   const discounts = {promoCode: salePromo ? salePromo.code : null, promoDiscount:+d.promoDisc.toFixed(2), offerName: d.offer ? d.offer.name : null, offerDiscount:+d.offerDisc.toFixed(2), direct:+d.direct.toFixed(2), gift: salePromo && salePromo.type==="gift" ? (salePromo.giftDescription||"") : null};
-  const payment = {id:newId(), date, cash, network, receipt};
+  const payment = {id:newId(), date, cash, network, receipt, cardType: network>0 ? readCardType("saleCardType") : undefined};
   applyPaymentToBalances(payment);
   ensureCustomerIndividual(custMobile, custName);
   state.salesInvoices.push({id:newId(), number, date, customerName:custName, customerMobile:custMobile, items, discounts, discountTotal:+d.discountTotal.toFixed(2), freeGifts, payment, recordedBy:currentUser.username});
@@ -1476,14 +1476,22 @@ function updateExpSubItemOptions(){
   const items = (cat && cat.subItems) || [];
   sel.innerHTML = `<option value="">-- بدون بند فرعي --</option>` + items.map(s=>`<option value="${s.id}" ${s.id===curSub?"selected":""}>${esc(s.label)}</option>`).join("");
 }
+// a user's card takings on a day: the amounts as charged (what the terminal shows) and the bank fees on them
+function cardTakingsOf(username, day){
+  const list = (typeof allCardPayments==="function" ? allCardPayments() : []).filter(p=> p.recordedBy===username && p.date===day);
+  return {gross: list.reduce((a,p)=>a+(p.network||0),0), fee: list.reduce((a,p)=>a+networkFeeOf(p),0), count:list.length};
+}
 function renderBalancesTab(){
   if(!currentUser) return;
   const isAdmin = currentUser.role==="مدير";
   const myBoxes = userBoxes(currentUser.username);
   const el = $("myBoxesList");
   el.innerHTML = myBoxes.map(b=>{
+    // the main network box: today's card takings as the terminal shows them, the bank's cut, and what's left
+    const today = (b.type==="network" && b.isMain) ? cardTakingsOf(b.owner, todayStr()) : null;
     return `<div class="garment-card"><span class="tag">${b.name} — ${typeLabel(b.type)}${b.isMain?" (رئيسي)":""}</span>
-      <p class="sub" style="margin:6px 0 0;font-size:16px;color:var(--ivory);font-weight:700;">${boxTotal(b).toFixed(0)} ﷼</p>
+      <p class="sub" style="margin:6px 0 0;font-size:16px;color:var(--ivory);font-weight:700;">${b.type==="network"?"الرصيد الصافي: ":""}${fmtSar(boxTotal(b))} ﷼</p>
+      ${today && today.gross ? `<p class="sub" style="margin:4px 0 0;">شبكة اليوم (مثل جهاز الشبكة): <b>${fmtSar(today.gross)}</b> — خصم البنك: ${fmtSar(today.fee)} — الصافي: <b>${fmtSar(today.gross-today.fee)}</b> ﷼</p>` : ""}
     </div>`;
   }).join("");
 

@@ -37,20 +37,49 @@ function reverseGarmentAdvisory(g){
   state.advisory.embroidery -= g.advisoryCredit.embroidery;
   g.advisoryApplied = false;
 }
+// ---- card payments: مدى or فيزا/ماستر, each with its own bank fee (incl. the VAT on it) ----
+function cardFeeRate(type){
+  if(type==="visa"){ const v = state.settings.bankFeeVisaPercent; return (v===null || v===undefined || v==="" || isNaN(parseFloat(v))) ? null : parseFloat(v); }
+  return state.settings.bankFeePercent||0;
+}
+// the fee a payment cost — fixed on the payment when it was taken; older payments (before card types)
+// fall back to the مدى rate, which is how they were always counted
+function networkFeeOf(p){
+  if(!p || !p.network) return 0;
+  if(p.bankFee!==undefined && p.bankFee!==null) return p.bankFee;
+  return p.network*(state.settings.bankFeePercent||0)/100;
+}
+function networkNetOf(p){ return (p && p.network) ? p.network - networkFeeOf(p) : 0; }
+function cardTypeOptionsHtml(cur){
+  const visaRate = cardFeeRate("visa");
+  return `<option value="mada" ${cur!=="visa"?"selected":""}>مدى (${(state.settings.bankFeePercent||0)}%)</option>`
+    + `<option value="visa" ${cur==="visa"?"selected":""} ${visaRate===null?"disabled":""}>فيزا / ماستر${visaRate===null?" — حدّد نسبتها من الإعدادات":` (${visaRate}%)`}</option>`;
+}
+function refreshCardTypeSelects(){ document.querySelectorAll(".card-type-select").forEach(s=>{ const cur = s.value; s.innerHTML = cardTypeOptionsHtml(cur); }); }
+function readCardType(id){ const el = typeof id==="string" ? $(id) : id; const v = el && el.value; return v==="visa" && cardFeeRate("visa")!==null ? "visa" : "mada"; }
+// a select's "شبكة — فيزا" option, for screens that pick the method from one list
+function readMethodCard(method){ return method==="network_visa" ? "visa" : "mada"; }
+function isNetworkMethod(method){ return method==="network" || method==="network_visa"; }
 function applyPaymentToBalances(p, ownerUsername){
   if(p.appliedToBalances) return;
   const owner = ownerUsername || p.recordedBy || (currentUser&&currentUser.username);
   if(!owner) return;
   p.recordedBy = owner;
   if(p.cash){ const box=mainBoxOf(owner,"cash"); if(box) box.balance += p.cash; }
-  if(p.network){ const fee = state.settings.bankFeePercent||0; const box=mainBoxOf(owner,"network"); if(box) box.balance += p.network*(1-fee/100); }
+  if(p.network){
+    if(p.bankFee===undefined || p.bankFee===null){
+      p.cardType = p.cardType==="visa" ? "visa" : "mada";
+      p.bankFee = Math.round(p.network*(cardFeeRate(p.cardType)||0))/100;
+    }
+    const box=mainBoxOf(owner,"network"); if(box) box.balance += p.network - p.bankFee;
+  }
   p.appliedToBalances = true;
 }
 function reversePaymentFromBalances(p){
   if(!p.appliedToBalances) return;
   const owner = p.recordedBy;
   if(p.cash && owner){ const box=mainBoxOf(owner,"cash"); if(box) box.balance -= p.cash; }
-  if(p.network && owner){ const fee = state.settings.bankFeePercent||0; const box=mainBoxOf(owner,"network"); if(box) box.balance -= p.network*(1-fee/100); }
+  if(p.network && owner){ const box=mainBoxOf(owner,"network"); if(box) box.balance -= networkNetOf(p); }
   p.appliedToBalances = false;
 }
 function nextVoucherNo(){ const n=state.settings.nextVoucherNumber||1; state.settings.nextVoucherNumber=n+1; return n; }
@@ -233,6 +262,10 @@ function runShiftAudit(){
   const recordedExpTotal = expected.recordedCashExpenses + expected.recordedNetworkExpenses;
   const netTransfersOut = expected.sysTransfersOut - expected.sysTransfersReturned;
   let html = `<div class="remaining-box"><span>المتوقع من النظام (كاش ${expected.sysCash.toFixed(0)} + شبكة ${expected.sysNetwork.toFixed(0)} + تحويلات مستلمة ${expected.sysTransfers.toFixed(0)}${netTransfersOut>0?` − تحويلات مرسلة ${netTransfersOut.toFixed(0)}`:""}${recordedExpTotal>0?` − مصروفات مسجّلة ${recordedExpTotal.toFixed(0)}`:""}${Math.abs(expected.sysOtherNet)>0.001?` ${expected.sysOtherNet>0?"+":"−"} حركات صندوق أخرى ${Math.abs(expected.sysOtherNet).toFixed(0)}`:""})</span><span class="amt">${expected.total.toFixed(2)} ريال</span></div>`;
+  const cardDay = typeof cardTakingsOf==="function" ? cardTakingsOf(currentUser.username, date) : null;
+  if(cardDay && cardDay.gross){
+    html += `<p class="sub" style="margin:4px 0;">ℹ الشبكة محسوبة بالمبلغ كامل مثل جهاز الشبكة (${fmtSar(cardDay.gross)} ﷼). خصم البنك عليها ${fmtSar(cardDay.fee)} ﷼، والصافي اللي يوصل البنك ${fmtSar(cardDay.gross-cardDay.fee)} ﷼ — الخصم مسجّل مصروف «عمولة الشبكة» وما يدخل في العجز والزيادة.</p>`;
+  }
   if(netTransfersOut>0){
     html += `<p class="sub" style="margin:4px 0;">ℹ تم خصم ${netTransfersOut.toFixed(0)} ريال تحويلات أرسلتها من صندوقك اليوم لمستخدم آخر (ما رجعت لك حتى الآن).</p>`;
   }
@@ -406,17 +439,20 @@ function transferFunds(fromBoxId, toOwnerUsername, toBoxId, amount, purpose){
     // cross-user transfer: pending request, amount already reserved (deducted) from sender
     state.transferRequests.push({
       id: newId(), seq: null,
-      fromBoxId, fromOwner: fromBox.owner, toOwner: toOwnerUsername,
+      fromBoxId, fromOwner: fromBox.owner, toOwner: toOwnerUsername, boxType: fromBox.type==="network" ? "network" : "cash",
       amount, purpose: purpose||"", status:"pending",
       createdAt: todayStr(), resolvedAt: null, voucherNumber: null,
     });
     return {ok:true, instant:false};
   }
 }
+// a transfer lands in the receiver's box of the same kind it left: network money stays network money
+// (older requests didn't record it — their sending box still says which kind it was)
+function transferBoxType(t){ return t.boxType || ((findCashBox(t.fromBoxId)||{}).type==="network" ? "network" : "cash"); }
 async function acceptTransferRequest(id){
   const req = state.transferRequests.find(r=>r.id===id); if(!req || req.status!=="pending") return;
   const snapshot = JSON.parse(JSON.stringify(state));
-  const toBox = mainBoxOf(req.toOwner,"cash");
+  const toBox = mainBoxOf(req.toOwner, transferBoxType(req));
   if(toBox) toBox.balance += req.amount;
   req.status="accepted"; req.resolvedAt=todayStr(); req.voucherNumber=nextVoucherNo();
   if(await saveStateWithRollback(snapshot)){
@@ -743,7 +779,7 @@ function addPaymentTemp(){
   if(cash<=0 && network<=0){ showToast("أدخل مبلغ كاش أو شبكة"); return; }
   if(network>0 && !networkReceiptNo){ showToast("أدخل رقم سند الشبكة"); return; }
   const cashReceiptNo = cash>0 ? nextVoucherNo() : null;
-  paymentsListTemp.push({id:newId(), date:todayStr(), cash, network, cashReceiptNo, networkReceiptNo});
+  paymentsListTemp.push({id:newId(), date:todayStr(), cash, network, cashReceiptNo, networkReceiptNo, cardType: network>0 ? readCardType("newPayCardType") : undefined});
   $("newPayCash").value=""; $("newPayNetwork").value=""; $("newPayReceipt").value="";
   renderPaymentsList();
   if(cashReceiptNo) showToast(`تم إصدار سند كاش رقم ${cashReceiptNo} تلقائياً`);

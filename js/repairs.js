@@ -28,7 +28,7 @@ function readRepairPayment(prefix, maxAmount){
   if(cash+network > maxAmount + 0.001) return {error:`المبلغ أكبر من المتبقي (${maxAmount.toFixed(0)} ريال)`};
   if(network>0 && !networkReceiptNo) return {error:"أدخل رقم إيصال الشبكة"};
   if(cash+network<=0) return {payment:null};
-  return {payment:{id:newId(), date:todayStr(), cash, network, networkReceiptNo:network>0?networkReceiptNo:"", cashReceiptNo: cash>0 ? nextVoucherNo() : null}};
+  return {payment:{id:newId(), date:todayStr(), cash, network, networkReceiptNo:network>0?networkReceiptNo:"", cashReceiptNo: cash>0 ? nextVoucherNo() : null, cardType: network>0 ? readCardType(prefix+"Card") : undefined}};
 }
 
 async function saveNewRepair(){
@@ -119,7 +119,7 @@ async function cancelRepair(id){
   r.refunds = [];
   (r.payments||[]).forEach(p=>{
     if(!p.appliedToBalances) return;
-    r.refunds.push({date:todayStr(), cash:p.cash||0, network:p.network||0, owner:p.recordedBy});
+    r.refunds.push({date:todayStr(), cash:p.cash||0, network:p.network||0, bankFee: networkFeeOf(p), owner:p.recordedBy});
     reversePaymentFromBalances(p);
   });
   if(r.advisoryWage){ state.advisory.wages -= r.advisoryWage; r.advisoryWage = 0; }
@@ -164,7 +164,7 @@ function renderRepairsList(){
         <div class="field"><label>كاش</label><input type="number" min="0" id="rpp-${r.id}-Cash" placeholder="0"></div>
         <div class="field"><label>شبكة</label><input type="number" min="0" id="rpp-${r.id}-Net" placeholder="0"></div>
         <div class="field"><label>رقم إيصال الشبكة</label><input type="text" id="rpp-${r.id}-Rec"></div>
-      </div>` : "";
+      </div><div class="row-3"><div class="field"><label>نوع البطاقة</label><select id="rpp-${r.id}-Card" class="card-type-select">${cardTypeOptionsHtml()}</select></div></div>` : "";
     return `<div class="garment-card" style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;">
         <span class="tag">${repairLabel(r)} — ${esc(REPAIR_STATUS_LABELS[r.status]||r.status)}</span>

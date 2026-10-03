@@ -122,7 +122,7 @@ function collectBoxMovements(){
     if((p.cash||0)+(p.network||0)<=0) return;
     if(!p.recordedBy){ out.push({boxId:null, amount:(p.cash||0)+(p.network||0), label, date}); return; }
     if(p.cash) add(mainId(p.recordedBy,"cash"), p.cash, label, date);
-    if(p.network) add(mainId(p.recordedBy,"network"), p.network*(1-fee/100), label, date);
+    if(p.network) add(mainId(p.recordedBy,"network"), networkNetOf(p), label, date);
   };
   state.invoices.forEach(inv=> (inv.payments||[]).forEach(p=> pay(p, `دفعة فاتورة ${inv.number}`, p.date)));
   state.salesInvoices.forEach(s=>{ if(s.payment) pay(s.payment, `فاتورة مبيعات ${s.number}`, s.payment.date||s.date); });
@@ -132,7 +132,7 @@ function collectBoxMovements(){
     (r.payments||[]).forEach(p=> pay(p, `دفعة صيانة ص-${r.number}`, p.date));
     (r.refunds||[]).forEach(f=>{
       if(f.cash) add(mainId(f.owner,"cash"), -f.cash, `استرداد صيانة ملغاة ص-${r.number}`, f.date);
-      if(f.network) add(mainId(f.owner,"network"), -f.network*(1-fee/100), `استرداد صيانة ملغاة ص-${r.number}`, f.date);
+      if(f.network) add(mainId(f.owner,"network"), -(f.network - (f.bankFee!==undefined ? f.bankFee : f.network*fee/100)), `استرداد صيانة ملغاة ص-${r.number}`, f.date);
     });
   });
   state.vouchers.forEach(v=> add(v.boxId, v.type==="receipt" ? v.amount : -v.amount, `سند ${v.type==="receipt"?"قبض":"صرف"} ${v.voucherNo}`, v.date));
@@ -145,7 +145,7 @@ function collectBoxMovements(){
   state.payrollLedger.forEach(e=>{ if(e.type==="payment"||e.type==="advance") add(e.boxId, -e.amount, `${e.type==="advance"?"سلفة":"راتب"} ${e.username}`, e.date); });
   state.transferRequests.forEach(t=>{
     add(t.fromBoxId, -t.amount, "تحويل مرسل", t.createdAt);
-    if(t.status==="accepted") add(mainId(t.toOwner,"cash"), t.amount, "تحويل مستلم", t.resolvedAt);
+    if(t.status==="accepted") add(mainId(t.toOwner, transferBoxType(t)), t.amount, "تحويل مستلم", t.resolvedAt);
     if(t.status==="rejected") add(t.fromBoxId, t.amount, "تحويل مرفوض راجع", t.resolvedAt);
   });
   (state.boxTransfers||[]).forEach(t=>{ add(t.fromBoxId, -t.amount, "تحويل بين صناديقك", t.date); add(t.toBoxId, t.amount, "تحويل بين صناديقك", t.date); });
@@ -262,6 +262,18 @@ function renderTopExpensesReport(){
       </div>`;
     }).join("");
 }
+// every card payment's bank fee, by the day it was taken — an expense («عمولة الشبكة») of that month
+function allCardPayments(){
+  const out = [];
+  state.invoices.forEach(inv=> (inv.payments||[]).forEach(p=>{ if(p.network) out.push(p); }));
+  state.salesInvoices.forEach(s=>{ if(s.payment && s.payment.network) out.push({...s.payment, date: s.payment.date||s.date, recordedBy: s.payment.recordedBy||s.recordedBy}); });
+  (state.openingDebtPayments||[]).forEach(p=>{ if(p.network) out.push(p); });
+  (state.repairs||[]).forEach(r=> (r.payments||[]).forEach(p=>{ if(p.network) out.push(p); }));
+  return out;
+}
+function networkFeesForMonth(monthLabel){
+  return allCardPayments().filter(p=>(p.date||"").slice(0,7)===monthLabel).reduce((a,p)=>a+networkFeeOf(p),0);
+}
 function computeMonthlyFinancials(monthLabel){
   let revenue=0, cost=0, garmentsCut=0;
   state.invoices.forEach(inv=>{
@@ -291,7 +303,8 @@ function computeMonthlyFinancials(monthLabel){
   revenue += repairs.revenue; cost += repairs.cost;
   const operationalLosses = totalOperationalLossesForMonth(monthLabel);
   const generalExpenses = generalExpensesForMonth(monthLabel);
-  cost += operationalLosses + generalExpenses + giftsCost;
+  const networkFees = networkFeesForMonth(monthLabel);
+  cost += operationalLosses + generalExpenses + giftsCost + networkFees;
   const rawFixed = totalFixed();
   const salesProfit = totalSalesProfitForMonth(monthLabel);
   // fixed costs normally ride on the garments cut this month; with none cut they still have to be
@@ -299,7 +312,7 @@ function computeMonthlyFinancials(monthLabel){
   if(garmentsCutInMonth(monthLabel)===0) cost += Math.max(0, rawFixed - salesProfit);
   const excessSalesProfit = Math.max(0, salesProfit - rawFixed); // ready-made sales profit beyond what's needed to fully cover fixed costs adds straight to net profit
   cost -= excessSalesProfit;
-  return {revenue, cost, profit:revenue-cost, garmentsCut, generalExpenses, operationalLosses, giftsCost, salesProfit, excessSalesProfit, repairsRevenue:repairs.revenue, repairsCount:repairs.count};
+  return {revenue, cost, profit:revenue-cost, garmentsCut, generalExpenses, operationalLosses, giftsCost, networkFees, salesProfit, excessSalesProfit, repairsRevenue:repairs.revenue, repairsCount:repairs.count};
 }
 function totalPendingCustody(){
   let total = 0;
@@ -407,6 +420,7 @@ function renderSensitiveFinancials(){
     <div class="stat-card sales"><div class="lbl">إجمالي المبيعات المحقّقة (الشهر الحالي)</div><div class="val">${monthlyFin.revenue.toFixed(0)} ﷼</div></div>
     <div class="stat-card cost"><div class="lbl">إجمالي التكاليف المحقّقة (الشهر الحالي)</div><div class="val">${monthlyFin.cost.toFixed(0)} ﷼</div></div>
     <div class="stat-card cost"><div class="lbl">منها: مصاريف عامة (غير مرتبطة برصيد إرشادي)</div><div class="val">${monthlyFin.generalExpenses.toFixed(0)} ﷼</div></div>
+    <div class="stat-card cost"><div class="lbl">منها: عمولة الشبكة (خصم البنك)</div><div class="val">${(monthlyFin.networkFees||0).toFixed(2)} ﷼</div></div>
     <div class="stat-card profit"><div class="lbl">صافي الأرباح المحقّقة (الشهر الحالي)</div><div class="val" style="color:${monthlyFin.profit>=0?'var(--profit)':'var(--loss)'}">${monthlyFin.profit.toFixed(0)} ﷼</div></div>
     <div class="stat-card count"><div class="lbl">عدد الفواتير (الشهر الحالي)</div><div class="val">${curInvoicesCount} فاتورة / ${curGarmentsCount} ثوب</div></div>
     <div class="stat-card" style="border-color:var(--gold-soft);"><div class="lbl">أمانات معلّقة (عربونات لم تتحرر بعد)</div><div class="val" style="color:var(--gold-soft);">${pendingCustody.toFixed(0)} ﷼</div></div>
@@ -572,6 +586,7 @@ function showQuickDeliveryPayment(inv, idx, remaining, targetId){
       <div class="field"><label>كاش (ريال)</label><input type="number" id="quickPayCash" min="0" value="${remaining.toFixed(0)}"></div>
       <div class="field"><label>شبكة (ريال)</label><input type="number" id="quickPayNetwork" min="0" value="0"></div>
     </div>
+    <div class="field"><label>نوع البطاقة</label><select id="quickPayCard" class="card-type-select">${cardTypeOptionsHtml()}</select></div>
     <div class="field"><label>رقم سند الشبكة (إلزامي لو فيه شبكة)</label><input type="text" id="quickPayReceipt"></div>
     <button class="btn btn-gold btn-sm" onclick="confirmQuickDeliveryPayment('${inv.id}', ${idxArg})">تحصيل وتسليم${Array.isArray(idx)?` (${idx.length} ثياب)`:""}</button>
     <button class="btn btn-ghost btn-sm" onclick="document.getElementById('${target}').innerHTML='';">إلغاء</button>
@@ -587,7 +602,7 @@ function confirmQuickDeliveryPayment(invId, idx){
   const remaining = invoiceRemaining(inv);
   if(Math.abs((cash+network)-remaining)>0.01){ showToast(`المبلغ لازم يساوي المتبقي بالضبط (${remaining.toFixed(0)} ريال)`); return; }
   const snapshot = JSON.parse(JSON.stringify(state));
-  const payment = {cash, network, discount:0, receiptNo:receipt||undefined, date:todayStr()};
+  const payment = {cash, network, discount:0, receiptNo:receipt||undefined, date:todayStr(), cardType: network>0 ? readCardType("quickPayCard") : undefined};
   inv.payments = inv.payments||[]; inv.payments.push(payment);
   applyPaymentToBalances(payment);
   completeGarmentAdvance(inv, idx, "تسليم", snapshot);
@@ -652,6 +667,7 @@ function renderDebtsTab(){
       <div class="row-3">
         <div class="field"><label>كاش (ريال)</label><input type="number" class="debt-cash" data-inv="${inv.id}" data-idx="${idx}" min="0" placeholder="0"></div>
         <div class="field"><label>شبكة (ريال)</label><input type="number" class="debt-network" data-inv="${inv.id}" data-idx="${idx}" min="0" placeholder="0"></div>
+        <div class="field"><label>نوع البطاقة</label><select class="debt-card card-type-select" data-inv="${inv.id}" data-idx="${idx}">${cardTypeOptionsHtml()}</select></div>
         <div class="field"><label>رقم السند</label><input type="text" class="debt-receipt" data-inv="${inv.id}" data-idx="${idx}"></div>
       </div>
       <button class="btn btn-gold btn-sm" onclick="payCreditDebt('${inv.id}', ${idx})">تسديد الدين</button>
@@ -688,7 +704,7 @@ function renderCustomerDebts(){
         <p style="font-weight:700;color:var(--loss);margin:6px 0;">المبلغ المتبقي: ${remaining.toFixed(0)} ﷼</p>
         <div class="row-2">
           <div class="field" style="margin-bottom:0;"><label>مبلغ السداد (ريال)</label><input type="number" class="od-settle-amount" data-cust="${c.id}" min="0" max="${remaining}" placeholder="${remaining.toFixed(0)}"></div>
-          <div class="field" style="margin-bottom:0;"><label>طريقة السداد</label><select class="od-settle-method" data-cust="${c.id}"><option value="cash">كاش</option><option value="network">شبكة</option></select></div>
+          <div class="field" style="margin-bottom:0;"><label>طريقة السداد</label><select class="od-settle-method" data-cust="${c.id}"><option value="cash">كاش</option><option value="network">شبكة — مدى</option><option value="network_visa" ${cardFeeRate("visa")===null?"disabled":""}>شبكة — فيزا / ماستر</option></select></div>
         </div>
         <div class="actions-row" style="margin-top:8px;">
           <button class="btn btn-gold btn-sm" onclick="settleOpeningDebt('${c.id}')">سداد</button>
@@ -715,7 +731,7 @@ function renderCustomerDebts(){
         <p style="font-weight:700;color:var(--loss);margin:6px 0;">المبلغ المتبقي: ${remaining.toFixed(0)} ﷼</p>
         <div class="row-2">
           <div class="field" style="margin-bottom:0;"><label>مبلغ السداد (ريال)</label><input type="number" class="debt-settle-amount" data-inv="${inv.id}" min="0" max="${remaining}" placeholder="${remaining.toFixed(0)}"></div>
-          <div class="field" style="margin-bottom:0;"><label>طريقة السداد</label><select class="debt-settle-method" data-inv="${inv.id}"><option value="cash">كاش</option><option value="network">شبكة</option></select></div>
+          <div class="field" style="margin-bottom:0;"><label>طريقة السداد</label><select class="debt-settle-method" data-inv="${inv.id}"><option value="cash">كاش</option><option value="network">شبكة — مدى</option><option value="network_visa" ${cardFeeRate("visa")===null?"disabled":""}>شبكة — فيزا / ماستر</option></select></div>
         </div>
         <div class="actions-row" style="margin-top:8px;">
           <button class="btn btn-gold btn-sm" onclick="settleCustomerDebt('${inv.id}')">سداد</button>
@@ -746,7 +762,7 @@ async function settleCustomerDebt(invId){
   const method = methodSel.value;
   if(!inv.payments) inv.payments=[];
   const snapshot = JSON.parse(JSON.stringify(state));
-  const payment = {id:Date.now()+"-settle", date:todayStr(), cash: method==="cash"?amount:0, network: method==="network"?amount:0, receipt:"", recordedBy: currentUser.username, note:"سداد من شاشة مديونيات العملاء"};
+  const payment = {id:Date.now()+"-settle", date:todayStr(), cash: method==="cash"?amount:0, network: isNetworkMethod(method)?amount:0, receipt:"", recordedBy: currentUser.username, note:"سداد من شاشة مديونيات العملاء", cardType: isNetworkMethod(method) ? readMethodCard(method) : undefined};
   inv.payments.push(payment);
   applyPaymentToBalances(payment); // this was missing entirely before — the cash/network was never credited to any box
   if(await saveStateWithRollback(snapshot)){
@@ -846,7 +862,7 @@ async function settleOpeningDebt(custId){
   if(amount<=0){ showToast("أدخل مبلغ سداد صحيح"); return; }
   if(amount - remaining > 0.01){ showToast(`المبلغ أكبر من المتبقي (${remaining.toFixed(0)} ريال)`); return; }
   const snapshot = JSON.parse(JSON.stringify(state));
-  const payment = {id:newId(), customerId:cust.id, customerCode:cust.code, mobile:cust.mobile, date:todayStr(), cash: method==="cash"?amount:0, network: method==="network"?amount:0, recordedBy: currentUser.username};
+  const payment = {id:newId(), customerId:cust.id, customerCode:cust.code, mobile:cust.mobile, date:todayStr(), cash: method==="cash"?amount:0, network: isNetworkMethod(method)?amount:0, recordedBy: currentUser.username, cardType: isNetworkMethod(method) ? readMethodCard(method) : undefined};
   state.openingDebtPayments.push(payment);
   applyPaymentToBalances(payment);
   if(await saveStateWithRollback(snapshot)){
@@ -868,7 +884,8 @@ async function payCreditDebt(invId, idx){
   const owed = creditGarmentOwed(g, inv);
   if((cash+network) - owed > 0.01){ showToast(`المبلغ أكبر من المتبقي على هذا الثوب (${owed.toFixed(0)} ريال)`); return; }
   const snapshot = JSON.parse(JSON.stringify(state));
-  const payment = {id:newId(), date:todayStr(), cash, network, receipt, discount:0};
+  const cardSel = document.querySelector(`.debt-card[data-inv="${invId}"][data-idx="${idx}"]`);
+  const payment = {id:newId(), date:todayStr(), cash, network, receipt, discount:0, cardType: network>0 ? readCardType(cardSel) : undefined};
   inv.payments = inv.payments || [];
   inv.payments.push(payment);
   applyPaymentToBalances(payment);

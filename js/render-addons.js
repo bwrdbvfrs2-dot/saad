@@ -20,6 +20,8 @@ function renderAll(){
   $("minDepositValueWrap").style.display = state.settings.minDepositType==="none" ? "none" : "";
   $("minDepositValueLabel").textContent = state.settings.minDepositType==="percent" ? "النسبة (%)" : "المبلغ (ريال)";
   $("setBankFee").value = state.settings.bankFeePercent;
+  if($("setVisaFee") && document.activeElement!==$("setVisaFee")) $("setVisaFee").value = (state.settings.bankFeeVisaPercent===null || state.settings.bankFeeVisaPercent===undefined) ? "" : state.settings.bankFeeVisaPercent;
+  if(typeof refreshCardTypeSelects==="function") refreshCardTypeSelects();
   $("setWaWelcome").checked = !!state.settings.waWelcomeEnabled;
   $("setWaPromo").value = state.settings.waPromoMessage;
   renderExpenseCategories();
@@ -79,7 +81,8 @@ function renderAll(){
     const tr=document.createElement("tr"); tr.className="invoice-row";
     const profitCell = !profitData ? `<span class="sub">—</span>`
       : `<span class="${profitData.value>=0?'profit-pos':'profit-neg'}">${profitData.value.toFixed(0)} ﷼</span><br><span class="sub" style="font-size:10px;">${profitData.mode==="expected"?"الربح المتوقع (بعد التسليم)":"الربح والخسارة (قبل التسليم)"}</span>`;
-    tr.innerHTML = `<td><b>${esc(inv.number)}</b></td><td>${esc(inv.customerName||"—")}</td><td>${inv.date}</td>
+    const byLine = `<br><span class="sub" style="font-size:10px;">سجّلها: ${esc(inv.createdBy||"—")}${inv.lastEditedBy?` — آخر تعديل: ${esc(inv.lastEditedBy)}${inv.lastEditedAt?" "+inv.lastEditedAt.slice(0,10):""}`:""}</span>`;
+    tr.innerHTML = `<td><b>${esc(inv.number)}</b></td><td>${esc(inv.customerName||"—")}${byLine}</td><td>${inv.date}</td>
       <td>${s.toFixed(0)} ﷼</td><td>${paid.toFixed(0)} ﷼</td><td>${rem.toFixed(0)} ﷼</td>
       <td>${profitCell}</td>
       <td style="white-space:nowrap;">${isAdmin?`<button class="btn btn-ghost btn-sm" style="color:var(--gold-soft);border-color:var(--gold-soft);" onclick="editInvoice('${inv.id}')" title="تعديل الفاتورة">تعديل</button> <button class="btn btn-ghost btn-sm" onclick="createInvoiceReturn('${inv.id}')" title="تسجيل مرتجع">مرتجع</button>`:""}<button class="icon-btn" onclick="printCustomerReceipt('${inv.id}')" title="طباعة فاتورة العميل"><i data-lucide="printer"></i></button><button class="icon-btn" onclick="shareReceiptViaWhatsApp('${inv.id}')" title="إرسال الفاتورة واتساب"><i data-lucide="send"></i></button>${inv.einvoice?`<button class="icon-btn" onclick="showEinvoiceDetails('${inv.id}')" title="بيانات الفوترة الإلكترونية"><i data-lucide="receipt"></i></button>`:""}</td>`;
