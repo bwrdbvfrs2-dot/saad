@@ -250,6 +250,8 @@ function normalizeState(){
     state.settings.qcTabGranted = true;
   }
   if(!state.qcLog) state.qcLog=[];
+  if(!state.heldInvoices) state.heldInvoices=[];
+  if(!state.heldSales) state.heldSales=[];
   // one-time: hand the new external-repairs tab to every employee role. The "done" mark lives on each role
   // itself, not in settings — only a manager's save can change permissions, so a mark in settings saved
   // by a cashier first would have skipped the grant for good.
@@ -408,6 +410,8 @@ const WRITE_LOG_ITEMS = {
   salesInvoices:{one:"فاتورة مبيعات", many:"فواتير مبيعات", name:x=>"#"+x.number},
   customers:{one:"عميل", many:"عملاء", name:x=>x.code||x.mobile||""},
   itemCards:{one:"صنف", many:"أصناف", name:x=>x.name||x.code||""},
+  heldInvoices:{one:"فاتورة معلّقة", many:"فواتير معلّقة", name:x=>x.customerName||""},
+  heldSales:{one:"فاتورة مبيعات معلّقة", many:"فواتير مبيعات معلّقة", name:x=>x.customerName||""},
   suppliers:{one:"مورد", many:"موردين", name:x=>x.name||""},
   purchases:{one:"فاتورة مشتريات", many:"فواتير مشتريات", name:x=>"#"+(x.invoiceNo||"")},
   purchaseReturns:{one:"مرتجع مشتريات", many:"مرتجعات مشتريات", name:x=>(x.value||0)+" ﷼"},

@@ -18,13 +18,18 @@ function renderAll(){
   $("setMinDepositType").value = state.settings.minDepositType||"none";
   $("setMinDepositValue").value = state.settings.minDepositValue||"";
   $("minDepositValueWrap").style.display = state.settings.minDepositType==="none" ? "none" : "";
+  $("depositBypassRow").style.display = state.settings.minDepositType==="none" ? "none" : "";
+  $("depositBypassStatus").textContent = depositBypassStatusText();
   $("minDepositValueLabel").textContent = state.settings.minDepositType==="percent" ? "النسبة (%)" : "المبلغ (ريال)";
   $("setBankFee").value = state.settings.bankFeePercent;
   if($("setVisaFee") && document.activeElement!==$("setVisaFee")) $("setVisaFee").value = (state.settings.bankFeeVisaPercent===null || state.settings.bankFeeVisaPercent===undefined) ? "" : state.settings.bankFeeVisaPercent;
   if(typeof refreshCardTypeSelects==="function") refreshCardTypeSelects();
   $("setWaWelcome").checked = !!state.settings.waWelcomeEnabled;
+  if($("setWaInvoiceMode")) $("setWaInvoiceMode").value = state.settings.waInvoiceMode==="text" ? "text" : "image";
   $("setWaPromo").value = state.settings.waPromoMessage;
   renderExpenseCategories();
+  if(typeof renderHeldInvoices==="function") renderHeldInvoices();
+  if(typeof renderHeldSales==="function") renderHeldSales();
   renderFabricWidthQtyTable();
   $("setMeasureUnit").value = state.settings.measureUnit;
   $("setCommissionBasis").value = state.settings.commissionBasis||"تسليم";

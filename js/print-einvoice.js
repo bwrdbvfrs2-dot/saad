@@ -504,6 +504,8 @@ async function shareReceiptViaWhatsApp(invId){
   const inv = state.invoices.find(i=>i.id===invId);
   if(!inv) return;
   if(!inv.customerMobile){ showToast("ما فيه رقم جوال مسجّل لهذا العميل"); return; }
+  // the shop's choice in the settings: the invoice as a picture (default) or as a text message
+  if(state.settings.waInvoiceMode==="text"){ window.open(waLink(inv.customerMobile, buildInvoiceTextMessage(inv)), "_blank"); return; }
   const chat = canShareImageFiles() ? null : window.open("", "_blank");
   showToast("جاري تجهيز صورة الفاتورة…");
   try{

@@ -795,6 +795,45 @@ function showConfirm(message){
     yesBtn.addEventListener("click", onYes); noBtn.addEventListener("click", onNo);
   });
 }
+async function sha256Hex(text){
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+// the deposit bypass code counts only while it has a hash and (for a timed code) its end time hasn't passed
+function depositBypassActive(){
+  const s = state.settings;
+  if(!s.depositBypassHash) return false;
+  if(s.depositBypassMode==="hours" && (!s.depositBypassExpiresAt || new Date(s.depositBypassExpiresAt).getTime() <= serverNowMs())) return false;
+  return true;
+}
+function depositBypassStatusText(){
+  const s = state.settings;
+  if(!depositBypassActive()) return s.depositBypassHash ? "انتهت مدة الكود — اكتب كود جديد" : "ما فيه كود — ما يقدر أحد يتجاوز العربون";
+  if(s.depositBypassMode==="hours"){
+    const end = new Date(s.depositBypassExpiresAt);
+    return `✓ كود مفعّل لين ${end.toLocaleString("ar-SA-u-ca-gregory-nu-latn",{dateStyle:"short",timeStyle:"short"})}`;
+  }
+  return "✓ كود مفعّل — لمرة وحدة";
+}
+// asks for a code in the password modal; resolves true only when check(code) passes
+function askForCode(message, placeholder, errorText, check){
+  return new Promise(resolve=>{
+    const input=$("passwordModalInput"), err=$("passwordModalError"), yesBtn=$("passwordModalYes"), noBtn=$("passwordModalNo");
+    const oldPh = input.placeholder, oldErr = err.textContent;
+    $("passwordModalText").textContent = message;
+    input.value = ""; input.placeholder = placeholder; err.textContent = errorText; err.style.display = "none";
+    $("passwordModalOverlay").classList.remove("hidden"); input.focus();
+    function cleanup(v){
+      $("passwordModalOverlay").classList.add("hidden"); input.placeholder = oldPh; err.textContent = oldErr; input.value = "";
+      yesBtn.removeEventListener("click", onYes); noBtn.removeEventListener("click", onNo); input.removeEventListener("keydown", onKey);
+      resolve(v);
+    }
+    async function onYes(){ if(await check(input.value.trim())) cleanup(true); else { err.style.display = ""; input.value=""; input.focus(); } }
+    function onNo(){ cleanup(false); }
+    function onKey(e){ if(e.key==="Enter") onYes(); }
+    yesBtn.addEventListener("click", onYes); noBtn.addEventListener("click", onNo); input.addEventListener("keydown", onKey);
+  });
+}
 function confirmWithPassword(message){
   return new Promise(resolve=>{
     $("passwordModalText").textContent = message;
@@ -1093,7 +1132,9 @@ $("closeDrawerBtn").addEventListener("click", closeNavDrawer);
 $("navDrawerOverlay").addEventListener("click", e=>{ if(e.target.id==="navDrawerOverlay") closeNavDrawer(); });
 $("measModalBackdrop").addEventListener("click", closeMeasPanel);
 $("invCount").addEventListener("input", ()=>{
-  renderGarmentFields();
+  const n = parseInt($("invCount").value);
+  if(!(n>=1)) return; // mid-typing (empty field) — wait for a real number
+  setGarmentCount(Math.min(n, 50));
   if(!editingId) $("invDeliveryDate").value = formatDateInput(computeExpectedDeliveryDate(parseInt($("invCount").value)||1));
 });
 function renderCustomerAlert(mobile){ renderCustomerStandingAlerts(mobile, "customerAlertWrap"); }
@@ -1162,6 +1203,8 @@ $("saleNetwork").addEventListener("input", updateSaleTotal);
 $("saveInvoiceBtn").addEventListener("click", saveInvoice);
 $("saveAndPrintBtn").addEventListener("click", saveInvoiceAndPrint);
 $("saveAndSendBtn").addEventListener("click", saveInvoiceAndSend);
+$("holdInvoiceBtn").addEventListener("click", holdCurrentInvoice);
+$("holdSaleBtn").addEventListener("click", holdCurrentSale);
 $("resetFormBtn").addEventListener("click", async ()=>{
   if(isInvoiceFormDirty()){
     const wantsSave = await showConfirm("عندك فاتورة لسا ما انحفظت. تبي تحفظها قبل ما تفرّغ النموذج؟");
@@ -1473,6 +1516,25 @@ $("setCuttingCardTemplate").addEventListener("change", ()=>{
   state.settings.cuttingCardTemplate = $("setCuttingCardTemplate").value;
   saveState(); renderAll();
 });
+$("setDepositBypassMode").addEventListener("change", ()=>{ $("setDepositBypassHours").style.display = $("setDepositBypassMode").value==="hours" ? "" : "none"; });
+$("saveDepositBypassBtn").addEventListener("click", async ()=>{
+  const code = $("setDepositBypassCode").value.trim();
+  if(code.length < 4){ showToast("الكود لازم يكون 4 خانات أو أكثر"); return; }
+  const mode = $("setDepositBypassMode").value, hours = parseInt($("setDepositBypassHours").value,10)||0;
+  if(mode==="hours" && hours<1){ showToast("اكتب عدد الساعات"); return; }
+  state.settings.depositBypassHash = await sha256Hex(code);
+  state.settings.depositBypassMode = mode;
+  state.settings.depositBypassExpiresAt = mode==="hours" ? new Date(serverNowMs() + hours*3600000).toISOString() : "";
+  $("setDepositBypassCode").value = "";
+  if(await saveState()){ logAudit("deposit_bypass_code_set", {mode, hours: mode==="hours" ? hours : null}); showToast(mode==="once" ? "تم حفظ الكود — صالح لفاتورة وحدة بس" : `تم حفظ الكود — صالح ${hours} ساعة`); }
+  renderAll();
+});
+$("clearDepositBypassBtn").addEventListener("click", async ()=>{
+  if(!state.settings.depositBypassHash) return;
+  state.settings.depositBypassHash = ""; state.settings.depositBypassExpiresAt = "";
+  if(await saveState()){ logAudit("deposit_bypass_code_cleared", {}); showToast("تم إلغاء كود تجاوز العربون"); }
+  renderAll();
+});
 $("setMinDepositValue").addEventListener("input", ()=>{
   state.settings.minDepositValue = parseFloat($("setMinDepositValue").value)||0;
   saveState();
@@ -1612,6 +1674,10 @@ $("setVisaFee").addEventListener("change", ()=>{
   state.settings.bankFeeVisaPercent = v==="" || isNaN(parseFloat(v)) ? null : parseFloat(v);
   saveState(); refreshCardTypeSelects();
   showToast(state.settings.bankFeeVisaPercent===null ? "انشالت نسبة الفيزا — ما يقدر أحد يختار فيزا" : `نسبة خصم الفيزا: ${state.settings.bankFeeVisaPercent}%`);
+});
+$("setWaInvoiceMode").addEventListener("change", ()=>{
+  state.settings.waInvoiceMode = $("setWaInvoiceMode").value==="text" ? "text" : "image"; saveState();
+  showToast(state.settings.waInvoiceMode==="text" ? "الفاتورة تنرسل رسالة نصية" : "الفاتورة تنرسل صورة");
 });
 $("setWaWelcome").addEventListener("change", ()=>{
   state.settings.waWelcomeEnabled = $("setWaWelcome").checked; saveState();

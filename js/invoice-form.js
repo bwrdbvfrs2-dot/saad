@@ -506,6 +506,32 @@ function addonsSummaryText(ids){
   const names = (ids||[]).map(id=> (state.addonDefs.find(a=>a.id===id)||{}).name).filter(Boolean);
   return names.length ? names.join("، ") : "— بدون ملحقات —";
 }
+// what's typed in the thobe cards now, ready to draw them again (the "بدون قماش" choice kept as is)
+function garmentsFromForm(){
+  const inv = editingId ? state.invoices.find(i=>i.id===editingId) : null;
+  const list = readGarmentFields(inv ? inv.garments : null);
+  Array.from($("garmentsHolder").children).forEach((card,i)=>{ const raw = card.querySelector(".g-itemCard").value; if(list[i] && raw==="__none__") list[i].itemCardId = "__none__"; });
+  return list;
+}
+// changing the count keeps the thobes already filled in — it used to wipe them all
+function setGarmentCount(n){
+  const cur = garmentsFromForm();
+  if(editingId && n < cur.length){ showToast("ما ينقص عدد ثياب فاتورة محفوظة من هنا — الثوب الزايد يتلغى من التوزيع"); $("invCount").value = cur.length; return; }
+  $("invCount").value = n;
+  renderGarmentFields(cur.slice(0, n));
+  updateLiveTotals();
+}
+function removeGarmentFromForm(idx){
+  if(editingId) return;
+  const cur = garmentsFromForm();
+  if(cur.length<=1){ showToast("لازم يبقى ثوب واحد على الأقل"); return; }
+  cur.splice(idx, 1);
+  $("invCount").value = cur.length;
+  renderGarmentFields(cur);
+  updateLiveTotals();
+  if(typeof renderInvoiceOffersSelector==="function") renderInvoiceOffersSelector();
+  showToast(`انشال الثوب ${idx+1} — صار عدد الثياب ${cur.length}`);
+}
 function renderGarmentFields(prefill=null){
   closeMeasPanel();
   const holder=$("garmentsHolder"); holder.innerHTML="";
@@ -522,7 +548,7 @@ function renderGarmentFields(prefill=null){
       return `<label class="dd-option"><input type="checkbox" class="g-addon" data-addon="${a.id}" data-name="${esc(a.name)}" ${checked?"checked":""}> <span>${esc(a.name)}</span><span class="dd-price">${addonUnitPrice(a).toFixed(0)} ريال</span></label>`;
     }).join("");
     div.innerHTML=`
-      <span class="tag">ثوب ${i+1}</span>
+      <div style="display:flex;justify-content:space-between;align-items:center;"><span class="tag">ثوب ${i+1}</span>${!editingId && n>1 ? `<button type="button" class="btn btn-ghost btn-sm g-remove-btn" onclick="removeGarmentFromForm(${i})" title="شيل هذا الثوب من الفاتورة" style="color:var(--loss);">✕ حذف الثوب</button>` : ""}</div>
       <div class="row-2">
         <div class="field"><label>نوع القماش (من المشتريات)</label>
           <input type="text" class="g-itemCard-search" list="fabricDatalist" value="${esc(currentFabricName)}" placeholder="اختر القماش من المخزون (أو بدون قماش)..." autocomplete="off">
@@ -803,6 +829,7 @@ function computeExpectedDeliveryDate(newGarmentsCount){
 }
 function resetForm(){
   if(typeof setMeasOnlyEdit==="function" && measOnlyEdit) setMeasOnlyEdit(false);
+  fetchedHeldId = null;
   editingId=null; paymentsListTemp=[]; selectedOfferIds=[]; appliedPromoCode=null;
   $("formTitle").textContent="فاتورة جديدة";
   $("invNumber").value = state.settings.nextInvoiceNumber;
@@ -858,6 +885,80 @@ async function saveInvoiceMeasurementsOnly(){
   logAudit("invoice_measurements_edited", {invoiceNumber:inv.number, garments:changed});
   setMeasOnlyEdit(false); resetForm();
   showToast(`تم حفظ مقاسات فاتورة ${inv.number} (ثوب ${changed.join("، ")})${alreadyCut.length?` — تنبيه: ثوب ${alreadyCut.join("، ")} انقص من قبل، بلّغ القصاص`:""}`);
+}
+// ---- parked invoices: a customer who'll come back with the deposit. Everything typed in the form is kept
+// (customer, thobes, fabrics, prices, add-ons, measurements, notes) without taking an invoice number,
+// for HELD_INVOICE_DAYS days; fetching it fills the form back exactly, and saving it removes it ----
+const HELD_INVOICE_DAYS = 3;
+let fetchedHeldId = null;
+function heldInvoicesLive(){
+  const cutoff = serverNowMs() - HELD_INVOICE_DAYS*86400000;
+  return (state.heldInvoices||[]).filter(h=> new Date(h.heldAt).getTime() >= cutoff);
+}
+async function holdCurrentInvoice(){
+  if(editingId){ showToast("التعليق للفاتورة الجديدة بس — هذي فاتورة محفوظة"); return; }
+  const name = $("custName").value.trim(), mobile = $("custMobile").value.trim();
+  if(!name || !/^05\d{8}$/.test(mobile)){ showToast("اكتب اسم العميل وجواله أول عشان تقدر تجيب الفاتورة لما يرجع"); return; }
+  if(paymentsListTemp.length){ showToast("فيه دفعات مضافة — الفاتورة المعلّقة تكون بدون أي مبلغ. احذف الدفعات أو احفظ الفاتورة عادي"); return; }
+  const garments = readGarmentFields();
+  // keep the fabric choice exactly as picked — "أجرة تفصيل (بدون قماش)" included (it reads back as "")
+  Array.from($("garmentsHolder").children).forEach((card,i)=>{ const raw = card.querySelector(".g-itemCard").value; if(garments[i] && raw==="__none__") garments[i].itemCardId = "__none__"; });
+  const snapshot = JSON.parse(JSON.stringify(state));
+  state.heldInvoices = heldInvoicesLive().filter(h=> h.id!==fetchedHeldId);
+  const held = {
+    id: fetchedHeldId || newId(), heldAt: serverNowIso(), heldBy: currentUser.username,
+    customerName: name, customerMobile: mobile, notes: $("invNotes").value.trim(),
+    expectedDeliveryDate: $("invDeliveryDate").value || null, garments,
+    selectedOfferIds: [...selectedOfferIds],
+  };
+  state.heldInvoices.push(held);
+  if(!await saveStateWithRollback(snapshot)) return;
+  logAudit("invoice_held", {customerName:name, customerMobile:mobile, garments:garments.length});
+  fetchedHeldId = null;
+  resetForm();
+  showToast(`تم تعليق فاتورة ${name} — تبقى ${HELD_INVOICE_DAYS} أيام، وتجيبها من «الفواتير المعلّقة» فوق`);
+}
+function fetchHeldInvoice(id){
+  const h = heldInvoicesLive().find(x=>x.id===id);
+  if(!h){ showToast("هذي الفاتورة المعلّقة انتهت مدتها أو انحذفت"); renderHeldInvoices(); return; }
+  if(isInvoiceFormDirty && isInvoiceFormDirty() && !confirm("فيه فاتورة قيد الإدخال — تبي تستبدلها بالفاتورة المعلّقة؟")) return;
+  resetForm();
+  fetchedHeldId = h.id;
+  $("custName").value = h.customerName; $("custMobile").value = h.customerMobile;
+  $("invNotes").value = h.notes||"";
+  $("invCount").value = h.garments.length;
+  if(h.expectedDeliveryDate) $("invDeliveryDate").value = h.expectedDeliveryDate;
+  selectedOfferIds = [...(h.selectedOfferIds||[])];
+  renderGarmentFields(h.garments);
+  ["input","change"].forEach(ev=> $("custMobile").dispatchEvent(new Event(ev)));
+  updateLiveTotals(); renderHeldInvoices();
+  $("formTitle").textContent = `فاتورة جديدة — من المعلّقة (${h.customerName})`;
+  showToast("رجعت الفاتورة بكل اختياراتها ومقاساتها — أضف العربون واحفظ");
+}
+async function deleteHeldInvoice(id){
+  const h = (state.heldInvoices||[]).find(x=>x.id===id); if(!h) return;
+  if(!await showConfirm(`حذف الفاتورة المعلّقة للعميل ${h.customerName}؟`)) return;
+  const snapshot = JSON.parse(JSON.stringify(state));
+  state.heldInvoices = (state.heldInvoices||[]).filter(x=>x.id!==id);
+  if(fetchedHeldId===id) fetchedHeldId = null;
+  if(await saveStateWithRollback(snapshot)) logAudit("held_invoice_deleted", {customerName:h.customerName, customerMobile:h.customerMobile});
+}
+// called once the fetched invoice is saved for real
+function clearFetchedHeld(){
+  // expired ones are dropped too; fetchedHeldId stays until the form resets, so a failed save can be retried
+  state.heldInvoices = heldInvoicesLive().filter(x=>x.id!==fetchedHeldId);
+}
+function renderHeldInvoices(){
+  const el = $("heldInvoicesWrap"); if(!el) return;
+  const list = heldInvoicesLive().sort((a,b)=> b.heldAt.localeCompare(a.heldAt));
+  if(!list.length){ el.style.display = "none"; el.innerHTML = ""; return; }
+  el.style.display = "";
+  const left = h=> Math.max(0, Math.ceil((new Date(h.heldAt).getTime() + HELD_INVOICE_DAYS*86400000 - serverNowMs())/86400000));
+  el.innerHTML = `<details class="garment-card" ${list.length<=3?"open":""}><summary style="cursor:pointer;font-weight:700;">الفواتير المعلّقة (${list.length}) — بانتظار العربون</summary>
+    ${list.map(h=>`<div class="item-row" style="justify-content:space-between;flex-wrap:wrap;gap:6px;${h.id===fetchedHeldId?"border:1px solid var(--gold);border-radius:6px;":""}">
+      <span><b>${esc(h.customerName)}</b> — ${esc(h.customerMobile)} — ${h.garments.length} ثوب — علّقها ${esc(h.heldBy)} ${h.heldAt.slice(0,10)} <span class="sub">(باقي ${left(h)} يوم)</span></span>
+      <span style="display:flex;gap:6px;"><button class="btn btn-gold btn-sm" onclick="fetchHeldInvoice('${h.id}')">جلب</button><button class="btn btn-ghost btn-sm" onclick="deleteHeldInvoice('${h.id}')">حذف</button></span>
+    </div>`).join("")}</details>`;
 }
 function loadInvoiceIntoForm(inv){
   switchTab("invoice");

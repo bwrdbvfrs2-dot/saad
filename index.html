@@ -358,6 +358,11 @@
       <div class="field"><label>الحد الأدنى للعربون عند إنشاء فاتورة جديدة</label><select id="setMinDepositType"><option value="none">بدون حد أدنى (يقبل حفظ بدون أي دفعة)</option><option value="percent">نسبة % من قيمة الفاتورة</option><option value="fixed">مبلغ ثابت (ريال)</option></select></div>
       <div class="field" id="minDepositValueWrap" style="display:none;"><label id="minDepositValueLabel">القيمة</label><input type="number" id="setMinDepositValue" min="0" step="0.5"></div>
     </div>
+    <div class="row-2" id="depositBypassRow" style="display:none;">
+      <div class="field"><label>كود تجاوز العربون (تعطيه للكاشير وقت الحاجة)</label><input type="password" id="setDepositBypassCode" placeholder="اكتب كود جديد واضغط حفظ" autocomplete="new-password"></div>
+      <div class="field"><label>صلاحية الكود</label><div style="display:flex;gap:6px;"><select id="setDepositBypassMode"><option value="once">مرة واحدة (ينتهي بعد أول فاتورة)</option><option value="hours">لمدة معيّنة (ساعات)</option></select><input type="number" id="setDepositBypassHours" min="1" step="1" value="24" style="display:none;max-width:90px;" title="عدد الساعات"></div></div>
+      <div class="field" style="display:flex;align-items:flex-end;gap:6px;"><button class="btn btn-ghost btn-sm" id="saveDepositBypassBtn">حفظ الكود</button><button class="btn btn-ghost btn-sm" id="clearDepositBypassBtn">إلغاء الكود</button><span class="sub" id="depositBypassStatus"></span></div>
+    </div>
     <div class="stitch"></div>
     <h3 style="margin:0 0 8px;font-size:14px;">بنود التكاليف الثابتة</h3>
     <p class="sub" style="margin-bottom:10px;">أضف أو احذف بنود (إيجار، كهرباء، ماء...) — الإجمالي يتحدث تلقائياً ويُستخدم لحساب حصة كل ثوب جديد. الرواتب الأساسية لموظفين غير الخياط (من إدارة المستخدمين أدناه) تُضاف تلقائياً لهذا الإجمالي — لا تدخلها هنا مرة ثانية.</p>
@@ -630,6 +635,7 @@
       <h3 style="margin:0 0 8px;font-size:14px;">رسائل واتساب</h3>
       <div class="embro-toggle"><input type="checkbox" id="setWaWelcome"><label style="margin:0;">تفعيل رسالة واتساب ترحيبية عند إصدار فاتورة جديدة</label></div>
       <p class="sub" style="margin:6px 0 12px;">إذا فُعّلت، يظهر زر جاهز لفتح واتساب برسالة معبّأة فيها تفاصيل الفاتورة بعد كل حفظ.</p>
+      <div class="field" style="max-width:360px;"><label>إرسال الفاتورة للعميل بالواتساب</label><select id="setWaInvoiceMode"><option value="image">صورة الفاتورة</option><option value="text">رسالة نصية</option></select></div>
       <div class="field"><label>نص إعلان/عرض خاص (يُستخدم لرسائل العملاء الخاملين)</label><textarea id="setWaPromo" rows="3" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px;color:var(--ivory);font-family:inherit;font-size:14px;"></textarea></div>
       <div class="stitch"></div>
   </div>
@@ -640,6 +646,7 @@
 <div class="tab-panel" id="tab-invoice">
 <div class="panel">
   <h2><span id="formTitle">فاتورة جديدة</span></h2>
+  <div id="heldInvoicesWrap" style="display:none;margin-bottom:12px;"></div>
   <div id="measOnlyNote" class="note-box" style="display:none;margin-bottom:10px;">تعديل المقاسات فقط — افتح «كرت المقاس» لكل ثوب وعدّل، ثم اضغط <b>حفظ</b>. باقي الفاتورة (الأسعار، الدفعات، العميل) ما يتغيّر. للخروج اضغط <b>إلغاء</b>.</div>
   <p class="sub">أدخل بيانات الفاتورة والعميل. اسم الخياط والحالة يُحدّدان لاحقاً من "توزيع العمل والمتعثرة".</p>
   <div class="row-3">
@@ -691,6 +698,7 @@
     <button class="btn btn-gold" id="saveInvoiceBtn">حفظ</button>
     <button class="btn btn-ghost" id="saveAndPrintBtn">حفظ وطباعة</button>
     <button class="btn btn-ghost" id="saveAndSendBtn">حفظ وإرسال</button>
+    <button class="btn btn-ghost" id="holdInvoiceBtn" title="العميل بيرجع يدفع العربون — تنحفظ اختياراته ومقاساته بدون رقم فاتورة">تعليق الفاتورة</button>
     <button class="btn btn-ghost" id="resetFormBtn">إلغاء</button>
   </div>
   <div id="waWelcomeBanner" style="display:none;margin-top:14px;"></div>
@@ -704,9 +712,10 @@
   <p class="sub">لبيع المنتجات الجاهزة (شماغ، عطر، مسبحة...) — منفصلة تماماً عن فاتورة التفصيل، بدون خياط أو توزيع أو تسليم. تُدفع بالكامل وقت الحفظ.</p>
   <div class="row-3">
     <div class="field"><label>رقم الفاتورة (تلقائي — غير قابل للتعديل)</label><input type="text" id="saleNumber" readonly style="opacity:0.75;cursor:not-allowed;"></div>
-    <div class="field"><label>التاريخ</label><input type="date" id="saleDate"></div>
+    <div class="field"><label>التاريخ (تلقائي — ما يتغيّر)</label><input type="date" id="saleDate" readonly tabindex="-1" style="opacity:.75;cursor:not-allowed;"></div>
     <div class="field"></div>
   </div>
+  <div id="heldSalesWrap" style="display:none;margin-bottom:12px;"></div>
   <div class="row-2">
     <div class="field"><label>اسم العميل</label><input type="text" id="saleCustName" list="custNameDatalist" autocomplete="off"></div>
     <div class="field"><label>رقم جوال العميل</label><input type="tel" id="saleCustMobile" placeholder="05xxxxxxxx" maxlength="10" inputmode="numeric" autocomplete="off"></div>
@@ -742,7 +751,10 @@
     <span>الإجمالي: <b id="saleLiveSubtotal">0 ﷼</b> — الخصم: <b id="saleLiveDiscount">0 ﷼</b></span>
     <span class="amt">الصافي: <span id="saleLiveTotal">0 ﷼</span></span>
   </div>
-  <button class="btn btn-gold" id="saveSaleBtn">حفظ فاتورة المبيعات</button>
+  <div class="actions-row">
+    <button class="btn btn-gold" id="saveSaleBtn">حفظ فاتورة المبيعات</button>
+    <button class="btn btn-ghost" id="holdSaleBtn" title="العميل بيرجع يدفع — تنحفظ الأصناف بدون رقم فاتورة">تعليق الفاتورة</button>
+  </div>
   <div class="stitch"></div>
   <h3 style="margin:0 0 10px;font-size:14px;">سجل فواتير المبيعات</h3>
   <div class="table-wrap"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>العميل</th><th>الإجمالي</th></tr></thead><tbody id="salesInvoicesBody"></tbody></table></div>

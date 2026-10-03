@@ -1074,7 +1074,67 @@ function addSaleLineByBarcode(text){
   updateSaleTotal();
   showToast(`تمت إضافة ${c.name}`);
 }
+// ---- parked sales invoices: same as the tailoring ones — items kept without a number or any payment,
+// for HELD_INVOICE_DAYS days, and جلب fills the form back ----
+let fetchedHeldSaleId = null;
+function heldSalesLive(){
+  const cutoff = serverNowMs() - HELD_INVOICE_DAYS*86400000;
+  return (state.heldSales||[]).filter(h=> new Date(h.heldAt).getTime() >= cutoff);
+}
+async function holdCurrentSale(){
+  const name = $("saleCustName").value.trim(), mobile = $("saleCustMobile").value.trim();
+  if(!name || !/^05\d{8}$/.test(mobile)){ showToast("اكتب اسم العميل وجواله أول عشان تقدر تجيب الفاتورة لما يرجع"); return; }
+  if((saleCashTouched && (parseFloat($("saleCash").value)||0) > 0) || (parseFloat($("saleNetwork").value)||0) > 0){ showToast("فيه مبلغ مكتوب — الفاتورة المعلّقة تكون بدون أي مبلغ. امسح المبلغ أو احفظ الفاتورة عادي"); return; }
+  const lines = Array.from(document.querySelectorAll("#saleItemsHolder .garment-card")).map(div=>({
+    itemCardId: div.querySelector(".sl-item").value, qty: parseFloat(div.querySelector(".sl-qty").value)||0, price: parseFloat(div.querySelector(".sl-price").value)||0,
+  })).filter(l=> l.itemCardId && l.qty>0);
+  if(!lines.length){ showToast("أضف صنف واحد على الأقل"); return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
+  state.heldSales = heldSalesLive().filter(h=> h.id!==fetchedHeldSaleId);
+  state.heldSales.push({id: fetchedHeldSaleId || newId(), heldAt: serverNowIso(), heldBy: currentUser.username, customerName:name, customerMobile:mobile, lines, offerId: saleOfferId||null, promoCode: salePromo ? salePromo.code : ""});
+  if(!await saveStateWithRollback(snapshot)) return;
+  logAudit("sale_held", {customerName:name, customerMobile:mobile, lines:lines.length});
+  fetchedHeldSaleId = null;
+  resetSaleForm();
+  showToast(`تم تعليق فاتورة مبيعات ${name} — تبقى ${HELD_INVOICE_DAYS} أيام، وتجيبها من «الفواتير المعلّقة» فوق`);
+}
+function fetchHeldSale(id){
+  const h = heldSalesLive().find(x=>x.id===id);
+  if(!h){ showToast("هذي الفاتورة المعلّقة انتهت مدتها أو انحذفت"); renderHeldSales(); return; }
+  resetSaleForm();
+  fetchedHeldSaleId = h.id;
+  $("saleCustName").value = h.customerName; $("saleCustMobile").value = h.customerMobile;
+  $("saleItemsHolder").innerHTML = "";
+  h.lines.forEach(l=> renderSaleLine({itemCardId:l.itemCardId, qty:l.qty, price:l.price}));
+  saleOfferId = h.offerId || null;
+  if(h.promoCode){ $("salePromoInput").value = h.promoCode; applySalePromo(); }
+  ["input","change"].forEach(ev=> $("saleCustMobile").dispatchEvent(new Event(ev)));
+  updateSaleTotal(); renderHeldSales();
+  showToast("رجعت الفاتورة بأصنافها — اكتب المبلغ واحفظ");
+}
+async function deleteHeldSale(id){
+  const h = (state.heldSales||[]).find(x=>x.id===id); if(!h) return;
+  if(!await showConfirm(`حذف فاتورة المبيعات المعلّقة للعميل ${h.customerName}؟`)) return;
+  const snapshot = JSON.parse(JSON.stringify(state));
+  state.heldSales = (state.heldSales||[]).filter(x=>x.id!==id);
+  if(fetchedHeldSaleId===id) fetchedHeldSaleId = null;
+  if(await saveStateWithRollback(snapshot)) logAudit("held_sale_deleted", {customerName:h.customerName, customerMobile:h.customerMobile});
+}
+function renderHeldSales(){
+  const el = $("heldSalesWrap"); if(!el) return;
+  const list = heldSalesLive().sort((a,b)=> b.heldAt.localeCompare(a.heldAt));
+  if(!list.length){ el.style.display = "none"; el.innerHTML = ""; return; }
+  el.style.display = "";
+  const left = h=> Math.max(0, Math.ceil((new Date(h.heldAt).getTime() + HELD_INVOICE_DAYS*86400000 - serverNowMs())/86400000));
+  const total = h=> h.lines.reduce((a,l)=>a+l.qty*l.price,0);
+  el.innerHTML = `<details class="garment-card" ${list.length<=3?"open":""}><summary style="cursor:pointer;font-weight:700;">فواتير المبيعات المعلّقة (${list.length})</summary>
+    ${list.map(h=>`<div class="item-row" style="justify-content:space-between;flex-wrap:wrap;gap:6px;${h.id===fetchedHeldSaleId?"border:1px solid var(--gold);border-radius:6px;":""}">
+      <span><b>${esc(h.customerName)}</b> — ${esc(h.customerMobile)} — ${h.lines.length} صنف (${fmtSar(total(h))} ﷼) — علّقها ${esc(h.heldBy)} ${h.heldAt.slice(0,10)} <span class="sub">(باقي ${left(h)} يوم)</span></span>
+      <span style="display:flex;gap:6px;"><button class="btn btn-gold btn-sm" onclick="fetchHeldSale('${h.id}')">جلب</button><button class="btn btn-ghost btn-sm" onclick="deleteHeldSale('${h.id}')">حذف</button></span>
+    </div>`).join("")}</details>`;
+}
 function resetSaleForm(){
+  fetchedHeldSaleId = null;
   $("saleNumber").value = state.settings.nextSalesInvoiceNumber;
   $("saleDate").value = todayStr();
   $("saleCustName").value=""; $("saleCustMobile").value="";
@@ -1091,7 +1151,7 @@ async function saveSaleInvoice(){
   const number = $("saleNumber").value.trim();
   if(!number){ showToast("أدخل رقم الفاتورة"); return; }
   if(state.salesInvoices.some(s=>s.number===number)){ showToast(`رقم الفاتورة ${number} مستخدم مسبقاً — اختر رقم ثاني`); return; }
-  const date = $("saleDate").value || todayStr();
+  const date = todayStr(); // the date can't be chosen — always today's (server date)
   const custName = $("saleCustName").value.trim();
   const custMobile = $("saleCustMobile").value.trim();
   if(!custName){ showToast("أدخل اسم العميل"); return; }
@@ -1134,7 +1194,10 @@ async function saveSaleInvoice(){
   ensureCustomerIndividual(custMobile, custName);
   state.salesInvoices.push({id:newId(), number, date, customerName:custName, customerMobile:custMobile, items, discounts, discountTotal:+d.discountTotal.toFixed(2), freeGifts, payment, recordedBy:currentUser.username});
   state.settings.nextSalesInvoiceNumber++;
+  // a parked sale that has just been completed leaves the parked list in this same save
+  state.heldSales = heldSalesLive().filter(h=> h.id!==fetchedHeldSaleId);
   if(!await saveStateWithRollback(snapshot)) return; // form stays filled in so the cashier can just retry
+  fetchedHeldSaleId = null;
   logAudit("sale_invoice_recorded", {number, total, cash, network, discountTotal:+d.discountTotal.toFixed(2), promoCode:discounts.promoCode, offer:discounts.offerName, direct:discounts.direct});
   resetSaleForm();
   showToast(lowStock.length? "تم الحفظ — تنبيه: بعض الأصناف تجاوزت المخزون المتاح" : "تم حفظ فاتورة المبيعات");
