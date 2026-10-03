@@ -385,7 +385,11 @@
       <p class="sub">جاهز الآن: توليد XML بصيغة UBL 2.1 + QR code + تسلسل وربط الفواتير (Hash Chaining) لكل فاتورة، تلقائياً بمجرد التفعيل.<br>يحتاج تسجيلك الرسمي بمنصة "فاتورة" لاحقاً: الختم التشفيري (التوقيع الإلكتروني) والربط المباشر بأنظمة الهيئة (المرحلة الثانية) — هذا يحتاج شهادة CSID تصدرها الهيئة نفسها بعد إتمامك للتسجيل والربط، وما نقدر نولّدها من هنا.</p>
       <div class="stitch"></div>
       <h3 style="margin:0 0 8px;font-size:14px;">عمولة البنك (الشبكة)</h3>
-      <div class="field"><label>نسبة العمولة % (تُخصم تلقائياً من كل دفعة شبكة قبل إضافتها لصندوق الشبكة)</label><input type="number" id="setBankFee" min="0" step="0.01"></div>
+      <p class="sub" style="margin:0 0 8px;">النسبة شاملة ضريبة الرسوم. تنخصم مرة وحدة لحظة الدفع بالشبكة وتنسجّل مصروف «عمولة الشبكة»؛ الصندوق يعرض المبلغ كامل (مثل جهاز الشبكة) والصافي بعد الخصم، والتحويل بين الصناديق ينقل الصافي بدون أي خصم ثاني.</p>
+      <div class="row-2">
+        <div class="field"><label>نسبة خصم مدى %</label><input type="number" id="setBankFee" min="0" step="0.01"></div>
+        <div class="field"><label>نسبة خصم فيزا / ماستر % (فاضية = الكاشير ما يقدر يختار فيزا)</label><input type="number" id="setVisaFee" min="0" step="0.01" placeholder="—"></div>
+      </div>
       <div class="stitch"></div>
       <h3 style="margin:0 0 8px;font-size:14px;">تصنيفات المصروفات</h3>
       <p class="sub" style="margin-bottom:10px;">التصنيف المرتبط برصيد إرشادي يُخصم منه تلقائياً عند تسجيل مصروف بنفس التصنيف.</p>
@@ -675,6 +679,7 @@
     <div class="field"><label>شبكة (ريال)</label><input type="number" id="newPayNetwork" min="0" placeholder="0"></div>
     <div class="field"><label>رقم سند الشبكة (إلزامي لو فيه شبكة)</label><input type="text" id="newPayReceipt"></div>
   </div>
+  <div class="row-3"><div class="field"><label>نوع البطاقة</label><select id="newPayCardType" class="card-type-select"></select></div></div>
   <button class="btn btn-ghost btn-sm" id="addPaymentBtn">إضافة دفعة</button>
   <div class="remaining-box">
     <span>إجمالي الفاتورة: <b id="liveInvoiceTotal">0 ﷼</b> — المدفوع: <b id="livePaid">0 ﷼</b></span>
@@ -731,6 +736,7 @@
     <div class="field"><label>شبكة (ريال)</label><input type="number" id="saleNetwork" min="0" placeholder="0"></div>
     <div class="field"><label>رقم السند</label><input type="text" id="saleReceipt"></div>
   </div>
+  <div class="row-3"><div class="field"><label>نوع البطاقة</label><select id="saleCardType" class="card-type-select"></select></div></div>
   <div class="remaining-box">
     <span>الإجمالي: <b id="saleLiveSubtotal">0 ﷼</b> — الخصم: <b id="saleLiveDiscount">0 ﷼</b></span>
     <span class="amt">الصافي: <span id="saleLiveTotal">0 ﷼</span></span>
@@ -893,6 +899,7 @@
     <div class="field"><label>شبكة</label><input type="number" id="rpPayNet" min="0" placeholder="0"></div>
     <div class="field"><label>رقم إيصال الشبكة</label><input type="text" id="rpPayRec"></div>
   </div>
+  <div class="row-3"><div class="field"><label>نوع البطاقة</label><select id="rpPayCard" class="card-type-select"></select></div></div>
   <button class="btn btn-gold" id="rpSaveBtn">حفظ وطباعة الإيصال</button>
   <div class="stitch"></div>
   <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">
