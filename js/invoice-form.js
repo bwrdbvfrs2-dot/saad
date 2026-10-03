@@ -506,6 +506,32 @@ function addonsSummaryText(ids){
   const names = (ids||[]).map(id=> (state.addonDefs.find(a=>a.id===id)||{}).name).filter(Boolean);
   return names.length ? names.join("، ") : "— بدون ملحقات —";
 }
+// what's typed in the thobe cards now, ready to draw them again (the "بدون قماش" choice kept as is)
+function garmentsFromForm(){
+  const inv = editingId ? state.invoices.find(i=>i.id===editingId) : null;
+  const list = readGarmentFields(inv ? inv.garments : null);
+  Array.from($("garmentsHolder").children).forEach((card,i)=>{ const raw = card.querySelector(".g-itemCard").value; if(list[i] && raw==="__none__") list[i].itemCardId = "__none__"; });
+  return list;
+}
+// changing the count keeps the thobes already filled in — it used to wipe them all
+function setGarmentCount(n){
+  const cur = garmentsFromForm();
+  if(editingId && n < cur.length){ showToast("ما ينقص عدد ثياب فاتورة محفوظة من هنا — الثوب الزايد يتلغى من التوزيع"); $("invCount").value = cur.length; return; }
+  $("invCount").value = n;
+  renderGarmentFields(cur.slice(0, n));
+  updateLiveTotals();
+}
+function removeGarmentFromForm(idx){
+  if(editingId) return;
+  const cur = garmentsFromForm();
+  if(cur.length<=1){ showToast("لازم يبقى ثوب واحد على الأقل"); return; }
+  cur.splice(idx, 1);
+  $("invCount").value = cur.length;
+  renderGarmentFields(cur);
+  updateLiveTotals();
+  if(typeof renderInvoiceOffersSelector==="function") renderInvoiceOffersSelector();
+  showToast(`انشال الثوب ${idx+1} — صار عدد الثياب ${cur.length}`);
+}
 function renderGarmentFields(prefill=null){
   closeMeasPanel();
   const holder=$("garmentsHolder"); holder.innerHTML="";
@@ -522,7 +548,7 @@ function renderGarmentFields(prefill=null){
       return `<label class="dd-option"><input type="checkbox" class="g-addon" data-addon="${a.id}" data-name="${esc(a.name)}" ${checked?"checked":""}> <span>${esc(a.name)}</span><span class="dd-price">${addonUnitPrice(a).toFixed(0)} ريال</span></label>`;
     }).join("");
     div.innerHTML=`
-      <span class="tag">ثوب ${i+1}</span>
+      <div style="display:flex;justify-content:space-between;align-items:center;"><span class="tag">ثوب ${i+1}</span>${!editingId && n>1 ? `<button type="button" class="btn btn-ghost btn-sm g-remove-btn" onclick="removeGarmentFromForm(${i})" title="شيل هذا الثوب من الفاتورة" style="color:var(--loss);">✕ حذف الثوب</button>` : ""}</div>
       <div class="row-2">
         <div class="field"><label>نوع القماش (من المشتريات)</label>
           <input type="text" class="g-itemCard-search" list="fabricDatalist" value="${esc(currentFabricName)}" placeholder="اختر القماش من المخزون (أو بدون قماش)..." autocomplete="off">

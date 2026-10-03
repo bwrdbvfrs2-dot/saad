@@ -1093,7 +1093,9 @@ $("closeDrawerBtn").addEventListener("click", closeNavDrawer);
 $("navDrawerOverlay").addEventListener("click", e=>{ if(e.target.id==="navDrawerOverlay") closeNavDrawer(); });
 $("measModalBackdrop").addEventListener("click", closeMeasPanel);
 $("invCount").addEventListener("input", ()=>{
-  renderGarmentFields();
+  const n = parseInt($("invCount").value);
+  if(!(n>=1)) return; // mid-typing (empty field) — wait for a real number
+  setGarmentCount(Math.min(n, 50));
   if(!editingId) $("invDeliveryDate").value = formatDateInput(computeExpectedDeliveryDate(parseInt($("invCount").value)||1));
 });
 function renderCustomerAlert(mobile){ renderCustomerStandingAlerts(mobile, "customerAlertWrap"); }
