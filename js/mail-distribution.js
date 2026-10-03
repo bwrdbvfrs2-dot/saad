@@ -493,6 +493,8 @@ async function saveInvoice(){
   } else {
     $("waWelcomeBanner").style.display = "none";
   }
+  // a parked invoice that has just been completed leaves the parked list in this same save
+  if(!editingId && typeof clearFetchedHeld==="function") clearFetchedHeld();
   const saved = await saveState();
   if(saved){
     logAudit(editingId ? "invoice_edited" : "invoice_created", {invoiceNumber:number, saleTotal: invoiceSaleTotal(invData), paid: invoicePaid(invData)});

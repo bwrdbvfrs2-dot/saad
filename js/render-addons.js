@@ -23,8 +23,10 @@ function renderAll(){
   if($("setVisaFee") && document.activeElement!==$("setVisaFee")) $("setVisaFee").value = (state.settings.bankFeeVisaPercent===null || state.settings.bankFeeVisaPercent===undefined) ? "" : state.settings.bankFeeVisaPercent;
   if(typeof refreshCardTypeSelects==="function") refreshCardTypeSelects();
   $("setWaWelcome").checked = !!state.settings.waWelcomeEnabled;
+  if($("setWaInvoiceMode")) $("setWaInvoiceMode").value = state.settings.waInvoiceMode==="text" ? "text" : "image";
   $("setWaPromo").value = state.settings.waPromoMessage;
   renderExpenseCategories();
+  if(typeof renderHeldInvoices==="function") renderHeldInvoices();
   renderFabricWidthQtyTable();
   $("setMeasureUnit").value = state.settings.measureUnit;
   $("setCommissionBasis").value = state.settings.commissionBasis||"تسليم";

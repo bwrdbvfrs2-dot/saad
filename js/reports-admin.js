@@ -1162,6 +1162,7 @@ $("saleNetwork").addEventListener("input", updateSaleTotal);
 $("saveInvoiceBtn").addEventListener("click", saveInvoice);
 $("saveAndPrintBtn").addEventListener("click", saveInvoiceAndPrint);
 $("saveAndSendBtn").addEventListener("click", saveInvoiceAndSend);
+$("holdInvoiceBtn").addEventListener("click", holdCurrentInvoice);
 $("resetFormBtn").addEventListener("click", async ()=>{
   if(isInvoiceFormDirty()){
     const wantsSave = await showConfirm("عندك فاتورة لسا ما انحفظت. تبي تحفظها قبل ما تفرّغ النموذج؟");
@@ -1612,6 +1613,10 @@ $("setVisaFee").addEventListener("change", ()=>{
   state.settings.bankFeeVisaPercent = v==="" || isNaN(parseFloat(v)) ? null : parseFloat(v);
   saveState(); refreshCardTypeSelects();
   showToast(state.settings.bankFeeVisaPercent===null ? "انشالت نسبة الفيزا — ما يقدر أحد يختار فيزا" : `نسبة خصم الفيزا: ${state.settings.bankFeeVisaPercent}%`);
+});
+$("setWaInvoiceMode").addEventListener("change", ()=>{
+  state.settings.waInvoiceMode = $("setWaInvoiceMode").value==="text" ? "text" : "image"; saveState();
+  showToast(state.settings.waInvoiceMode==="text" ? "الفاتورة تنرسل رسالة نصية" : "الفاتورة تنرسل صورة");
 });
 $("setWaWelcome").addEventListener("change", ()=>{
   state.settings.waWelcomeEnabled = $("setWaWelcome").checked; saveState();

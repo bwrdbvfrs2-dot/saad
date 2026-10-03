@@ -630,6 +630,7 @@
       <h3 style="margin:0 0 8px;font-size:14px;">رسائل واتساب</h3>
       <div class="embro-toggle"><input type="checkbox" id="setWaWelcome"><label style="margin:0;">تفعيل رسالة واتساب ترحيبية عند إصدار فاتورة جديدة</label></div>
       <p class="sub" style="margin:6px 0 12px;">إذا فُعّلت، يظهر زر جاهز لفتح واتساب برسالة معبّأة فيها تفاصيل الفاتورة بعد كل حفظ.</p>
+      <div class="field" style="max-width:360px;"><label>إرسال الفاتورة للعميل بالواتساب</label><select id="setWaInvoiceMode"><option value="image">صورة الفاتورة</option><option value="text">رسالة نصية</option></select></div>
       <div class="field"><label>نص إعلان/عرض خاص (يُستخدم لرسائل العملاء الخاملين)</label><textarea id="setWaPromo" rows="3" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px;color:var(--ivory);font-family:inherit;font-size:14px;"></textarea></div>
       <div class="stitch"></div>
   </div>
@@ -640,6 +641,7 @@
 <div class="tab-panel" id="tab-invoice">
 <div class="panel">
   <h2><span id="formTitle">فاتورة جديدة</span></h2>
+  <div id="heldInvoicesWrap" style="display:none;margin-bottom:12px;"></div>
   <div id="measOnlyNote" class="note-box" style="display:none;margin-bottom:10px;">تعديل المقاسات فقط — افتح «كرت المقاس» لكل ثوب وعدّل، ثم اضغط <b>حفظ</b>. باقي الفاتورة (الأسعار، الدفعات، العميل) ما يتغيّر. للخروج اضغط <b>إلغاء</b>.</div>
   <p class="sub">أدخل بيانات الفاتورة والعميل. اسم الخياط والحالة يُحدّدان لاحقاً من "توزيع العمل والمتعثرة".</p>
   <div class="row-3">
@@ -691,6 +693,7 @@
     <button class="btn btn-gold" id="saveInvoiceBtn">حفظ</button>
     <button class="btn btn-ghost" id="saveAndPrintBtn">حفظ وطباعة</button>
     <button class="btn btn-ghost" id="saveAndSendBtn">حفظ وإرسال</button>
+    <button class="btn btn-ghost" id="holdInvoiceBtn" title="العميل بيرجع يدفع العربون — تنحفظ اختياراته ومقاساته بدون رقم فاتورة">تعليق الفاتورة</button>
     <button class="btn btn-ghost" id="resetFormBtn">إلغاء</button>
   </div>
   <div id="waWelcomeBanner" style="display:none;margin-top:14px;"></div>
