@@ -348,12 +348,12 @@ function buildDailyReportHtml(day, r, username){
   // suppliers, salaries, transfers) — always shown, it's the day's bottom line
   const f = r.flows;
   html += `<div class="dr-summary">
-    <div class="dr-box"><div class="dr-lbl">الكاش — داخل / خارج</div><div class="dr-val">${f.cashIn.toFixed(0)} / ${f.cashOut.toFixed(0)} ﷼</div></div>
-    <div class="dr-box"><div class="dr-lbl">الشبكة — داخل / خارج (بعد رسوم البنك)</div><div class="dr-val">${f.netIn.toFixed(0)} / ${f.netOut.toFixed(0)} ﷼</div></div>
-    <div class="dr-box dr-net"><div class="dr-lbl">صافي حركة الصناديق${username?` (${esc(username)})`:""}</div><div class="dr-val">${(f.cashIn-f.cashOut+f.netIn-f.netOut).toFixed(0)} ﷼</div></div>
+    <div class="dr-box"><div class="dr-lbl">الكاش — داخل / خارج</div><div class="dr-val">${fmtSar(f.cashIn)} / ${fmtSar(f.cashOut)} ﷼</div></div>
+    <div class="dr-box"><div class="dr-lbl">الشبكة — داخل / خارج (بعد رسوم البنك)</div><div class="dr-val">${fmtSar(f.netIn)} / ${fmtSar(f.netOut)} ﷼</div></div>
+    <div class="dr-box dr-net"><div class="dr-lbl">صافي حركة الصناديق${username?` (${esc(username)})`:""}</div><div class="dr-val">${fmtSar(f.cashIn-f.cashOut+f.netIn-f.netOut)} ﷼</div></div>
   </div>
   ${r.cardFees ? `<p class="dr-note">الشبكة كاملة (مثل جهاز الشبكة): ${fmtSar(r.cardGross)} ﷼ — خصم البنك (عمولة الشبكة): ${fmtSar(r.cardFees)} ﷼ — الصافي: ${fmtSar(r.cardGross-r.cardFees)} ﷼</p>` : ""}
-  <p class="dr-note">صافي الكاش: ${(f.cashIn-f.cashOut).toFixed(0)} ﷼ — يشمل كل الحركات المسجّلة (دفعات، مبيعات، سندات، مصروفات، مرتجعات، مشتريات، موردين، رواتب، تحويلات).</p>
+  <p class="dr-note">صافي الكاش: ${fmtSar(f.cashIn-f.cashOut)} ﷼ — يشمل كل الحركات المسجّلة (دفعات، مبيعات، سندات، مصروفات، مرتجعات، مشتريات، موردين، رواتب، تحويلات).</p>
   </div>`;
   return html;
 }
@@ -367,7 +367,8 @@ function reportRecipientOptions(){
     : `<option value="${esc(u.username)}" disabled>${esc(u.username)} (${esc(u.role)}) — ما له جوال، أضفه من إعدادات المستخدمين</option>`).join("");
 }
 function dailyReportText(day, r, username){
-  const n = v=> (v||0).toFixed(0);
+  // halalas shown where there are any (148.62 after the bank fee), whole riyals otherwise
+  const n = v=> fmtSar(v);
   const L = [];
   if(state.settings.shopName) L.push(`*${state.settings.shopName}*`);
   L.push(username ? `التقرير اليومي — ${username}` : "التقرير اليومي الشامل");
@@ -389,7 +390,7 @@ function dailyReportText(day, r, username){
   L.push("");
   L.push(`الكاش: داخل ${n(f.cashIn)} / خارج ${n(f.cashOut)}`);
   L.push(`الشبكة: داخل ${n(f.netIn)} / خارج ${n(f.netOut)}`);
-  if(r.cardFees) L.push(`الشبكة كاملة ${n(r.cardGross)} — عمولة البنك ${r.cardFees.toFixed(2)}`);
+  if(r.cardFees) L.push(`الشبكة كاملة ${n(r.cardGross)} — عمولة البنك ${n(r.cardFees)} — الصافي ${n(r.cardGross-r.cardFees)}`);
   L.push(`*صافي حركة الصناديق: ${n(f.cashIn-f.cashOut+f.netIn-f.netOut)} ﷼*`);
   L.push("");
   L.push(`أرسله: ${currentUser ? currentUser.username : ""}`);
