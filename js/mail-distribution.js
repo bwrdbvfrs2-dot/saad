@@ -399,9 +399,14 @@ async function saveInvoice(){
   if(isNewInvoice && state.settings.minDepositType!=="none" && !allNoFabric){
     const saleTotalCheck = garments.filter(g=>g.status!=="ملغي").reduce((a,g)=>a+garmentSalePrice(g),0);
     const paidCheck = paymentsListTemp.reduce((a,p)=>a+p.cash+p.network+(p.discount||0),0);
-    const minRequired = state.settings.minDepositType==="percent" ? saleTotalCheck*(state.settings.minDepositValue||0)/100 : (state.settings.minDepositValue||0);
+    const depVal = state.settings.minDepositValue||0;
+    // "cost": the deposit must at least cover what the thobes cost the shop (fabric, padding, embroidery,
+    // tailor's wage, add-ons) plus the set amount on each thobe
+    const minRequired = state.settings.minDepositType==="percent" ? saleTotalCheck*depVal/100
+      : state.settings.minDepositType==="cost" ? garments.filter(g=>g.status!=="ملغي").reduce((a,g)=>a+garmentDirectCostOnly(g)+depVal,0)
+      : depVal;
     if(minRequired>0 && paidCheck < minRequired - 0.01){
-      const msg = `لازم تحصّل عربون لا يقل عن ${minRequired.toFixed(0)} ريال قبل حفظ الفاتورة (الحد الأدنى المحدد من الإعدادات)`;
+      const msg = `لازم تحصّل عربون لا يقل عن ${fmtSar(minRequired)} ريال قبل حفظ الفاتورة (الحد الأدنى المحدد من الإعدادات)`;
       if(!depositBypassActive()){ showToast(msg); return; }
       const ok = await askForCode(`${msg}\n\nعشان تحفظها بعربون أقل، اكتب كود تجاوز العربون من المدير:`, "كود تجاوز العربون", "الكود غير صحيح",
         async code=> !!code && depositBypassActive() && await sha256Hex(code) === state.settings.depositBypassHash);
