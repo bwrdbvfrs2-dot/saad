@@ -21,7 +21,7 @@ function renderAll(){
   $("depositBypassRow").style.display = state.settings.minDepositType==="none" ? "none" : "";
   $("depositBypassStatus").textContent = depositBypassStatusText();
   $("minDepositValueLabel").textContent = state.settings.minDepositType==="percent" ? "النسبة (%)"
-    : state.settings.minDepositType==="cost" ? "الزيادة على تكلفة الفاتورة كاملة (ريال) — التكلفة: القماش + الحشوات + التطريز + أجرة الخياط + الملحقات" : "المبلغ (ريال)";
+    : state.settings.minDepositType==="cost" ? "الزيادة على تكلفة كل ثوب (ريال) — التكلفة: القماش + الحشوات + التطريز + أجرة الخياط + الملحقات" : "المبلغ (ريال)";
   $("setBankFee").value = state.settings.bankFeePercent;
   if($("setVisaFee") && document.activeElement!==$("setVisaFee")) $("setVisaFee").value = (state.settings.bankFeeVisaPercent===null || state.settings.bankFeeVisaPercent===undefined) ? "" : state.settings.bankFeeVisaPercent;
   if(typeof refreshCardTypeSelects==="function") refreshCardTypeSelects();

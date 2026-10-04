@@ -401,9 +401,9 @@ async function saveInvoice(){
     const paidCheck = paymentsListTemp.reduce((a,p)=>a+p.cash+p.network+(p.discount||0),0);
     const depVal = state.settings.minDepositValue||0;
     // "cost": the deposit must at least cover what the thobes cost the shop (fabric, padding, embroidery,
-    // tailor's wage, add-ons) plus the set amount once on the whole invoice
+    // tailor's wage, add-ons) plus the set amount on each thobe
     const minRequired = state.settings.minDepositType==="percent" ? saleTotalCheck*depVal/100
-      : state.settings.minDepositType==="cost" ? garments.filter(g=>g.status!=="ملغي").reduce((a,g)=>a+garmentDirectCostOnly(g),0) + depVal
+      : state.settings.minDepositType==="cost" ? garments.filter(g=>g.status!=="ملغي").reduce((a,g)=>a+garmentDirectCostOnly(g)+depVal,0)
       : depVal;
     if(minRequired>0 && paidCheck < minRequired - 0.01){
       const msg = `لازم تحصّل عربون لا يقل عن ${fmtSar(minRequired)} ريال قبل حفظ الفاتورة (الحد الأدنى المحدد من الإعدادات)`;
