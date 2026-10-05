@@ -30,6 +30,8 @@ function renderAll(){
   $("setWaPromo").value = state.settings.waPromoMessage;
   renderExpenseCategories();
   if(typeof renderHeldInvoices==="function") renderHeldInvoices();
+  // an approval that arrives while the cashier has the invoice open turns «طلب تعديل» into «تعديل» right away
+  if(editingId && editingPaymentIdx===null && typeof renderPaymentsList==="function") renderPaymentsList();
   if(typeof renderHeldSales==="function") renderHeldSales();
   renderFabricWidthQtyTable();
   $("setMeasureUnit").value = state.settings.measureUnit;
