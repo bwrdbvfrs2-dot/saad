@@ -514,7 +514,7 @@ async function saveInvoice(){
   const saved = await saveState();
   if(saved){
     logAudit(editingId ? "invoice_edited" : "invoice_created", {invoiceNumber:number, saleTotal: invoiceSaleTotal(invData), paid: invoicePaid(invData)});
-    removedPayments.forEach(op=> logAudit("payment_removed", {invoiceNumber:number, cash:op.cash||0, network:op.network||0, recordedBy:op.recordedBy, date:op.date}));
+    removedPayments.forEach(op=> logAudit("payment_removed", {invoiceNumber:number, cash:op.cash||0, network:op.network||0, cashReceiptNo:op.cashReceiptNo||null, networkReceiptNo:op.networkReceiptNo||null, recordedBy:op.recordedBy, date:op.date}));
     if(depositBypassed) logAudit("deposit_bypassed", {invoiceNumber:number, customerName:custName, ...depositBypassed});
     if(!editingId){ selectedOfferIds = []; appliedPromoCode = null; }
     showToast(editingId ? "تم تحديث الفاتورة" : (appliedOffers.length ? `تم حفظ الفاتورة — تطبيق: ${appliedOffers.join("، ")}` : "تم حفظ الفاتورة"));
