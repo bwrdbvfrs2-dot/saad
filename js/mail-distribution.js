@@ -13,7 +13,7 @@ function renderMailTab(){
   if(advSel){ $("mailAdvanceEmployeeDatalist").innerHTML = state.users.map(u=>`<option value="${esc(u.username)}"></option>`).join(""); if(!advSel.value) { advSel.value = currentUser.username; $("mailAdvanceEmployeeSearch").value = currentUser.username; } }
 
   const isAdmin = currentUser.role==="مدير";
-  const canApprovePay = isAdmin || currentUser.role==="محاسب";
+  const canApprovePay = canApprovePaymentEdits();
   const visible = r=> isAdmin || r.createdBy===currentUser.username || (r.type==="payment_edit" && canApprovePay);
   $("mailAdminToolsWrap").style.display = isAdmin ? "" : "none";
   if(isAdmin){
@@ -126,7 +126,7 @@ async function decideSimpleMailRequest(reqId, approved){
 async function decidePaymentEditRequest(reqId, approved){
   const r = state.mailRequests.find(x=>x.id===reqId);
   if(!r || r.type!=="payment_edit") return;
-  if(!(currentUser.role==="مدير" || currentUser.role==="محاسب")){ showToast("الموافقة للمدير أو المحاسب"); return; }
+  if(!canApprovePaymentEdits()){ showToast("الموافقة للمدير أو المحاسب اللي حدّده المدير"); return; }
   if(r.status!=="pending"){ showToast("هذا الطلب تم البت فيه مسبقاً"); return; }
   const snapshot = JSON.parse(JSON.stringify(state));
   r.status = "decided"; r.approved = !!approved; r.decidedBy = currentUser.username; r.decidedAt = todayStr();

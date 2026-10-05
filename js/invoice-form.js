@@ -788,7 +788,14 @@ let paymentsListTemp = [];
 // ---- a payment already saved with the invoice can't just be deleted: the cashier asks the manager or the
 // accountant (mail inbox), and once approved can change its cash / card amounts (0 to any) one time ----
 let editingPaymentIdx = null;
-function canEditPaymentsDirectly(){ return !!currentUser && (currentUser.role==="مدير" || currentUser.role==="محاسب"); }
+// the manager, or an accountant the manager picked in user settings, approves (and can edit directly)
+function canApprovePaymentEdits(u){
+  u = u || currentUser;
+  if(!u) return false;
+  const live = state.users.find(x=>x.username===u.username) || u;
+  return live.role==="مدير" || (live.role==="محاسب" && !!live.approvePaymentEdits);
+}
+function canEditPaymentsDirectly(){ return canApprovePaymentEdits(); }
 function paymentEditRequestFor(paymentId){
   return (state.mailRequests||[]).filter(r=> r.type==="payment_edit" && r.invoiceId===editingId && r.paymentId===paymentId).pop() || null;
 }
@@ -825,7 +832,7 @@ function renderPaymentsList(){
 }
 function removePaymentTemp(i){
   const p = paymentsListTemp[i];
-  if(p && (p.appliedToBalances || p.correction) && !canEditPaymentsDirectly()){ showToast("الدفعة محفوظة — اطلب تعديلها من المدير أو المحاسب"); return; }
+  if(p && (p.appliedToBalances || p.correction) && !canEditPaymentsDirectly()){ showToast("الدفعة محفوظة — اطلب تعديلها من المدير"); return; }
   paymentsListTemp.splice(i,1); renderPaymentsList();
 }
 async function requestPaymentEdit(i){
@@ -839,7 +846,7 @@ async function requestPaymentEdit(i){
   if(!await saveStateWithRollback(snapshot)) return;
   logAudit("payment_edit_requested", {invoiceNumber:inv.number, cash:p.cash||0, network:p.network||0});
   renderPaymentsList();
-  showToast("انرسل طلب تعديل الدفعة للمدير والمحاسب — بعد الموافقة يطلع لك زر «تعديل»");
+  showToast("انرسل طلب تعديل الدفعة للمدير عن طريق البريد — بعد الموافقة يطلع لك زر «تعديل»");
 }
 function startPaymentEdit(i){ editingPaymentIdx = i; renderPaymentsList(); }
 function applyPaymentEdit(i){

@@ -901,6 +901,7 @@ function renderUsers(){
         <div class="field" style="margin-bottom:0;"><label>نوع الحد</label><select class="edit-discount-type" data-idx="${i}"><option value="amount" ${u.discountType==="amount"?"selected":""}>مبلغ ثابت</option><option value="percent" ${u.discountType==="percent"?"selected":""}>نسبة %</option></select></div>
         <div class="field" style="margin-bottom:0;"><label>قيمة الحد</label><input type="number" class="edit-discount-value" data-idx="${i}" min="0" value="${u.discountValue||""}" placeholder="0"></div>
       </div>
+      ${u.role==="محاسب" ? `<div class="field" style="margin:8px 0 0;"><label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" class="edit-approve-payedits" data-idx="${i}" ${u.approvePaymentEdits?"checked":""}> يوافق على طلبات تعديل دفعات الفواتير (تجيه في البريد مع المدير)</label></div>` : ""}
       <div class="actions-row" style="margin-top:8px;">
         <button class="btn btn-ghost btn-sm" onclick="saveUserEdit(${i})">حفظ</button>
         ${isLastManager?`<span class="sub">لازم يبقى مدير واحد على الأقل</span>`:`<button class="btn btn-danger btn-sm" onclick="removeUser(${i})">حذف</button>`}
@@ -986,7 +987,9 @@ async function saveUserEdit(i){
   const mobileInp = document.querySelector(`.edit-mobile[data-idx="${i}"]`);
   const mobile = mobileInp ? mobileInp.value.trim() : (prevUser.mobile||"");
   if(mobile && !/^05\d{8}$/.test(mobile)){ showToast("جوال الموظف لازم يكون بصيغة 05XXXXXXXX"); return; }
-  const updatedUser = {...prevUser, mobile, username,role,joinedDate,baseSalary,commissionEnabled,commissionRate,discountEnabled,discountType,discountValue,dailyCapacity,productionCapacity,wageMen,wageChild,wageChildSmall};
+  const apInp = document.querySelector(`.edit-approve-payedits[data-idx="${i}"]`);
+  const approvePaymentEdits = role==="محاسب" && (apInp ? apInp.checked : !!prevUser.approvePaymentEdits);
+  const updatedUser = {...prevUser, approvePaymentEdits, mobile, username,role,joinedDate,baseSalary,commissionEnabled,commissionRate,discountEnabled,discountType,discountValue,dailyCapacity,productionCapacity,wageMen,wageChild,wageChildSmall};
   if(newPassword){
     // client-side Firebase Auth can't set another account's password directly — create a fresh
     // login account carrying the new password and retire the old one
