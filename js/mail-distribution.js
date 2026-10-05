@@ -486,6 +486,10 @@ async function saveInvoice(){
   if(isNewInvoice && state.settings.einvoiceEnabled){
     invData.einvoice = await generateEinvoiceForNewInvoice(invData);
   }
+  // a saved payment deleted while editing (e.g. entered as cash when it was card) leaves the box it went
+  // into — before, only the new payment was added and the old amount stayed in the box
+  const removedPayments = oldInv ? (oldInv.payments||[]).filter(op=> op.appliedToBalances && !invData.payments.some(np=> np.id===op.id)) : [];
+  removedPayments.forEach(op=> reversePaymentFromBalances(op));
   invData.payments.forEach(p=> applyPaymentToBalances(p));
   if(editingId){
     const idx = state.invoices.findIndex(i=>i.id===editingId);
@@ -510,6 +514,7 @@ async function saveInvoice(){
   const saved = await saveState();
   if(saved){
     logAudit(editingId ? "invoice_edited" : "invoice_created", {invoiceNumber:number, saleTotal: invoiceSaleTotal(invData), paid: invoicePaid(invData)});
+    removedPayments.forEach(op=> logAudit("payment_removed", {invoiceNumber:number, cash:op.cash||0, network:op.network||0, recordedBy:op.recordedBy, date:op.date}));
     if(depositBypassed) logAudit("deposit_bypassed", {invoiceNumber:number, customerName:custName, ...depositBypassed});
     if(!editingId){ selectedOfferIds = []; appliedPromoCode = null; }
     showToast(editingId ? "تم تحديث الفاتورة" : (appliedOffers.length ? `تم حفظ الفاتورة — تطبيق: ${appliedOffers.join("، ")}` : "تم حفظ الفاتورة"));
