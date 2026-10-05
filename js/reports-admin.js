@@ -347,13 +347,18 @@ function buildDailyReportHtml(day, r, username){
   // real movement of every box (all sources: payments, sales, vouchers, expenses, refunds, purchases,
   // suppliers, salaries, transfers) — always shown, it's the day's bottom line
   const f = r.flows;
-  html += `<div class="dr-summary">
-    <div class="dr-box"><div class="dr-lbl">الكاش — داخل / خارج</div><div class="dr-val">${fmtSar(f.cashIn)} / ${fmtSar(f.cashOut)} ﷼</div></div>
-    <div class="dr-box"><div class="dr-lbl">الشبكة — داخل / خارج (بعد رسوم البنك)</div><div class="dr-val">${fmtSar(f.netIn)} / ${fmtSar(f.netOut)} ﷼</div></div>
-    <div class="dr-box dr-net"><div class="dr-lbl">صافي حركة الصناديق${username?` (${esc(username)})`:""}</div><div class="dr-val">${fmtSar(f.cashIn-f.cashOut+f.netIn-f.netOut)} ﷼</div></div>
-  </div>
-  ${r.cardFees ? `<p class="dr-note">الشبكة كاملة (مثل جهاز الشبكة): ${fmtSar(r.cardGross)} ﷼ — خصم البنك (عمولة الشبكة): ${fmtSar(r.cardFees)} ﷼ — الصافي: ${fmtSar(r.cardGross-r.cardFees)} ﷼</p>` : ""}
-  <p class="dr-note">صافي الكاش: ${fmtSar(f.cashIn-f.cashOut)} ﷼ — يشمل كل الحركات المسجّلة (دفعات، مبيعات، سندات، مصروفات، مرتجعات، مشتريات، موردين، رواتب، تحويلات).</p>
+  // one row per box, in / out / net in their own columns (they used to share one cell as "in / out")
+  const amt = (v, cls)=> `<td class="${cls}"><bdi>${fmtSar(v)}</bdi> ﷼</td>`;
+  const netCell = v=> amt(v, v < -0.001 ? "dr-out" : "");
+  const boxRow = (label, i, o)=> `<tr><td class="dr-boxname">${label}</td>${amt(i,"dr-in")}${amt(o,"dr-out")}${netCell(i-o)}</tr>`;
+  html += `<section class="dr-section dr-flows">
+    <h3 class="dr-title">حركة الصناديق${username?` — ${esc(username)}`:""}</h3>
+    <table class="dr-table"><thead><tr><th>الصندوق</th><th>⬇ داخل</th><th>⬆ خارج</th><th>الصافي</th></tr></thead>
+    <tbody>${boxRow("الكاش", f.cashIn, f.cashOut)}${boxRow(`الشبكة <span class="dr-sub">(بعد عمولة البنك)</span>`, f.netIn, f.netOut)}</tbody>
+    <tfoot>${boxRow("الإجمالي", f.cashIn+f.netIn, f.cashOut+f.netOut)}</tfoot></table>
+  </section>
+  ${r.cardFees ? `<p class="dr-note">الشبكة كاملة (مثل جهاز الشبكة): <b>${fmtSar(r.cardGross)} ﷼</b> — عمولة البنك: <b>${fmtSar(r.cardFees)} ﷼</b> — الصافي: <b>${fmtSar(r.cardGross-r.cardFees)} ﷼</b></p>` : ""}
+  <p class="dr-note">يشمل كل الحركات المسجّلة — الخارج: التحويلات للمدير/المحاسب، المصروفات، المرتجعات، المشتريات، الموردين، الرواتب.</p>
   </div>`;
   return html;
 }
@@ -388,10 +393,11 @@ function dailyReportText(day, r, username){
   if(!L.some(x=>x.startsWith("• "))) L.push("ما فيه أي حركة في هذا اليوم.");
   const f = r.flows;
   L.push("");
-  L.push(`الكاش: داخل ${n(f.cashIn)} / خارج ${n(f.cashOut)}`);
-  L.push(`الشبكة: داخل ${n(f.netIn)} / خارج ${n(f.netOut)}`);
-  if(r.cardFees) L.push(`الشبكة كاملة ${n(r.cardGross)} — عمولة البنك ${n(r.cardFees)} — الصافي ${n(r.cardGross-r.cardFees)}`);
-  L.push(`*صافي حركة الصناديق: ${n(f.cashIn-f.cashOut+f.netIn-f.netOut)} ﷼*`);
+  L.push("*حركة الصناديق*");
+  L.push(`الكاش: داخل ${n(f.cashIn)} — خارج ${n(f.cashOut)} — الصافي ${n(f.cashIn-f.cashOut)}`);
+  L.push(`الشبكة: داخل ${n(f.netIn)} — خارج ${n(f.netOut)} — الصافي ${n(f.netIn-f.netOut)}`);
+  if(r.cardFees) L.push(`(الشبكة كاملة ${n(r.cardGross)} — عمولة البنك ${n(r.cardFees)})`);
+  L.push(`*الإجمالي: داخل ${n(f.cashIn+f.netIn)} — خارج ${n(f.cashOut+f.netOut)} — الصافي ${n(f.cashIn-f.cashOut+f.netIn-f.netOut)} ﷼*`);
   L.push("");
   L.push(`أرسله: ${currentUser ? currentUser.username : ""}`);
   return L.join("\n");

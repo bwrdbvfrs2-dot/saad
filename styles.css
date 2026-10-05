@@ -319,6 +319,12 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 .daily-report .dr-lbl{font-size:12px;color:var(--muted);}
 .daily-report .dr-val{font-size:16px;font-weight:800;margin-top:2px;}
 .daily-report .dr-note{font-size:11px;color:var(--muted);margin-top:6px;}
+.daily-report .dr-flows{margin-top:16px;}
+.daily-report .dr-flows td{text-align:center;font-weight:700;}
+.daily-report .dr-flows td.dr-boxname{text-align:right;}
+.daily-report .dr-flows .dr-sub{font-weight:400;font-size:11px;color:var(--muted);}
+.daily-report .dr-in{color:var(--profit);}
+.daily-report .dr-out{color:var(--loss);}
 @media print{
   #printArea .daily-report{font-size:11px;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   #printArea .daily-report .dr-head{border-bottom:2px solid #000;}
@@ -333,6 +339,8 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   #printArea .daily-report .dr-box{background:#f3f3f3 !important;border:1px solid #444 !important;}
   #printArea .daily-report .dr-net{border:2px solid #000 !important;}
   #printArea .daily-report .no-print{display:none !important;}
+  #printArea .daily-report .dr-in{color:#0a7a2f !important;}
+  #printArea .daily-report .dr-out{color:#b3261e !important;}
 }
 /* a report captured as a picture for WhatsApp: always the printed (white) look, whatever the theme */
 .share-capture{font-family:var(--font-main);}
@@ -343,6 +351,8 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 .share-capture .daily-report .dr-title{background:#e6e6e6;border-right:4px solid #000;color:#000;}
 .share-capture .daily-report .dr-count{background:#000;color:#fff;}
 .share-capture .daily-report .dr-table th,.share-capture .daily-report .dr-table td{border:1px solid #444;color:#000;background:#fff;}
+.share-capture .daily-report .dr-table td.dr-in{color:#0a7a2f;}
+.share-capture .daily-report .dr-table td.dr-out{color:#b3261e;}
 .share-capture .daily-report .dr-table th{background:#d9d9d9;}
 .share-capture .daily-report .dr-table tbody tr:nth-child(even) td{background:#f3f3f3;}
 .share-capture .daily-report .dr-table tfoot td{background:#e6e6e6;border-top:2px solid #000;}
