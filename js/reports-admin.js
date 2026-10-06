@@ -1288,6 +1288,7 @@ function performTabSwitch(name){
   if(name==="repairs") renderRepairsTab();
   if(name==="report-myDaily") renderMyDaily();
   if(name==="report-daily") renderDailyPreview();
+  if(name==="mail") renderMailTab(); // opening the mail clears its unread count
   if(name==="invoice" && !editingId){
     // refresh dropdowns (e.g. newly-added measurement options) without discarding data already entered
     renderGarmentFields(readGarmentFields());

@@ -1,4 +1,13 @@
 // ---------------- mail / internal requests inbox ----------------
+// what this user has already seen of the notifications addressed to them (per device). A device with no
+// mark yet counts only the last 3 days, so a fresh login doesn't light up with old news.
+function mailSeenKey(){ return "mailSeenSeq:" + (currentUser ? currentUser.username : ""); }
+function mailSeenSeq(){ try{ const v = localStorage.getItem(mailSeenKey()); return v===null ? null : (parseInt(v,10)||0); }catch(e){ return null; } }
+function markMailSeen(seq){ try{ localStorage.setItem(mailSeenKey(), String(seq)); }catch(e){} }
+function isUnreadNotification(d, seen){
+  if(seen===null) return (d.date||"") >= new Date(serverNowMs() - 3*86400000).toISOString().slice(0,10);
+  return (d.seq||0) > seen;
+}
 function nextMailRequestNo(){ const n=state.settings.nextMailRequestNumber||1; state.settings.nextMailRequestNumber=n+1; return n; }
 function switchMailComposeForm(type){
   ["Return","Advance","Leave"].forEach(t=> $(`mailCompose${t}Form`).style.display = "none");
@@ -22,7 +31,13 @@ function renderMailTab(){
 
   // personal notifications: decisions addressed to me, regardless of who filed the underlying request
   const myNotifications = state.decisions.filter(d=>d.recipientUsername===currentUser.username).slice().reverse();
-  $("myNotificationsList").innerHTML = myNotifications.length ? myNotifications.map(d=>`<div class="item-row" style="flex-direction:column;align-items:stretch;"><b>قرار رقم ${d.seq}</b><span class="sub">${esc(d.message)} — ${d.date}</span></div>`).join("") : `<p class="sub">ما فيه إشعارات لك.</p>`;
+  const seen = mailSeenSeq();
+  const unread = myNotifications.filter(d=> isUnreadNotification(d, seen));
+  const mailOpen = $("tab-mail") && $("tab-mail").classList.contains("active");
+  $("myNotificationsList").innerHTML = myNotifications.length ? myNotifications.map(d=>`<div class="item-row" style="flex-direction:column;align-items:stretch;${unread.includes(d)?"border:1px solid var(--gold);border-radius:6px;":""}"><b>قرار رقم ${d.seq}${unread.includes(d)?` <span class="badge b-pending">جديد</span>`:""}</b><span class="sub">${esc(d.message)} — ${d.date}</span></div>`).join("") : `<p class="sub">ما فيه إشعارات لك.</p>`;
+  const maxSeq = myNotifications.reduce((a,d)=> Math.max(a, d.seq||0), seen||0);
+  const unreadCount = mailOpen ? 0 : unread.length;
+  if(mailOpen && (seen===null || maxSeq > seen)) markMailSeen(maxSeq);
 
   const all = state.mailRequests.slice().reverse();
   const pending = all.filter(r=>r.status==="pending" && visible(r));
@@ -62,8 +77,10 @@ function renderMailTab(){
 
   const pendingCountForAdmin = state.mailRequests.filter(r=>r.status==="pending" && (isAdmin || (canApprovePay && r.type==="payment_edit" && r.createdBy!==currentUser.username))).length;
   const badge = $("mailBadge");
+  // everyone gets a count: requests waiting on them to decide + replies they haven't opened yet
+  const badgeCount = (canApprovePay ? pendingCountForAdmin : 0) + unreadCount;
   if(badge){
-    if(canApprovePay && pendingCountForAdmin>0){ badge.style.display=""; badge.textContent = pendingCountForAdmin>9?"9+":pendingCountForAdmin; }
+    if(badgeCount>0){ badge.style.display=""; badge.textContent = badgeCount>9?"9+":badgeCount; }
     else badge.style.display = "none";
   }
 }
