@@ -1,4 +1,13 @@
 // ---------------- mail / internal requests inbox ----------------
+// what this user has already seen of the notifications addressed to them (per device). A device with no
+// mark yet counts only the last 3 days, so a fresh login doesn't light up with old news.
+function mailSeenKey(){ return "mailSeenSeq:" + (currentUser ? currentUser.username : ""); }
+function mailSeenSeq(){ try{ const v = localStorage.getItem(mailSeenKey()); return v===null ? null : (parseInt(v,10)||0); }catch(e){ return null; } }
+function markMailSeen(seq){ try{ localStorage.setItem(mailSeenKey(), String(seq)); }catch(e){} }
+function isUnreadNotification(d, seen){
+  if(seen===null) return (d.date||"") >= new Date(serverNowMs() - 3*86400000).toISOString().slice(0,10);
+  return (d.seq||0) > seen;
+}
 function nextMailRequestNo(){ const n=state.settings.nextMailRequestNumber||1; state.settings.nextMailRequestNumber=n+1; return n; }
 function switchMailComposeForm(type){
   ["Return","Advance","Leave"].forEach(t=> $(`mailCompose${t}Form`).style.display = "none");
@@ -13,6 +22,8 @@ function renderMailTab(){
   if(advSel){ $("mailAdvanceEmployeeDatalist").innerHTML = state.users.map(u=>`<option value="${esc(u.username)}"></option>`).join(""); if(!advSel.value) { advSel.value = currentUser.username; $("mailAdvanceEmployeeSearch").value = currentUser.username; } }
 
   const isAdmin = currentUser.role==="مدير";
+  const canApprovePay = canApprovePaymentEdits();
+  const visible = r=> isAdmin || r.createdBy===currentUser.username || (r.type==="payment_edit" && canApprovePay);
   $("mailAdminToolsWrap").style.display = isAdmin ? "" : "none";
   if(isAdmin){
     $("bonusEmployeeDatalist").innerHTML = state.users.filter(u=>u.role!=="مدير").map(u=>`<option value="${esc(u.username)}"></option>`).join("");
@@ -20,23 +31,34 @@ function renderMailTab(){
 
   // personal notifications: decisions addressed to me, regardless of who filed the underlying request
   const myNotifications = state.decisions.filter(d=>d.recipientUsername===currentUser.username).slice().reverse();
-  $("myNotificationsList").innerHTML = myNotifications.length ? myNotifications.map(d=>`<div class="item-row" style="flex-direction:column;align-items:stretch;"><b>قرار رقم ${d.seq}</b><span class="sub">${esc(d.message)} — ${d.date}</span></div>`).join("") : `<p class="sub">ما فيه إشعارات لك.</p>`;
+  const seen = mailSeenSeq();
+  const unread = myNotifications.filter(d=> isUnreadNotification(d, seen));
+  const mailOpen = $("tab-mail") && $("tab-mail").classList.contains("active");
+  $("myNotificationsList").innerHTML = myNotifications.length ? myNotifications.map(d=>`<div class="item-row" style="flex-direction:column;align-items:stretch;${unread.includes(d)?"border:1px solid var(--gold);border-radius:6px;":""}"><b>قرار رقم ${d.seq}${unread.includes(d)?` <span class="badge b-pending">جديد</span>`:""}</b><span class="sub">${esc(d.message)} — ${d.date}</span></div>`).join("") : `<p class="sub">ما فيه إشعارات لك.</p>`;
+  const maxSeq = myNotifications.reduce((a,d)=> Math.max(a, d.seq||0), seen||0);
+  const unreadCount = mailOpen ? 0 : unread.length;
+  if(mailOpen && (seen===null || maxSeq > seen)) markMailSeen(maxSeq);
 
   const all = state.mailRequests.slice().reverse();
-  const pending = all.filter(r=>r.status==="pending" && (isAdmin || r.createdBy===currentUser.username));
-  const resolved = all.filter(r=>r.status==="decided" && (isAdmin || r.createdBy===currentUser.username)).slice(0,30);
+  const pending = all.filter(r=>r.status==="pending" && visible(r));
+  const resolved = all.filter(r=>r.status==="decided" && visible(r)).slice(0,30);
 
-  const typeLabel = t=> t==="invoice_return_defect"?"فاتورة مرتجعة (خلل)" : t==="advance"?"طلب سلفة" : "طلب إجازة";
+  const typeLabel = t=> t==="invoice_return_defect"?"فاتورة مرتجعة (خلل)" : t==="advance"?"طلب سلفة" : t==="payment_edit"?"تعديل دفعة فاتورة" : "طلب إجازة";
   const detailLine = r=>{
     if(r.type==="invoice_return_defect") return `فاتورة ${esc(r.invoiceNumber)} — ${r.amount.toFixed(0)} ﷼ — المتسبّب: ${esc(r.responsibleUsername)} — السبب: ${esc(r.reason)}`;
     if(r.type==="advance") return `${esc(r.employeeUsername)} — ${r.amount.toFixed(0)} ﷼ — ${esc(r.reason||"—")}`;
+    if(r.type==="payment_edit") return `فاتورة ${esc(r.invoiceNumber)} — الدفعة: كاش ${fmtSar(r.cash)} / شبكة ${fmtSar(r.network)} ﷼ (${r.payDate||"—"}) — طلبها ${esc(r.createdBy)} — السبب: ${esc(r.reason||"—")}${r.usedAt?` — عُدّلت ${r.usedAt}`:""}`;
     if(r.type==="leave") return `${esc(r.employeeUsername)} — من ${r.fromDate} إلى ${r.toDate} — ${esc(r.reason||"—")}`;
     return "—";
   };
 
   $("mailPendingList").innerHTML = pending.length ? pending.map(r=>{
     let actions = "";
-    if(isAdmin){
+    if(r.type==="payment_edit" && canApprovePay && r.createdBy!==currentUser.username){
+      actions = `<button class="btn btn-gold btn-sm" onclick="decidePaymentEditRequest('${r.id}', true)">موافقة</button> <button class="btn btn-danger btn-sm" onclick="decidePaymentEditRequest('${r.id}', false)">رفض</button>`;
+    } else if(r.type==="payment_edit"){
+      actions = `<span class="badge b-pending">قيد الانتظار</span>`;
+    } else if(isAdmin){
       if(r.type==="invoice_return_defect") actions = `<button class="btn btn-gold btn-sm" onclick="openMailDecisionModal('${r.id}')">اتخاذ قرار</button>`;
       else actions = `<button class="btn btn-gold btn-sm" onclick="decideSimpleMailRequest('${r.id}', true)">موافقة</button> <button class="btn btn-danger btn-sm" onclick="decideSimpleMailRequest('${r.id}', false)">رفض</button>`;
     } else {
@@ -53,10 +75,12 @@ function renderMailTab(){
     resolved.map(r=>`<tr><td>${typeLabel(r.type)}</td><td>${detailLine(r)}</td><td>${esc(r.decisionLabel||"—")}</td><td>${r.decidedAt||r.date}</td></tr>`).join("") +
     `</tbody></table></div>` : `<p class="sub">ما فيه طلبات منتهية بعد.</p>`;
 
-  const pendingCountForAdmin = state.mailRequests.filter(r=>r.status==="pending").length;
+  const pendingCountForAdmin = state.mailRequests.filter(r=>r.status==="pending" && (isAdmin || (canApprovePay && r.type==="payment_edit" && r.createdBy!==currentUser.username))).length;
   const badge = $("mailBadge");
+  // everyone gets a count: requests waiting on them to decide + replies they haven't opened yet
+  const badgeCount = (canApprovePay ? pendingCountForAdmin : 0) + unreadCount;
   if(badge){
-    if(isAdmin && pendingCountForAdmin>0){ badge.style.display=""; badge.textContent = pendingCountForAdmin>9?"9+":pendingCountForAdmin; }
+    if(badgeCount>0){ badge.style.display=""; badge.textContent = badgeCount>9?"9+":badgeCount; }
     else badge.style.display = "none";
   }
 }
@@ -115,6 +139,22 @@ async function decideSimpleMailRequest(reqId, approved){
   if(!await saveStateWithRollback(snapshot)) return;
   logAudit("mail_request_decided", {type:r.type, seq:r.seq, approved, employeeUsername:r.employeeUsername, amount:r.amount||0});
   showToast(approved ? "تمت الموافقة على الطلب" : "تم رفض الطلب");
+}
+async function decidePaymentEditRequest(reqId, approved){
+  const r = state.mailRequests.find(x=>x.id===reqId);
+  if(!r || r.type!=="payment_edit") return;
+  if(!canApprovePaymentEdits()){ showToast("الموافقة للمدير أو المحاسب اللي حدّده المدير"); return; }
+  if(r.status!=="pending"){ showToast("هذا الطلب تم البت فيه مسبقاً"); return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
+  r.status = "decided"; r.approved = !!approved; r.decidedBy = currentUser.username; r.decidedAt = todayStr();
+  r.decisionLabel = approved ? `تمت الموافقة (${currentUser.username}) — يقدر يعدّل الدفعة مرة وحدة` : `مرفوض (${currentUser.username})`;
+  const seq = nextDecisionNo();
+  state.decisions.push({id:newId(), seq, type:"payment_edit", recipientUsername:r.createdBy, amount:0, reason:r.reason||"",
+    message: approved ? `وافق ${currentUser.username} على تعديل دفعة فاتورة #${r.invoiceNumber} — افتح الفاتورة للتعديل واضغط «تعديل» عند الدفعة ثم احفظ.` : `رفض ${currentUser.username} طلب تعديل دفعة فاتورة #${r.invoiceNumber}.`,
+    decidedBy:currentUser.username, date:todayStr()});
+  if(!await saveStateWithRollback(snapshot)) return;
+  logAudit("payment_edit_decided", {seq:r.seq, invoiceNumber:r.invoiceNumber, approved:!!approved, requestedBy:r.createdBy});
+  showToast(approved ? "تمت الموافقة — يقدر يعدّل الدفعة الحين" : "تم رفض الطلب");
 }
 let mailDecisionTargetId = null;
 function openMailDecisionModal(reqId){
@@ -486,6 +526,17 @@ async function saveInvoice(){
   if(isNewInvoice && state.settings.einvoiceEnabled){
     invData.einvoice = await generateEinvoiceForNewInvoice(invData);
   }
+  // a saved payment deleted while editing (e.g. entered as cash when it was card) leaves the box it went
+  // into — before, only the new payment was added and the old amount stayed in the box
+  const removedPayments = oldInv ? (oldInv.payments||[]).filter(op=> op.appliedToBalances && !invData.payments.some(np=> np.id===op.id)) : [];
+  // an approved correction: the old amounts come out of the box, the new ones go in below
+  const editedPayments = oldInv ? (oldInv.payments||[]).filter(op=> op.appliedToBalances && invData.payments.some(np=> np.id===op.id && np.correction && !np.appliedToBalances)) : [];
+  removedPayments.concat(editedPayments).forEach(op=> reversePaymentFromBalances(op));
+  invData.payments.forEach(np=>{
+    if(!np.correction || np.appliedToBalances || !np.correction.requestId) return;
+    const req = state.mailRequests.find(r=> r.id===np.correction.requestId);
+    if(req && !req.usedAt){ req.usedAt = todayStr(); req.usedBy = currentUser.username; }
+  });
   invData.payments.forEach(p=> applyPaymentToBalances(p));
   if(editingId){
     const idx = state.invoices.findIndex(i=>i.id===editingId);
@@ -510,6 +561,9 @@ async function saveInvoice(){
   const saved = await saveState();
   if(saved){
     logAudit(editingId ? "invoice_edited" : "invoice_created", {invoiceNumber:number, saleTotal: invoiceSaleTotal(invData), paid: invoicePaid(invData)});
+    editedPayments.forEach(op=>{ const np = invData.payments.find(x=>x.id===op.id);
+      logAudit("payment_edited", {invoiceNumber:number, fromCash:op.cash||0, fromNetwork:op.network||0, toCash:np.cash||0, toNetwork:np.network||0, recordedBy:op.recordedBy, cashReceiptNo:op.cashReceiptNo||null, requestId:np.correction.requestId||null}); });
+    removedPayments.forEach(op=> logAudit("payment_removed", {invoiceNumber:number, cash:op.cash||0, network:op.network||0, cashReceiptNo:op.cashReceiptNo||null, networkReceiptNo:op.networkReceiptNo||null, recordedBy:op.recordedBy, date:op.date}));
     if(depositBypassed) logAudit("deposit_bypassed", {invoiceNumber:number, customerName:custName, ...depositBypassed});
     if(!editingId){ selectedOfferIds = []; appliedPromoCode = null; }
     showToast(editingId ? "تم تحديث الفاتورة" : (appliedOffers.length ? `تم حفظ الفاتورة — تطبيق: ${appliedOffers.join("، ")}` : "تم حفظ الفاتورة"));

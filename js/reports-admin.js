@@ -347,13 +347,18 @@ function buildDailyReportHtml(day, r, username){
   // real movement of every box (all sources: payments, sales, vouchers, expenses, refunds, purchases,
   // suppliers, salaries, transfers) — always shown, it's the day's bottom line
   const f = r.flows;
-  html += `<div class="dr-summary">
-    <div class="dr-box"><div class="dr-lbl">الكاش — داخل / خارج</div><div class="dr-val">${fmtSar(f.cashIn)} / ${fmtSar(f.cashOut)} ﷼</div></div>
-    <div class="dr-box"><div class="dr-lbl">الشبكة — داخل / خارج (بعد رسوم البنك)</div><div class="dr-val">${fmtSar(f.netIn)} / ${fmtSar(f.netOut)} ﷼</div></div>
-    <div class="dr-box dr-net"><div class="dr-lbl">صافي حركة الصناديق${username?` (${esc(username)})`:""}</div><div class="dr-val">${fmtSar(f.cashIn-f.cashOut+f.netIn-f.netOut)} ﷼</div></div>
-  </div>
-  ${r.cardFees ? `<p class="dr-note">الشبكة كاملة (مثل جهاز الشبكة): ${fmtSar(r.cardGross)} ﷼ — خصم البنك (عمولة الشبكة): ${fmtSar(r.cardFees)} ﷼ — الصافي: ${fmtSar(r.cardGross-r.cardFees)} ﷼</p>` : ""}
-  <p class="dr-note">صافي الكاش: ${fmtSar(f.cashIn-f.cashOut)} ﷼ — يشمل كل الحركات المسجّلة (دفعات، مبيعات، سندات، مصروفات، مرتجعات، مشتريات، موردين، رواتب، تحويلات).</p>
+  // one row per box, in / out / net in their own columns (they used to share one cell as "in / out")
+  const amt = (v, cls)=> `<td class="${cls}"><bdi>${fmtSar(v)}</bdi> ﷼</td>`;
+  const netCell = v=> amt(v, v < -0.001 ? "dr-out" : "");
+  const boxRow = (label, i, o)=> `<tr><td class="dr-boxname">${label}</td>${amt(i,"dr-in")}${amt(o,"dr-out")}${netCell(i-o)}</tr>`;
+  html += `<section class="dr-section dr-flows">
+    <h3 class="dr-title">حركة الصناديق${username?` — ${esc(username)}`:""}</h3>
+    <table class="dr-table"><thead><tr><th>الصندوق</th><th>⬇ داخل</th><th>⬆ خارج</th><th>الصافي</th></tr></thead>
+    <tbody>${boxRow("الكاش", f.cashIn, f.cashOut)}${boxRow(`الشبكة <span class="dr-sub">(بعد عمولة البنك)</span>`, f.netIn, f.netOut)}</tbody>
+    <tfoot>${boxRow("الإجمالي", f.cashIn+f.netIn, f.cashOut+f.netOut)}</tfoot></table>
+  </section>
+  ${r.cardFees ? `<p class="dr-note">الشبكة كاملة (مثل جهاز الشبكة): <b>${fmtSar(r.cardGross)} ﷼</b> — عمولة البنك: <b>${fmtSar(r.cardFees)} ﷼</b> — الصافي: <b>${fmtSar(r.cardGross-r.cardFees)} ﷼</b></p>` : ""}
+  <p class="dr-note">يشمل كل الحركات المسجّلة — الخارج: التحويلات للمدير/المحاسب، المصروفات، المرتجعات، المشتريات، الموردين، الرواتب.</p>
   </div>`;
   return html;
 }
@@ -388,10 +393,11 @@ function dailyReportText(day, r, username){
   if(!L.some(x=>x.startsWith("• "))) L.push("ما فيه أي حركة في هذا اليوم.");
   const f = r.flows;
   L.push("");
-  L.push(`الكاش: داخل ${n(f.cashIn)} / خارج ${n(f.cashOut)}`);
-  L.push(`الشبكة: داخل ${n(f.netIn)} / خارج ${n(f.netOut)}`);
-  if(r.cardFees) L.push(`الشبكة كاملة ${n(r.cardGross)} — عمولة البنك ${n(r.cardFees)} — الصافي ${n(r.cardGross-r.cardFees)}`);
-  L.push(`*صافي حركة الصناديق: ${n(f.cashIn-f.cashOut+f.netIn-f.netOut)} ﷼*`);
+  L.push("*حركة الصناديق*");
+  L.push(`الكاش: داخل ${n(f.cashIn)} — خارج ${n(f.cashOut)} — الصافي ${n(f.cashIn-f.cashOut)}`);
+  L.push(`الشبكة: داخل ${n(f.netIn)} — خارج ${n(f.netOut)} — الصافي ${n(f.netIn-f.netOut)}`);
+  if(r.cardFees) L.push(`(الشبكة كاملة ${n(r.cardGross)} — عمولة البنك ${n(r.cardFees)})`);
+  L.push(`*الإجمالي: داخل ${n(f.cashIn+f.netIn)} — خارج ${n(f.cashOut+f.netOut)} — الصافي ${n(f.cashIn-f.cashOut+f.netIn-f.netOut)} ﷼*`);
   L.push("");
   L.push(`أرسله: ${currentUser ? currentUser.username : ""}`);
   return L.join("\n");
@@ -895,6 +901,7 @@ function renderUsers(){
         <div class="field" style="margin-bottom:0;"><label>نوع الحد</label><select class="edit-discount-type" data-idx="${i}"><option value="amount" ${u.discountType==="amount"?"selected":""}>مبلغ ثابت</option><option value="percent" ${u.discountType==="percent"?"selected":""}>نسبة %</option></select></div>
         <div class="field" style="margin-bottom:0;"><label>قيمة الحد</label><input type="number" class="edit-discount-value" data-idx="${i}" min="0" value="${u.discountValue||""}" placeholder="0"></div>
       </div>
+      ${u.role==="محاسب" ? `<div class="field" style="margin:8px 0 0;"><label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" class="edit-approve-payedits" data-idx="${i}" ${u.approvePaymentEdits?"checked":""}> يوافق على طلبات تعديل دفعات الفواتير (تجيه في البريد مع المدير)</label></div>` : ""}
       <div class="actions-row" style="margin-top:8px;">
         <button class="btn btn-ghost btn-sm" onclick="saveUserEdit(${i})">حفظ</button>
         ${isLastManager?`<span class="sub">لازم يبقى مدير واحد على الأقل</span>`:`<button class="btn btn-danger btn-sm" onclick="removeUser(${i})">حذف</button>`}
@@ -980,7 +987,9 @@ async function saveUserEdit(i){
   const mobileInp = document.querySelector(`.edit-mobile[data-idx="${i}"]`);
   const mobile = mobileInp ? mobileInp.value.trim() : (prevUser.mobile||"");
   if(mobile && !/^05\d{8}$/.test(mobile)){ showToast("جوال الموظف لازم يكون بصيغة 05XXXXXXXX"); return; }
-  const updatedUser = {...prevUser, mobile, username,role,joinedDate,baseSalary,commissionEnabled,commissionRate,discountEnabled,discountType,discountValue,dailyCapacity,productionCapacity,wageMen,wageChild,wageChildSmall};
+  const apInp = document.querySelector(`.edit-approve-payedits[data-idx="${i}"]`);
+  const approvePaymentEdits = role==="محاسب" && (apInp ? apInp.checked : !!prevUser.approvePaymentEdits);
+  const updatedUser = {...prevUser, approvePaymentEdits, mobile, username,role,joinedDate,baseSalary,commissionEnabled,commissionRate,discountEnabled,discountType,discountValue,dailyCapacity,productionCapacity,wageMen,wageChild,wageChildSmall};
   if(newPassword){
     // client-side Firebase Auth can't set another account's password directly — create a fresh
     // login account carrying the new password and retire the old one
@@ -1279,6 +1288,7 @@ function performTabSwitch(name){
   if(name==="repairs") renderRepairsTab();
   if(name==="report-myDaily") renderMyDaily();
   if(name==="report-daily") renderDailyPreview();
+  if(name==="mail") renderMailTab(); // opening the mail clears its unread count
   if(name==="invoice" && !editingId){
     // refresh dropdowns (e.g. newly-added measurement options) without discarding data already entered
     renderGarmentFields(readGarmentFields());

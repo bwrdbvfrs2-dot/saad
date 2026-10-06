@@ -785,19 +785,91 @@ function renderInvoiceOffersSelector(){
 
 // ---------------- payments (form-local list before save) ----------------
 let paymentsListTemp = [];
+// ---- a payment already saved with the invoice can't just be deleted: the cashier asks the manager or the
+// accountant (mail inbox), and once approved can change its cash / card amounts (0 to any) one time ----
+let editingPaymentIdx = null;
+// the manager, or an accountant the manager picked in user settings, approves (and can edit directly)
+function canApprovePaymentEdits(u){
+  u = u || currentUser;
+  if(!u) return false;
+  const live = state.users.find(x=>x.username===u.username) || u;
+  return live.role==="مدير" || (live.role==="محاسب" && !!live.approvePaymentEdits);
+}
+function canEditPaymentsDirectly(){ return canApprovePaymentEdits(); }
+function paymentEditRequestFor(paymentId){
+  return (state.mailRequests||[]).filter(r=> r.type==="payment_edit" && r.invoiceId===editingId && r.paymentId===paymentId).pop() || null;
+}
+function approvedPaymentEdit(paymentId){
+  const r = paymentEditRequestFor(paymentId);
+  return r && r.status==="decided" && r.approved && !r.usedAt ? r : null;
+}
+function paymentRowActions(p, i){
+  if(!p.appliedToBalances && !p.correction) return `<button class="icon-btn" onclick="removePaymentTemp(${i})">حذف</button>`;
+  if(p.auto) return "";
+  if(canEditPaymentsDirectly() || (p.correction && !p.appliedToBalances) || approvedPaymentEdit(p.id)) return `<button class="icon-btn pay-edit-btn" onclick="startPaymentEdit(${i})">تعديل</button>`;
+  const r = paymentEditRequestFor(p.id);
+  if(r && r.status==="pending") return `<span class="badge b-pending">طلب التعديل بانتظار الموافقة</span>`;
+  return `<button class="icon-btn pay-request-btn" onclick="requestPaymentEdit(${i})">طلب تعديل</button>`;
+}
 function renderPaymentsList(){
   const el = $("paymentsList");
   if(paymentsListTemp.length===0){ el.innerHTML = `<p class="sub">ما فيه دفعات مسجّلة بعد.</p>`; }
   else {
-    el.innerHTML = paymentsListTemp.map((p,i)=>`<div class="payment-row">
-      <span>كاش: ${p.cash.toFixed(0)} ﷼${p.cashReceiptNo?` (سند ${p.cashReceiptNo})`:""}</span><span>شبكة: ${p.network.toFixed(0)} ﷼${p.networkReceiptNo?` (سند ${p.networkReceiptNo})`:""}</span>
+    el.innerHTML = paymentsListTemp.map((p,i)=> i===editingPaymentIdx ? `<div class="payment-row pay-edit-row" style="flex-wrap:wrap;gap:6px;">
+      <label>كاش <input type="number" min="0" step="0.01" class="pe-cash" value="${p.cash||0}" style="width:90px;"></label>
+      <label>شبكة <input type="number" min="0" step="0.01" class="pe-network" value="${p.network||0}" style="width:90px;"></label>
+      <label>سند الشبكة <input type="text" class="pe-receipt" value="${esc(p.networkReceiptNo||"")}" style="width:100px;"></label>
+      <select class="pe-card card-type-select">${cardTypeOptionsHtml(p.cardType)}</select>
+      <button class="btn btn-gold btn-sm" onclick="applyPaymentEdit(${i})">تم</button>
+      <button class="btn btn-ghost btn-sm" onclick="editingPaymentIdx=null;renderPaymentsList()">إلغاء</button></div>`
+    : `<div class="payment-row">
+      <span>كاش: ${fmtSar(p.cash)} ﷼${p.cashReceiptNo?` (سند ${p.cashReceiptNo})`:""}</span><span>شبكة: ${fmtSar(p.network)} ﷼${p.networkReceiptNo?` (سند ${p.networkReceiptNo})`:""}</span>
       ${p.discount?`<span>خصم: ${p.discount.toFixed(0)} ﷼</span>`:""}
-      <span style="color:var(--muted)">${p.date}</span>
-      <button class="icon-btn" onclick="removePaymentTemp(${i})">حذف</button></div>`).join("");
+      <span style="color:var(--muted)">${p.date}${p.correction?" — معدّلة":""}</span>
+      ${paymentRowActions(p, i)}</div>`).join("");
   }
   updateLiveTotals();
 }
-function removePaymentTemp(i){ paymentsListTemp.splice(i,1); renderPaymentsList(); }
+function removePaymentTemp(i){
+  const p = paymentsListTemp[i];
+  if(p && (p.appliedToBalances || p.correction) && !canEditPaymentsDirectly()){ showToast("الدفعة محفوظة — اطلب تعديلها من المدير"); return; }
+  paymentsListTemp.splice(i,1); renderPaymentsList();
+}
+async function requestPaymentEdit(i){
+  const p = paymentsListTemp[i]; if(!p || !editingId) return;
+  const inv = state.invoices.find(x=>x.id===editingId); if(!inv) return;
+  const reason = prompt("سبب تعديل الدفعة؟ (مثلاً: دخلتها كاش وهي شبكة)", "");
+  if(reason===null) return;
+  const snapshot = JSON.parse(JSON.stringify(state));
+  state.mailRequests.push({id:newId(), seq:nextMailRequestNo(), type:"payment_edit", invoiceId:inv.id, invoiceNumber:inv.number, paymentId:p.id,
+    cash:p.cash||0, network:p.network||0, payDate:p.date, recordedBy:p.recordedBy||"", reason:reason.trim(), status:"pending", createdBy:currentUser.username, date:todayStr()});
+  if(!await saveStateWithRollback(snapshot)) return;
+  logAudit("payment_edit_requested", {invoiceNumber:inv.number, cash:p.cash||0, network:p.network||0});
+  renderPaymentsList();
+  showToast("انرسل طلب تعديل الدفعة للمدير عن طريق البريد — بعد الموافقة يطلع لك زر «تعديل»");
+}
+function startPaymentEdit(i){ editingPaymentIdx = i; renderPaymentsList(); }
+function applyPaymentEdit(i){
+  const p = paymentsListTemp[i]; const row = document.querySelector("#paymentsList .pay-edit-row"); if(!p || !row) return;
+  const cash = parseFloat(row.querySelector(".pe-cash").value)||0, network = parseFloat(row.querySelector(".pe-network").value)||0;
+  const receipt = row.querySelector(".pe-receipt").value.trim();
+  if(cash<0 || network<0){ showToast("المبلغ ما يكون بالسالب"); return; }
+  if(network>0 && !receipt){ showToast("أدخل رقم سند الشبكة"); return; }
+  const req = approvedPaymentEdit(p.id);
+  if(!p.correction) p.correction = {fromCash:p.cash||0, fromNetwork:p.network||0, fromCardType:p.cardType||null, fromCashReceiptNo:p.cashReceiptNo||null, fromNetworkReceiptNo:p.networkReceiptNo||null};
+  Object.assign(p.correction, {by:currentUser.username, at:serverNowIso(), requestId: req ? req.id : (p.correction.requestId||null)});
+  p.cash = cash; p.network = network;
+  p.cashReceiptNo = cash>0 ? (p.cashReceiptNo || nextVoucherNo()) : null;
+  p.networkReceiptNo = network>0 ? receipt : "";
+  p.cardType = network>0 ? readCardType(row.querySelector(".pe-card")) : undefined;
+  delete p.bankFee;
+  // goes back into the boxes with the new amounts when the invoice is saved (the old ones come out first)
+  p.appliedToBalances = false;
+  editingPaymentIdx = null;
+  if(cash===0 && network===0 && !p.discount) paymentsListTemp.splice(i,1);
+  renderPaymentsList();
+  showToast("تم تعديل الدفعة — احفظ الفاتورة عشان يتطبق التعديل على الصناديق");
+}
 function addPaymentTemp(){
   const cash = parseFloat($("newPayCash").value)||0;
   const network = parseFloat($("newPayNetwork").value)||0;
@@ -830,7 +902,7 @@ function computeExpectedDeliveryDate(newGarmentsCount){
 function resetForm(){
   if(typeof setMeasOnlyEdit==="function" && measOnlyEdit) setMeasOnlyEdit(false);
   fetchedHeldId = null;
-  editingId=null; paymentsListTemp=[]; selectedOfferIds=[]; appliedPromoCode=null;
+  editingId=null; paymentsListTemp=[]; editingPaymentIdx=null; selectedOfferIds=[]; appliedPromoCode=null;
   $("formTitle").textContent="فاتورة جديدة";
   $("invNumber").value = state.settings.nextInvoiceNumber;
   $("invDate").value = todayStr();
@@ -962,7 +1034,7 @@ function renderHeldInvoices(){
 }
 function loadInvoiceIntoForm(inv){
   switchTab("invoice");
-  editingId=inv.id; paymentsListTemp = JSON.parse(JSON.stringify(inv.payments||[]));
+  editingId=inv.id; paymentsListTemp = JSON.parse(JSON.stringify(inv.payments||[])); editingPaymentIdx=null;
   $("formTitle").textContent="تعديل الفاتورة: "+inv.number;
   $("invNumber").value=inv.number; $("invDate").value=inv.date; $("invCount").value=inv.garments.length;
   $("invDeliveryDate").value = inv.expectedDeliveryDate || "";

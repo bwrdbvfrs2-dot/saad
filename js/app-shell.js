@@ -251,6 +251,9 @@ function normalizeState(){
   }
   if(!state.qcLog) state.qcLog=[];
   if(!state.heldInvoices) state.heldInvoices=[];
+  // payments from the quick-pay screen used to be saved without an id — an edit request needs one to point
+  // at. Derived from the invoice and the payment's place, so it's the same on every device and every load.
+  (state.invoices||[]).forEach(inv=> (inv.payments||[]).forEach((p,i)=>{ if(p && !p.id) p.id = `${inv.id}-p${i}`; }));
   if(!state.heldSales) state.heldSales=[];
   // one-time: hand the new external-repairs tab to every employee role. The "done" mark lives on each role
   // itself, not in settings — only a manager's save can change permissions, so a mark in settings saved

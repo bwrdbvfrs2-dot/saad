@@ -602,7 +602,7 @@ function confirmQuickDeliveryPayment(invId, idx){
   const remaining = invoiceRemaining(inv);
   if(Math.abs((cash+network)-remaining)>0.01){ showToast(`المبلغ لازم يساوي المتبقي بالضبط (${remaining.toFixed(0)} ريال)`); return; }
   const snapshot = JSON.parse(JSON.stringify(state));
-  const payment = {cash, network, discount:0, receiptNo:receipt||undefined, date:todayStr(), cardType: network>0 ? readCardType("quickPayCard") : undefined};
+  const payment = {id:newId(), cash, network, discount:0, receiptNo:receipt||undefined, date:todayStr(), cardType: network>0 ? readCardType("quickPayCard") : undefined};
   inv.payments = inv.payments||[]; inv.payments.push(payment);
   applyPaymentToBalances(payment);
   completeGarmentAdvance(inv, idx, "تسليم", snapshot);
