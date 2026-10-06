@@ -1632,7 +1632,8 @@ $("applyPromoCodeBtn").addEventListener("click", applyPromoCodeInput);
 $("directDiscountInput").addEventListener("input", ()=>{
   // a direct discount comes on top of the full sale price, never on top of a price already lowered
   updateLiveTotals();   // caps the discount to the user's limit first
-  if((parseFloat($("directDiscountInput").value)||0) > 0) resetGarmentPricesToBase();
+  // a saved invoice keeps the prices it was sold at — only a new one goes back to the list price
+  if(!editingId && (parseFloat($("directDiscountInput").value)||0) > 0) resetGarmentPricesToBase();
   updatePriceFieldsLockState();
   updateLiveTotals();
 });

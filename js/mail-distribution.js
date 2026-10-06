@@ -510,6 +510,12 @@ async function saveInvoice(){
         invData.promoGiftDescription = appliedPromoCode.giftDescription;
       }
     }
+  }
+  // a direct discount counts on a saved invoice being edited too — it used to show on screen and then be
+  // dropped silently on save, for new invoices only
+  {
+    const vip = isCustomerVip(custMobile);
+    const saleTotal = garments.filter(g=>g.status!=="ملغي").reduce((a,g)=>a+garmentSalePrice(g),0);
     let directDiscountVal = parseFloat($("directDiscountInput")?.value)||0;
     if(directDiscountVal>0.01 && !vip){
       // re-check the per-user discount cap here too — the live UI clamps it on input, but that
@@ -520,7 +526,7 @@ async function saveInvoice(){
       if(directDiscountVal > remainingAllowance) directDiscountVal = remainingAllowance;
     }
     if(directDiscountVal>0.01){
-      invData.payments.push({id:Date.now()+"-direct", date, cash:0, network:0, receipt:"", discount:directDiscountVal, auto:true, note:"خصم مباشر", recordedBy:currentUser.username});
+      invData.payments.push({id:Date.now()+"-direct", date: isNewInvoice ? date : todayStr(), cash:0, network:0, receipt:"", discount:directDiscountVal, auto:true, note:"خصم مباشر", recordedBy:currentUser.username});
     }
   }
   if(isNewInvoice && state.settings.einvoiceEnabled){
