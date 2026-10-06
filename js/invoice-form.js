@@ -849,7 +849,7 @@ async function requestPaymentEdit(i){
   showToast("انرسل طلب تعديل الدفعة للمدير عن طريق البريد — بعد الموافقة يطلع لك زر «تعديل»");
 }
 function startPaymentEdit(i){ editingPaymentIdx = i; renderPaymentsList(); }
-function applyPaymentEdit(i){
+async function applyPaymentEdit(i){
   const p = paymentsListTemp[i]; const row = document.querySelector("#paymentsList .pay-edit-row"); if(!p || !row) return;
   const cash = parseFloat(row.querySelector(".pe-cash").value)||0, network = parseFloat(row.querySelector(".pe-network").value)||0;
   const receipt = row.querySelector(".pe-receipt").value.trim();
@@ -868,7 +868,9 @@ function applyPaymentEdit(i){
   editingPaymentIdx = null;
   if(cash===0 && network===0 && !p.discount) paymentsListTemp.splice(i,1);
   renderPaymentsList();
-  showToast("تم تعديل الدفعة — احفظ الفاتورة عشان يتطبق التعديل على الصناديق");
+  // saved straight away: the row used to change on screen while the totals, boxes and reports kept the
+  // old amount until «حفظ الفاتورة» was pressed — easy to miss
+  await saveInvoice();
 }
 function addPaymentTemp(){
   const cash = parseFloat($("newPayCash").value)||0;

@@ -510,6 +510,12 @@ async function saveInvoice(){
         invData.promoGiftDescription = appliedPromoCode.giftDescription;
       }
     }
+  }
+  // a direct discount counts on a saved invoice being edited too — it used to show on screen and then be
+  // dropped silently on save, for new invoices only
+  {
+    const vip = isCustomerVip(custMobile);
+    const saleTotal = garments.filter(g=>g.status!=="ملغي").reduce((a,g)=>a+garmentSalePrice(g),0);
     let directDiscountVal = parseFloat($("directDiscountInput")?.value)||0;
     if(directDiscountVal>0.01 && !vip){
       // re-check the per-user discount cap here too — the live UI clamps it on input, but that
@@ -520,7 +526,7 @@ async function saveInvoice(){
       if(directDiscountVal > remainingAllowance) directDiscountVal = remainingAllowance;
     }
     if(directDiscountVal>0.01){
-      invData.payments.push({id:Date.now()+"-direct", date, cash:0, network:0, receipt:"", discount:directDiscountVal, auto:true, note:"خصم مباشر", recordedBy:currentUser.username});
+      invData.payments.push({id:Date.now()+"-direct", date: isNewInvoice ? date : todayStr(), cash:0, network:0, receipt:"", discount:directDiscountVal, auto:true, note:"خصم مباشر", recordedBy:currentUser.username});
     }
   }
   if(isNewInvoice && state.settings.einvoiceEnabled){
@@ -532,11 +538,13 @@ async function saveInvoice(){
   // an approved correction: the old amounts come out of the box, the new ones go in below
   const editedPayments = oldInv ? (oldInv.payments||[]).filter(op=> op.appliedToBalances && invData.payments.some(np=> np.id===op.id && np.correction && !np.appliedToBalances)) : [];
   removedPayments.concat(editedPayments).forEach(op=> reversePaymentFromBalances(op));
+  const useRequest = req=>{ if(req && !req.usedAt){ req.usedAt = todayStr(); req.usedBy = currentUser.username; } };
   invData.payments.forEach(np=>{
     if(!np.correction || np.appliedToBalances || !np.correction.requestId) return;
-    const req = state.mailRequests.find(r=> r.id===np.correction.requestId);
-    if(req && !req.usedAt){ req.usedAt = todayStr(); req.usedBy = currentUser.username; }
+    useRequest(state.mailRequests.find(r=> r.id===np.correction.requestId));
   });
+  // a payment taken to 0 is gone from the list — its approval is spent all the same
+  removedPayments.forEach(op=> useRequest((state.mailRequests||[]).find(r=> r.type==="payment_edit" && r.invoiceId===invData.id && r.paymentId===op.id && r.approved && !r.usedAt)));
   invData.payments.forEach(p=> applyPaymentToBalances(p));
   if(editingId){
     const idx = state.invoices.findIndex(i=>i.id===editingId);
