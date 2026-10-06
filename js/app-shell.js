@@ -44,6 +44,9 @@ function normalizeState(){
   // maintenance/general expense had nowhere to go except being wrongly charged against a linked category
   if(!state.expenseCategories.some(c=>c.label==="صيانة")) state.expenseCategories.push({id:"c5", label:"صيانة"});
   if(!state.expenseCategories.some(c=>c.label==="مصاريف عامة")) state.expenseCategories.push({id:"c6", label:"مصاريف عامة"});
+  // paying the rent / power bill out of a box is an expense, but its cost already reaches the month through
+  // the fixed costs in the settings (shared out over the thobes cut) — this category keeps it from counting twice
+  if(!state.expenseCategories.some(c=>c.fixedCost)) state.expenseCategories.push({id:"c7", label:"تكاليف ثابتة (إيجار، كهرباء، ماء)", fixedCost:true, subItems:[{id:"c7-rent",label:"إيجار"},{id:"c7-power",label:"كهرباء"},{id:"c7-water",label:"ماء"}]});
   state.expenseCategories.forEach(c=>{ if(!c.subItems) c.subItems=[]; });
   if(!state.expenses) state.expenses=[];
   if(!state.transferRequests) state.transferRequests=[];
