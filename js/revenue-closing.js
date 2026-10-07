@@ -50,7 +50,9 @@ function generalExpensesForMonth(monthLabel){
   return state.expenses
     .filter(e=>{
       const cat = state.expenseCategories.find(c=>c.id===e.categoryId);
-      return !cat || !cat.advisoryKey; // not linked to an advisory balance (fabric/wages/padding/embroidery)
+      // not linked to an advisory balance (fabric/wages/padding/embroidery), and not a fixed cost (rent, power…)
+      // already counted through the settings' fixed costs
+      return !cat || (!cat.advisoryKey && !cat.fixedCost);
     })
     .filter(e=>(e.date||"").slice(0,7)===monthLabel)
     .reduce((sum,e)=>sum+(e.amount||0),0);

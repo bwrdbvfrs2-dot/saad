@@ -163,8 +163,9 @@ function renderExpenseCategories(){
         <button class="icon-btn" onclick="removeExpenseSubItem('${c.id}', ${si})">حذف</button>
       </div>`).join("") || `<p class="sub" style="margin:4px 0;">ما فيه بنود فرعية بعد.</p>`;
     return `<div class="garment-card">
-      <div class="item-row"><span>${esc(c.label)}${c.advisoryKey?` — مرتبط بـ${ADVISORY_LABELS[c.advisoryKey]}`:""}</span>
-        <button class="icon-btn" onclick="removeExpenseCategory(${i})">حذف التصنيف</button></div>
+      <div class="item-row"><span>${esc(c.label)}${c.advisoryKey?` — مرتبط بـ${ADVISORY_LABELS[c.advisoryKey]}`:""}${c.fixedCost?` — <b>تكلفة ثابتة</b> (محسوبة من التكاليف الثابتة بالإعدادات، ما تتكرر في التكاليف)`:""}</span>
+        <span style="display:flex;gap:6px;">${c.advisoryKey?"":`<button class="icon-btn" onclick="toggleExpenseCategoryFixed(${i})">${c.fixedCost?"إلغاء: تكلفة ثابتة":"اجعله تكلفة ثابتة"}</button>`}
+        <button class="icon-btn" onclick="removeExpenseCategory(${i})">حذف التصنيف</button></span></div>
       <p class="sub" style="margin:8px 0 4px;">البنود الفرعية (اختياري — لتفصيل أكثر بتقارير المصروفات)</p>
       ${subItemsHtml}
       <div class="row-2" style="margin-top:4px;">
@@ -174,10 +175,21 @@ function renderExpenseCategories(){
     </div>`;
   }).join("") || `<p class="sub">ما فيه تصنيفات بعد.</p>`;
 }
+async function toggleExpenseCategoryFixed(i){
+  const c = state.expenseCategories[i]; if(!c || c.advisoryKey) return;
+  const turnOn = !c.fixedCost;
+  if(!await showConfirm(turnOn
+    ? `«${c.label}» يصير تكلفة ثابتة: مصروفاته (الماضية والجاية) ما تنحسب مرة ثانية في التكاليف، لأن الإيجار والكهرباء محسوبة من التكاليف الثابتة بالإعدادات. متأكد؟`
+    : `«${c.label}» يرجع مصروف عادي: مصروفاته تنحسب في التكاليف مع التكاليف الثابتة. متأكد؟`)) return;
+  c.fixedCost = turnOn;
+  if(await saveState()) logAudit("expense_category_fixed_toggled", {label:c.label, fixedCost:turnOn});
+  renderAll();
+}
 function addExpenseCategory(){
-  const label=$("newCatLabel").value.trim(), advisoryKey=$("newCatAdvisory").value||null;
+  const label=$("newCatLabel").value.trim(), pick=$("newCatAdvisory").value||null;
   if(!label){ showToast("أدخل اسم التصنيف"); return; }
-  state.expenseCategories.push({id:newId(), label, advisoryKey, subItems:[]});
+  const fixedCost = pick==="__fixed__";
+  state.expenseCategories.push({id:newId(), label, advisoryKey: fixedCost ? null : pick, fixedCost, subItems:[]});
   $("newCatLabel").value=""; $("newCatAdvisory").value="";
   saveState(); renderAll();
 }
