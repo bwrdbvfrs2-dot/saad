@@ -1474,6 +1474,23 @@ $("manualCardType").addEventListener("change", updateManualCardLabels);
 $("itemImportTemplateBtn").addEventListener("click", downloadItemImportTemplate);
 $("itemImportFile").addEventListener("change", ()=>{ const f=$("itemImportFile").files[0]; if(f) previewItemImport(f); });
 $("purchType").addEventListener("change", refreshPurchaseForm);
+// phones (Samsung / iPhone keyboards) report a tapped datalist suggestion as "change" — or only on blur —
+// without the "input" every search box here listens to, so the pick looked typed but never took. Any
+// box with a list gets its "input" replayed when the value moved without one.
+// every keystroke in the new-invoice form keeps the device draft up to date
+["input","change"].forEach(ev=> $("tab-invoice").addEventListener(ev, ()=>{ if(typeof saveInvoiceDraftSoon==="function") saveInvoiceDraftSoon(); }));
+(function replayDatalistPicks(){
+  const isListBox = t=> t && t.tagName==="INPUT" && t.hasAttribute("list");
+  document.addEventListener("input", e=>{ if(isListBox(e.target)) e.target.dataset.lastInputValue = e.target.value; }, true);
+  const replay = e=>{
+    const t = e.target;
+    if(!isListBox(t) || t.dataset.lastInputValue===t.value) return;
+    t.dataset.lastInputValue = t.value;
+    t.dispatchEvent(new Event("input", {bubbles:true}));
+  };
+  document.addEventListener("change", replay, true);
+  document.addEventListener("focusout", replay, true);
+})();
 $("purchItemName").addEventListener("input", updatePurchItemStatus);
 $("purchSupplierSearch").addEventListener("input", ()=>{
   const val = $("purchSupplierSearch").value.trim();
