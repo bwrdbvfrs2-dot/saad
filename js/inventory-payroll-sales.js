@@ -1094,6 +1094,7 @@ async function holdCurrentSale(){
   state.heldSales.push({id: fetchedHeldSaleId || newId(), heldAt: serverNowIso(), heldBy: currentUser.username, customerName:name, customerMobile:mobile, lines, offerId: saleOfferId||null, promoCode: salePromo ? salePromo.code : ""});
   if(!await saveStateWithRollback(snapshot)) return;
   logAudit("sale_held", {customerName:name, customerMobile:mobile, lines:lines.length});
+  clearSaleDraft();
   fetchedHeldSaleId = null;
   resetSaleForm();
   showToast(`تم تعليق فاتورة مبيعات ${name} — تبقى ${HELD_INVOICE_DAYS} أيام، وتجيبها من «الفواتير المعلّقة» فوق`);
@@ -1119,6 +1120,51 @@ async function deleteHeldSale(id){
   state.heldSales = (state.heldSales||[]).filter(x=>x.id!==id);
   if(fetchedHeldSaleId===id) fetchedHeldSaleId = null;
   if(await saveStateWithRollback(snapshot)) logAudit("held_sale_deleted", {customerName:h.customerName, customerMobile:h.customerMobile});
+}
+// ---- an unsaved sales invoice is kept on this device too (customer, lines, offer, code) ----
+function saleDraftKey(){ return "saleDraft:" + (currentUser ? currentUser.username : ""); }
+let saleDraftTimer = null;
+function saleDraftLines(){
+  return Array.from(document.querySelectorAll("#saleItemsHolder .garment-card")).map(div=>({
+    itemCardId: div.querySelector(".sl-item").value, qty: parseFloat(div.querySelector(".sl-qty").value)||0, price: parseFloat(div.querySelector(".sl-price").value)||0,
+  })).filter(l=> l.itemCardId && l.qty>0);
+}
+function saveSaleDraftSoon(){ clearTimeout(saleDraftTimer); saleDraftTimer = setTimeout(saveSaleDraftNow, 800); }
+function saveSaleDraftNow(){
+  if(!currentUser) return;
+  const name = $("saleCustName").value.trim(), mobile = $("saleCustMobile").value.trim(), lines = saleDraftLines();
+  if(!name && !mobile) return;
+  if(!lines.length && !name) return;
+  const draft = {savedAt: serverNowIso(), customerName:name, customerMobile:mobile, lines, offerId: saleOfferId||null, promoCode: salePromo ? salePromo.code : "", fetchedHeldSaleId};
+  try{ localStorage.setItem(saleDraftKey(), JSON.stringify(draft)); }catch(e){}
+  renderSaleDraftBanner();
+}
+function readSaleDraft(){ try{ const d = JSON.parse(localStorage.getItem(saleDraftKey())||"null"); return d && (d.lines||[]).length ? d : null; }catch(e){ return null; } }
+function clearSaleDraft(){ clearTimeout(saleDraftTimer); try{ localStorage.removeItem(saleDraftKey()); }catch(e){} renderSaleDraftBanner(); }
+function saleFormDirty(){ return !!($("saleCustName").value.trim() || $("saleCustMobile").value.trim()); }
+function renderSaleDraftBanner(){
+  const el = $("saleDraftWrap"); if(!el) return;
+  const d = readSaleDraft();
+  if(!d || saleFormDirty()){ el.style.display = "none"; el.innerHTML = ""; return; }
+  el.style.display = "";
+  el.innerHTML = `<div class="garment-card" style="border:1px solid var(--gold);">
+    <b>فيه فاتورة مبيعات ما انحفظت على هذا الجهاز</b> — ${esc(d.customerName||"بدون اسم")} ${d.customerMobile?`(${esc(d.customerMobile)})`:""} — ${d.lines.length} صنف — ${esc((d.savedAt||"").slice(0,16).replace("T"," "))}
+    <div style="display:flex;gap:6px;margin-top:8px;"><button class="btn btn-gold btn-sm" onclick="restoreSaleDraft()">استرجاعها</button><button class="btn btn-ghost btn-sm" onclick="clearSaleDraft()">تجاهل</button></div>
+  </div>`;
+}
+function restoreSaleDraft(){
+  const d = readSaleDraft(); if(!d) return;
+  resetSaleForm();
+  $("saleCustName").value = d.customerName||""; $("saleCustMobile").value = d.customerMobile||"";
+  $("saleItemsHolder").innerHTML = "";
+  d.lines.filter(l=> findItemCard(l.itemCardId)).forEach(l=> renderSaleLine({itemCardId:l.itemCardId, qty:l.qty, price:l.price}));
+  if(!$("saleItemsHolder").children.length) renderSaleLine();
+  saleOfferId = d.offerId || null;
+  if(d.fetchedHeldSaleId && heldSalesLive().some(h=>h.id===d.fetchedHeldSaleId)) fetchedHeldSaleId = d.fetchedHeldSaleId;
+  if(d.promoCode){ $("salePromoInput").value = d.promoCode; applySalePromo(); }
+  ["input","change"].forEach(ev=> $("saleCustMobile").dispatchEvent(new Event(ev)));
+  updateSaleTotal(); renderSaleDraftBanner();
+  showToast("رجعت فاتورة المبيعات بأصنافها — اكتب المبلغ واحفظ");
 }
 function renderHeldSales(){
   const el = $("heldSalesWrap"); if(!el) return;
@@ -1198,6 +1244,7 @@ async function saveSaleInvoice(){
   state.heldSales = heldSalesLive().filter(h=> h.id!==fetchedHeldSaleId);
   if(!await saveStateWithRollback(snapshot)) return; // form stays filled in so the cashier can just retry
   fetchedHeldSaleId = null;
+  clearSaleDraft();
   logAudit("sale_invoice_recorded", {number, total, cash, network, discountTotal:+d.discountTotal.toFixed(2), promoCode:discounts.promoCode, offer:discounts.offerName, direct:discounts.direct});
   resetSaleForm();
   showToast(lowStock.length? "تم الحفظ — تنبيه: بعض الأصناف تجاوزت المخزون المتاح" : "تم حفظ فاتورة المبيعات");

@@ -22,6 +22,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-functions-compat.js"></script>
 </head>
 <body>
+<div id="offlineBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:var(--loss);color:#fff;text-align:center;font-weight:700;padding:8px 12px;font-size:14px;">⚠ ما فيه اتصال بالإنترنت — أي حفظ ما راح يتم لين يرجع النت. فاتورة التفصيل وفاتورة المبيعات اللي تكتبها تنحفظ مسودة على هذا الجهاز.</div>
 
 <div id="loginScreen">
   <div class="login-card">
@@ -717,6 +718,7 @@
     <div class="field"><label>التاريخ (تلقائي — ما يتغيّر)</label><input type="date" id="saleDate" readonly tabindex="-1" style="opacity:.75;cursor:not-allowed;"></div>
     <div class="field"></div>
   </div>
+  <div id="saleDraftWrap" style="display:none;margin-bottom:12px;"></div>
   <div id="heldSalesWrap" style="display:none;margin-bottom:12px;"></div>
   <div class="row-2">
     <div class="field"><label>اسم العميل</label><input type="text" id="saleCustName" list="custNameDatalist" autocomplete="off"></div>

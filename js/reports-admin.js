@@ -845,10 +845,7 @@ function showConfirm(message){
     yesBtn.addEventListener("click", onYes); noBtn.addEventListener("click", onNo);
   });
 }
-async function sha256Hex(text){
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
-}
+// sha256Hex() comes from print-einvoice.js
 // the deposit bypass code counts only while it has a hash and (for a timed code) its end time hasn't passed
 function depositBypassActive(){
   const s = state.settings;
@@ -1478,7 +1475,8 @@ $("purchType").addEventListener("change", refreshPurchaseForm);
 // without the "input" every search box here listens to, so the pick looked typed but never took. Any
 // box with a list gets its "input" replayed when the value moved without one.
 // every keystroke in the new-invoice form keeps the device draft up to date
-["input","change"].forEach(ev=> $("tab-invoice").addEventListener(ev, ()=>{ if(typeof saveInvoiceDraftSoon==="function") saveInvoiceDraftSoon(); }));
+["input","change","click","keyup"].forEach(ev=> $("tab-invoice").addEventListener(ev, ()=>{ if(typeof saveInvoiceDraftSoon==="function") saveInvoiceDraftSoon(); }));
+["input","change","click","keyup"].forEach(ev=> $("tab-salesInvoice").addEventListener(ev, ()=>{ if(typeof saveSaleDraftSoon==="function") saveSaleDraftSoon(); }));
 (function replayDatalistPicks(){
   const isListBox = t=> t && t.tagName==="INPUT" && t.hasAttribute("list");
   document.addEventListener("input", e=>{ if(isListBox(e.target)) e.target.dataset.lastInputValue = e.target.value; }, true);
