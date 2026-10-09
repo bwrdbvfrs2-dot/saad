@@ -315,6 +315,11 @@ function paymentKind(inv, p){
   return "installment";
 }
 function paymentKindLabel(inv, p){ return {deposit:"عربون", delivery:"تسليم", installment:"سداد", discount:"خصم"}[paymentKind(inv,p)]; }
+// what money leaving a box was for, from the kind every box movement carries
+const BOX_OUT_KINDS = {transfer:"تحويل", internal:"تحويل بين صناديقه", expense:"مصروف", voucher:"سند صرف", refund:"مرتجع / استرداد",
+  purchase:"مشتريات", supplier:"سداد مورد / دائن", payroll:"رواتب وسلف"};
+function boxOutKind(m){ return BOX_OUT_KINDS[m.kind] || "أخرى"; }
+function dailyOutMoves(r){ return (r.moves||[]).filter(m=> m.amount < -0.001); }
 function dailySection(title, headers, rows, opts={}){
   if(!rows.length) return "";
   return `<section class="dr-section">
@@ -323,7 +328,7 @@ function dailySection(title, headers, rows, opts={}){
   </section>`;
 }
 function buildDailyReportHtml(day, r, username){
-  const sar = n=> `${(n||0).toFixed(0)} ﷼`;
+  const sar = n=> `${fmtSar(n||0)} ﷼`;
   const shop = state.settings.shopName || "";
   let html = `<div class="daily-report">
     <div class="dr-head"><div class="dr-shop">${esc(shop)}</div>
@@ -375,6 +380,11 @@ function buildDailyReportHtml(day, r, username){
     <tbody>${boxRow("الكاش", f.cashIn, f.cashOut)}${boxRow(`الشبكة <span class="dr-sub">(بعد عمولة البنك)</span>`, f.netIn, f.netOut)}</tbody>
     <tfoot>${boxRow("الإجمالي", f.cashIn+f.netIn, f.cashOut+f.netOut)}</tfoot></table>
   </section>
+  ${(()=>{ const outs = dailyOutMoves(r); if(!outs.length) return "";
+    const boxName = id=>{ const b = findCashBox(id); return b ? (b.type==="network" ? "شبكة" : "كاش") : "—"; };
+    return dailySection("الخارج من الصناديق — نوعه", ["النوع","التفاصيل","الصندوق","المبلغ"],
+      outs.map(m=>`<tr><td>${boxOutKind(m)}</td><td>${esc(m.label||"")}</td><td>${boxName(m.boxId)}</td><td class="dr-out">${sar(-m.amount)}</td></tr>`),
+      {foot:`<td colspan="3">الإجمالي</td><td class="dr-out">${sar(outs.reduce((a,m)=>a-m.amount,0))}</td>`}); })()}
   ${r.cardFees ? `<p class="dr-note">الشبكة كاملة (مثل جهاز الشبكة): <b>${fmtSar(r.cardGross)} ﷼</b> — عمولة البنك: <b>${fmtSar(r.cardFees)} ﷼</b> — الصافي: <b>${fmtSar(r.cardGross-r.cardFees)} ﷼</b></p>` : ""}
   <p class="dr-note">يشمل كل الحركات المسجّلة — الخارج: التحويلات للمدير/المحاسب، المصروفات، المرتجعات، المشتريات، الموردين، الرواتب.</p>
   </div>`;
@@ -421,6 +431,11 @@ function dailyReportText(day, r, username){
   L.push(`الكاش: داخل ${n(f.cashIn)} — خارج ${n(f.cashOut)} — الصافي ${n(f.cashIn-f.cashOut)}`);
   L.push(`الشبكة: داخل ${n(f.netIn)} — خارج ${n(f.netOut)} — الصافي ${n(f.netIn-f.netOut)}`);
   if(r.cardFees) L.push(`(الشبكة كاملة ${n(r.cardGross)} — عمولة البنك ${n(r.cardFees)})`);
+  const outs = dailyOutMoves(r);
+  if(outs.length){
+    const byKind = {}; outs.forEach(m=>{ const k = boxOutKind(m); byKind[k] = (byKind[k]||0) - m.amount; });
+    L.push(`الخارج: ${Object.entries(byKind).map(([k,v])=>`${k} ${n(v)}`).join(" — ")}`);
+  }
   L.push(`*الإجمالي: داخل ${n(f.cashIn+f.netIn)} — خارج ${n(f.cashOut+f.netOut)} — الصافي ${n(f.cashIn-f.cashOut+f.netIn-f.netOut)} ﷼*`);
   L.push("");
   L.push(`أرسله: ${currentUser ? currentUser.username : ""}`);

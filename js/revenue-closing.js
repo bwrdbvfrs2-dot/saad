@@ -119,7 +119,7 @@ function collectBoxMovements(){
   const fee = state.settings.bankFeePercent||0;
   const out = [];
   const mainId = (u,t)=>{ const b=mainBoxOf(u,t); return b ? b.id : null; };
-  const add = (boxId, amount, label, date)=> out.push({boxId, amount, label, date});
+  const add = (boxId, amount, label, date, kind)=> out.push({boxId, amount, label, date, kind});
   const pay = (p, label, date)=>{
     if((p.cash||0)+(p.network||0)<=0) return;
     if(!p.recordedBy){ out.push({boxId:null, amount:(p.cash||0)+(p.network||0), label, date}); return; }
@@ -133,24 +133,24 @@ function collectBoxMovements(){
   (state.repairs||[]).forEach(r=>{
     (r.payments||[]).forEach(p=> pay(p, `دفعة صيانة ص-${r.number}`, p.date));
     (r.refunds||[]).forEach(f=>{
-      if(f.cash) add(mainId(f.owner,"cash"), -f.cash, `استرداد صيانة ملغاة ص-${r.number}`, f.date);
-      if(f.network) add(mainId(f.owner,"network"), -(f.network - (f.bankFee!==undefined ? f.bankFee : f.network*fee/100)), `استرداد صيانة ملغاة ص-${r.number}`, f.date);
+      if(f.cash) add(mainId(f.owner,"cash"), -f.cash, `استرداد صيانة ملغاة ص-${r.number}`, f.date, "refund");
+      if(f.network) add(mainId(f.owner,"network"), -(f.network - (f.bankFee!==undefined ? f.bankFee : f.network*fee/100)), `استرداد صيانة ملغاة ص-${r.number}`, f.date, "refund");
     });
   });
-  state.vouchers.forEach(v=> add(v.boxId, v.type==="receipt" ? v.amount : -v.amount, `سند ${v.type==="receipt"?"قبض":"صرف"} ${v.voucherNo}`, v.date));
-  state.expenses.forEach(e=> add(e.sourceBoxId, -e.amount, "مصروف", e.date));
-  state.invoiceReturns.forEach(r=>{ if(r.refundAmount) add(r.boxId, -r.refundAmount, `استرداد مرتجع فاتورة ${r.invoiceNumber}`, r.date); });
-  (state.salesReturns||[]).forEach(r=> add(r.boxId, -r.refundAmount, `استرداد مرتجع مبيعات ${r.saleInvoiceNumber}`, r.date));
-  state.purchases.forEach(p=>{ if(p.payStatus==="paid") add(p.sourceBoxId, -p.total, `فاتورة شراء ${p.invoiceNo}`, p.date); });
-  state.purchaseReturns.forEach(r=>{ if(r.payStatus==="paid") add(r.boxId, r.value, "مرتجع مشتريات", r.date); });
-  state.suppliers.forEach(s=> (s.payments||[]).forEach(sp=> add(sp.boxId, -sp.amount, `تسديد ${(s.kind||"مورد")==="مورد"?"مورد ":""}${s.name}`, sp.date)));
-  state.payrollLedger.forEach(e=>{ if(e.type==="payment"||e.type==="advance") add(e.boxId, -e.amount, `${e.type==="advance"?"سلفة":"راتب"} ${e.username}`, e.date); });
+  state.vouchers.forEach(v=> add(v.boxId, v.type==="receipt" ? v.amount : -v.amount, `سند ${v.type==="receipt"?"قبض":"صرف"} ${v.voucherNo}${v.party?" — "+v.party:""}`, v.date, "voucher"));
+  state.expenses.forEach(e=>{ const cat = state.expenseCategories.find(c=>c.id===e.categoryId); add(e.sourceBoxId, -e.amount, `مصروف${cat?" — "+cat.label:""}${e.subItemLabel?" — "+e.subItemLabel:""}`, e.date, "expense"); });
+  state.invoiceReturns.forEach(r=>{ if(r.refundAmount) add(r.boxId, -r.refundAmount, `استرداد مرتجع فاتورة ${r.invoiceNumber}`, r.date, "refund"); });
+  (state.salesReturns||[]).forEach(r=> add(r.boxId, -r.refundAmount, `استرداد مرتجع مبيعات ${r.saleInvoiceNumber}`, r.date, "refund"));
+  state.purchases.forEach(p=>{ if(p.payStatus==="paid") add(p.sourceBoxId, -p.total, `فاتورة شراء ${p.invoiceNo}`, p.date, "purchase"); });
+  state.purchaseReturns.forEach(r=>{ if(r.payStatus==="paid") add(r.boxId, r.value, "مرتجع مشتريات", r.date, "purchase"); });
+  state.suppliers.forEach(s=> (s.payments||[]).forEach(sp=> add(sp.boxId, -sp.amount, `تسديد ${(s.kind||"مورد")==="مورد"?"مورد ":""}${s.name}`, sp.date, "supplier")));
+  state.payrollLedger.forEach(e=>{ if(e.type==="payment"||e.type==="advance") add(e.boxId, -e.amount, `${e.type==="advance"?"سلفة":"راتب"} ${e.username}`, e.date, "payroll"); });
   state.transferRequests.forEach(t=>{
-    add(t.fromBoxId, -t.amount, "تحويل مرسل", t.createdAt);
-    if(t.status==="accepted") add(mainId(t.toOwner, transferBoxType(t)), t.amount, "تحويل مستلم", t.resolvedAt);
-    if(t.status==="rejected") add(t.fromBoxId, t.amount, "تحويل مرفوض راجع", t.resolvedAt);
+    add(t.fromBoxId, -t.amount, `تحويل مرسل إلى ${t.toOwner||""}`, t.createdAt, "transfer");
+    if(t.status==="accepted") add(mainId(t.toOwner, transferBoxType(t)), t.amount, `تحويل مستلم من ${t.fromOwner||""}`, t.resolvedAt, "transfer");
+    if(t.status==="rejected") add(t.fromBoxId, t.amount, "تحويل مرفوض راجع", t.resolvedAt, "transfer");
   });
-  (state.boxTransfers||[]).forEach(t=>{ add(t.fromBoxId, -t.amount, "تحويل بين صناديقك", t.date); add(t.toBoxId, t.amount, "تحويل بين صناديقك", t.date); });
+  (state.boxTransfers||[]).forEach(t=>{ add(t.fromBoxId, -t.amount, "تحويل بين صناديقك", t.date, "internal"); add(t.toBoxId, t.amount, "تحويل بين صناديقك", t.date, "internal"); });
   return out;
 }
 function computeIntegrityCheck(){
