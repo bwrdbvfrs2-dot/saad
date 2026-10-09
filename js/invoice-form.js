@@ -600,7 +600,7 @@ function renderGarmentFields(prefill=null){
       const oldPanel = wasOpen ? sel.closest(".meas-panel") : null;
       const savedScrollTop = oldPanel ? oldPanel.scrollTop : 0;
       const savedPageScrollY = window.scrollY;
-      renderGarmentFields(readGarmentFields());
+      renderGarmentFields(garmentsFromForm()); // keeps the "بدون قماش" pick (readGarmentFields turns it into "")
       // re-open the same panel after re-render (rebuilds the DOM) so picking an option doesn't close it, and refreshes the mannequin preview
       if(wasOpen){
         openMeasPanel(idx);

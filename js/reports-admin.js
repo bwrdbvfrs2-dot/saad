@@ -1334,7 +1334,7 @@ function performTabSwitch(name){
   if(name==="mail") renderMailTab(); // opening the mail clears its unread count
   if(name==="invoice" && !editingId){
     // refresh dropdowns (e.g. newly-added measurement options) without discarding data already entered
-    renderGarmentFields(readGarmentFields());
+    renderGarmentFields(garmentsFromForm()); // keeps the "بدون قماش" pick
     // only recompute the auto-estimated delivery date if the form is still fresh (untouched) — don't clobber a manual edit in progress
     if(!isInvoiceFormDirty()) $("invDeliveryDate").value = formatDateInput(computeExpectedDeliveryDate(parseInt($("invCount").value)||1));
   }
