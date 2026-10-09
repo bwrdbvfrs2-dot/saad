@@ -310,8 +310,12 @@ function deliveryReceiptOf(inv, g){
 // a payment in between, or a discount
 function paymentKind(inv, p){
   if(!((p.cash||0)+(p.network||0)) && p.discount) return "discount";
+  const deliveredThatDay = (inv.garments||[]).some(g=> g.deliveredDate===p.date);
+  // collected and delivered the same day as the invoice: the last payment of that day is the delivery one
+  const paidThatDay = (inv.payments||[]).filter(x=> x.date===p.date && ((x.cash||0)+(x.network||0))>0);
+  if(deliveredThatDay && paidThatDay.length && paidThatDay[paidThatDay.length-1]===p && (p.date!==inv.date || paidThatDay.length>1)) return "delivery";
   if(p.date===inv.date) return "deposit";
-  if((inv.garments||[]).some(g=> g.deliveredDate===p.date)) return "delivery";
+  if(deliveredThatDay) return "delivery";
   return "installment";
 }
 function paymentKindLabel(inv, p){ return {deposit:"عربون", delivery:"تسليم", installment:"سداد", discount:"خصم"}[paymentKind(inv,p)]; }
