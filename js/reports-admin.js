@@ -299,6 +299,13 @@ function renderDailyPreview(){
   });
 }
 // a section only appears when it has something in it — an empty day isn't a page of "لا يوجد" tables
+// the delivery's receipt: the one typed at delivery, else the receipt of the payment taken that same day
+function deliveryReceiptOf(inv, g){
+  if(g.deliveryReceipt) return String(g.deliveryReceipt);
+  const p = (inv.payments||[]).filter(x=> x.date===g.deliveredDate && ((x.cash||0)+(x.network||0))>0).pop();
+  if(!p) return "—";
+  return [p.cashReceiptNo ? `كاش ${p.cashReceiptNo}` : "", (p.networkReceiptNo||p.receipt) ? `شبكة ${p.networkReceiptNo||p.receipt}` : ""].filter(Boolean).join(" / ") || "—";
+}
 function dailySection(title, headers, rows, opts={}){
   if(!rows.length) return "";
   return `<section class="dr-section">
@@ -318,9 +325,9 @@ function buildDailyReportHtml(day, r, username){
     r.newInvoices.map(inv=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${inv.garments.length}</td><td>${sar(invoiceSaleTotal(inv))}</td></tr>`),
     {foot:`<td colspan="3">الإجمالي</td><td>${sar(r.newInvoices.reduce((a,i)=>a+invoiceSaleTotal(i),0))}</td>`}));
   parts.push(dailySection("تسليمات — من الشهر الحالي", ["رقم الفاتورة","نوع القماش","السعر","رقم الإيصال"],
-    r.deliveredThisMonth.map(({inv,g})=>`<tr><td>${esc(inv.number)}</td><td>${esc(g.fabricType)}</td><td>${sar(garmentSalePrice(g))}</td><td>${g.deliveryReceipt||"—"}</td></tr>`)));
+    r.deliveredThisMonth.map(({inv,g})=>`<tr><td>${esc(inv.number)}</td><td>${esc(g.fabricType)}</td><td>${sar(garmentSalePrice(g))}</td><td>${esc(deliveryReceiptOf(inv,g))}</td></tr>`)));
   parts.push(dailySection("تسليمات — متعثرة من أشهر سابقة", ["رقم الفاتورة","الشهر الأصلي","نوع القماش","السعر","رقم الإيصال"],
-    r.deliveredOverdue.map(({inv,g})=>`<tr><td>${esc(inv.number)}</td><td>${monthDisplay(inv.originMonth)}</td><td>${esc(g.fabricType)}</td><td>${sar(garmentSalePrice(g))}</td><td>${g.deliveryReceipt||"—"}</td></tr>`)));
+    r.deliveredOverdue.map(({inv,g})=>`<tr><td>${esc(inv.number)}</td><td>${monthDisplay(inv.originMonth)}</td><td>${esc(g.fabricType)}</td><td>${sar(garmentSalePrice(g))}</td><td>${esc(deliveryReceiptOf(inv,g))}</td></tr>`)));
   if(!username) parts.push(dailySection("تسليمات الجرد الافتتاحي", ["اسم العميل","الجوال","الوصف","المتبقي وقت التسليم"],
     r.legacyDelivered.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.mobile)}</td><td>${esc(x.desc)}</td><td>${x.remaining?sar(x.remaining):"—"}</td></tr>`)));
   const payRows = r.paymentRows.map(({inv,p})=>`<tr data-receipt="${esc((p.cashReceiptNo||"")+" "+(p.networkReceiptNo||p.receipt||""))}"><td>${esc(inv.number)}</td><td>${sar(p.cash)}</td><td>${p.cashReceiptNo||"—"}</td><td>${sar(p.network)}</td><td>${p.networkReceiptNo||p.receipt||"—"}</td><td>${p.discount?sar(p.discount):"—"}</td></tr>`);

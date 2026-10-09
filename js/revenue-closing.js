@@ -604,7 +604,9 @@ function confirmQuickDeliveryPayment(invId, idx){
   const remaining = invoiceRemaining(inv);
   if(Math.abs((cash+network)-remaining)>0.01){ showToast(`المبلغ لازم يساوي المتبقي بالضبط (${remaining.toFixed(0)} ريال)`); return; }
   const snapshot = JSON.parse(JSON.stringify(state));
-  const payment = {id:newId(), cash, network, discount:0, receiptNo:receipt||undefined, date:todayStr(), cardType: network>0 ? readCardType("quickPayCard") : undefined};
+  // the card slip number goes where every report and the receipt search read it (it was saved as receiptNo,
+  // which nothing reads), and cash gets its voucher number like any other payment
+  const payment = {id:newId(), cash, network, discount:0, networkReceiptNo: network>0 ? receipt : "", cashReceiptNo: cash>0 ? nextVoucherNo() : null, date:todayStr(), cardType: network>0 ? readCardType("quickPayCard") : undefined};
   inv.payments = inv.payments||[]; inv.payments.push(payment);
   applyPaymentToBalances(payment);
   completeGarmentAdvance(inv, idx, "تسليم", snapshot);
@@ -887,7 +889,7 @@ async function payCreditDebt(invId, idx){
   if((cash+network) - owed > 0.01){ showToast(`المبلغ أكبر من المتبقي على هذا الثوب (${owed.toFixed(0)} ريال)`); return; }
   const snapshot = JSON.parse(JSON.stringify(state));
   const cardSel = document.querySelector(`.debt-card[data-inv="${invId}"][data-idx="${idx}"]`);
-  const payment = {id:newId(), date:todayStr(), cash, network, receipt, discount:0, cardType: network>0 ? readCardType(cardSel) : undefined};
+  const payment = {id:newId(), date:todayStr(), cash, network, receipt, networkReceiptNo: network>0 ? receipt : "", cashReceiptNo: cash>0 ? nextVoucherNo() : null, discount:0, cardType: network>0 ? readCardType(cardSel) : undefined};
   inv.payments = inv.payments || [];
   inv.payments.push(payment);
   applyPaymentToBalances(payment);
