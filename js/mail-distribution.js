@@ -420,7 +420,8 @@ async function saveInvoice(){
         const idx = findCheapestMatchingGarment(garments, offer);
         if(idx!==null){
           const g = garments[idx];
-          const discountAmt = garmentSalePrice(g)*offer.discountPercent/100;
+          // whole riyals: a % of the price (e.g. 18% of 202 = 36.36) left halalas on the thobe the screens didn't show
+          const discountAmt = Math.round(garmentSalePrice(g)*offer.discountPercent/100);
           g.price = Math.max(0, g.price - discountAmt);
           appliedOffers.push(`${offer.name} (خصم ${offer.discountPercent}% على ثوب ${idx+1})`);
         }
