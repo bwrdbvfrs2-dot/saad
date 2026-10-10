@@ -287,7 +287,7 @@ function loadMeasurementSnapshotIntoGarment(idx, seasonKey){
     snapshot = individual && individual.measurementHistory && individual.measurementHistory[seasonKey] && individual.measurementHistory[seasonKey][0];
   }
   if(!snapshot){ showToast(seasonKey==="any" ? "ما فيه أي مقاس محفوظ سابقاً لهذا العميل" : `ما فيه مقاس ${seasonLabelAr(seasonKey)} محفوظ سابقاً لهذا العميل`); return; }
-  const current = readGarmentFields();
+  const current = garmentsFromForm(); // keeps the "بدون قماش" pick on the re-render below
   current[idx] = {...current[idx], measurements: {...snapshot.measurements}, category: snapshot.category||current[idx].category};
   renderGarmentFields(current);
   openMeasPanel(idx);
@@ -588,7 +588,7 @@ function renderLoyaltyInfo(){
 function refreshMeasurementsForCustomer(mobile, name){
   if(!/^[0-9]{10}$/.test(mobile) || !name || editingId) return;
   const lastGarment = findLastGarmentDataForCustomer(mobile, name);
-  const current = readGarmentFields();
+  const current = garmentsFromForm(); // keeps the "بدون قماش" pick on the re-render below
   let autoFilled = false;
   if(lastGarment && current[0] && Object.keys(current[0].measurements||{}).length===0){
     current[0] = {...current[0], measurements: {...lastGarment.measurements}, category: lastGarment.category||current[0].category};

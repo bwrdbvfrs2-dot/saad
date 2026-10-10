@@ -310,7 +310,10 @@ async function saveInvoice(){
   if(!/^[0-9]{10}$/.test(custMobile)){ showToast("رقم الجوال لازم يكون 10 أرقام بالضبط"); return; }
   const garmentCards = Array.from($("garmentsHolder").children);
   for(let i=0;i<garmentCards.length;i++){
-    const rawVal = garmentCards[i].querySelector(".g-itemCard").value;
+    // last safety net: whatever is written in the fabric box counts even if no event reached the hidden field
+    const hiddenSel = garmentCards[i].querySelector(".g-itemCard"), searchBox = garmentCards[i].querySelector(".g-itemCard-search");
+    if(!hiddenSel.value && searchBox && typeof resolveFabricPick==="function") hiddenSel.value = resolveFabricPick(searchBox.value);
+    const rawVal = hiddenSel.value;
     if(!rawVal){ showToast(`اختر القماش لثوب ${i+1} من المخزون (أو اختر "أجرة تفصيل بدون قماش" صراحة) قبل الحفظ`); return; }
     if(rawVal!=="__none__" && !findItemCard(rawVal)){ showToast(`القماش المحدد لثوب ${i+1} غير موجود بالمخزون — اختر قماشاً حقيقياً من القائمة`); return; }
   }
@@ -567,6 +570,7 @@ async function saveInvoice(){
   // a parked invoice that has just been completed leaves the parked list in this same save
   if(!editingId && typeof clearFetchedHeld==="function") clearFetchedHeld();
   const saved = await saveState();
+  if(saved && !editingId && typeof clearInvoiceDraft==="function") clearInvoiceDraft();
   if(saved){
     logAudit(editingId ? "invoice_edited" : "invoice_created", {invoiceNumber:number, saleTotal: invoiceSaleTotal(invData), paid: invoicePaid(invData)});
     editedPayments.forEach(op=>{ const np = invData.payments.find(x=>x.id===op.id);

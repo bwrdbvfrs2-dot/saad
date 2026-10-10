@@ -532,6 +532,17 @@ function removeGarmentFromForm(idx){
   if(typeof renderInvoiceOffersSelector==="function") renderInvoiceOffersSelector();
   showToast(`انشال الثوب ${idx+1} — صار عدد الثياب ${cur.length}`);
 }
+// what was typed or picked in a thobe's fabric box: "__none__" for tailoring only, a fabric card id, or ""
+// — forgiving about hamza / taa marbuta / brackets / spaces, so "اجره تفصيل بدون قماش" still counts
+function normArabic(t){ return String(t||"").replace(/[\u064B-\u0652\u0640]/g,"").replace(/[أإآ]/g,"ا").replace(/ة/g,"ه").replace(/ى/g,"ي").replace(/[()\[\]\-–—_.،,]/g," ").replace(/\s+/g," ").trim(); }
+function resolveFabricPick(text){
+  const v = normArabic(text);
+  if(!v) return "";
+  if(v===normArabic("أجرة تفصيل (بدون قماش)") || v.includes("بدون قماش") || v==="اجره تفصيل") return "__none__";
+  const cards = activeFabricCards();
+  const exact = cards.find(c=> normArabic(c.name)===v);
+  return exact ? exact.id : "";
+}
 function renderGarmentFields(prefill=null){
   closeMeasPanel();
   const holder=$("garmentsHolder"); holder.innerHTML="";
@@ -589,7 +600,7 @@ function renderGarmentFields(prefill=null){
       const oldPanel = wasOpen ? sel.closest(".meas-panel") : null;
       const savedScrollTop = oldPanel ? oldPanel.scrollTop : 0;
       const savedPageScrollY = window.scrollY;
-      renderGarmentFields(readGarmentFields());
+      renderGarmentFields(garmentsFromForm()); // keeps the "بدون قماش" pick (readGarmentFields turns it into "")
       // re-open the same panel after re-render (rebuilds the DOM) so picking an option doesn't close it, and refreshes the mannequin preview
       if(wasOpen){
         openMeasPanel(idx);
@@ -651,13 +662,15 @@ function renderGarmentFields(prefill=null){
     itemSel.addEventListener("change", ()=>applyDefaults(true));
     catSel.addEventListener("change", ()=>applyDefaults(true));
     const searchInp = div.querySelector(".g-itemCard-search");
-    searchInp.addEventListener("input", ()=>{
-      const val = searchInp.value.trim();
-      if(val===NO_FABRIC_LABEL){ itemSel.value="__none__"; applyDefaults(true); return; }
-      const match = activeFabricCards().find(c=>c.name===val);
-      itemSel.value = match ? match.id : "";
-      if(match) applyDefaults();
-    });
+    // phones fire only "change" when a datalist entry is tapped (some only on blur) — listen to all three,
+    // or the pick never reached the hidden field and the save said "اختر القماش"
+    const onFabricPick = ()=>{
+      const id = resolveFabricPick(searchInp.value);
+      if(id===itemSel.value) return;
+      itemSel.value = id;
+      if(id==="__none__") applyDefaults(true); else if(id) applyDefaults();
+    };
+    ["input","change","blur"].forEach(ev=> searchInp.addEventListener(ev, onFabricPick));
     if(!prefill) applyDefaults();
   }
   updateFixedShareNote(); updateLiveTotals(); updatePriceFieldsLockState();
@@ -988,6 +1001,7 @@ async function holdCurrentInvoice(){
   state.heldInvoices.push(held);
   if(!await saveStateWithRollback(snapshot)) return;
   logAudit("invoice_held", {customerName:name, customerMobile:mobile, garments:garments.length});
+  clearInvoiceDraft();
   fetchedHeldId = null;
   resetForm();
   showToast(`تم تعليق فاتورة ${name} — تبقى ${HELD_INVOICE_DAYS} أيام، وتجيبها من «الفواتير المعلّقة» فوق`);
@@ -1033,6 +1047,53 @@ function renderHeldInvoices(){
       <span><b>${esc(h.customerName)}</b> — ${esc(h.customerMobile)} — ${h.garments.length} ثوب — علّقها ${esc(h.heldBy)} ${h.heldAt.slice(0,10)} <span class="sub">(باقي ${left(h)} يوم)</span></span>
       <span style="display:flex;gap:6px;"><button class="btn btn-gold btn-sm" onclick="fetchHeldInvoice('${h.id}')">جلب</button><button class="btn btn-ghost btn-sm" onclick="deleteHeldInvoice('${h.id}')">حذف</button></span>
     </div>`).join("")}</details>`;
+}
+// ---- an unsaved new invoice is kept on this device as it's typed: closing the app, a dropped connection
+// or a phone that reloads the page no longer loses the customer, the thobes and their measurements.
+// Payments are not kept (a cash payment takes a voucher number), they're added again on return ----
+function invoiceDraftKey(){ return "invoiceDraft:" + (currentUser ? currentUser.username : ""); }
+let invoiceDraftTimer = null;
+function saveInvoiceDraftSoon(){
+  clearTimeout(invoiceDraftTimer);
+  invoiceDraftTimer = setTimeout(saveInvoiceDraftNow, 800);
+}
+function saveInvoiceDraftNow(){
+  if(!currentUser || editingId || measOnlyEdit || !$("tab-invoice")) return;
+  if(!(typeof isInvoiceFormDirty==="function" && isInvoiceFormDirty())) return;
+  const draft = { savedAt: serverNowIso(), customerName: $("custName").value.trim(), customerMobile: $("custMobile").value.trim(),
+    notes: $("invNotes").value.trim(), expectedDeliveryDate: $("invDeliveryDate").value || null,
+    garments: garmentsFromForm(), selectedOfferIds: [...selectedOfferIds], fetchedHeldId };
+  try{ localStorage.setItem(invoiceDraftKey(), JSON.stringify(draft)); }catch(e){}
+  renderInvoiceDraftBanner();
+}
+function readInvoiceDraft(){
+  try{ const d = JSON.parse(localStorage.getItem(invoiceDraftKey())||"null"); return d && d.garments && d.garments.length ? d : null; }catch(e){ return null; }
+}
+function clearInvoiceDraft(){ clearTimeout(invoiceDraftTimer); try{ localStorage.removeItem(invoiceDraftKey()); }catch(e){} renderInvoiceDraftBanner(); }
+function renderInvoiceDraftBanner(){
+  const el = $("invoiceDraftWrap"); if(!el) return;
+  const d = readInvoiceDraft();
+  // nothing to offer while that same invoice is on screen
+  if(!d || editingId || (typeof isInvoiceFormDirty==="function" && isInvoiceFormDirty())){ el.style.display = "none"; el.innerHTML = ""; return; }
+  el.style.display = "";
+  el.innerHTML = `<div class="garment-card" style="border:1px solid var(--gold);">
+    <b>فيه فاتورة ما انحفظت على هذا الجهاز</b> — ${esc(d.customerName||"بدون اسم")} ${d.customerMobile?`(${esc(d.customerMobile)})`:""} — ${d.garments.length} ثوب — ${esc((d.savedAt||"").slice(0,16).replace("T"," "))}
+    <div style="display:flex;gap:6px;margin-top:8px;"><button class="btn btn-gold btn-sm" onclick="restoreInvoiceDraft()">استرجاعها</button><button class="btn btn-ghost btn-sm" onclick="clearInvoiceDraft()">تجاهل</button></div>
+  </div>`;
+}
+function restoreInvoiceDraft(){
+  const d = readInvoiceDraft(); if(!d) return;
+  resetForm();
+  $("custName").value = d.customerName||""; $("custMobile").value = d.customerMobile||"";
+  $("invNotes").value = d.notes||"";
+  $("invCount").value = d.garments.length;
+  if(d.expectedDeliveryDate) $("invDeliveryDate").value = d.expectedDeliveryDate;
+  selectedOfferIds = [...(d.selectedOfferIds||[])];
+  if(d.fetchedHeldId && heldInvoicesLive().some(h=>h.id===d.fetchedHeldId)) fetchedHeldId = d.fetchedHeldId;
+  renderGarmentFields(d.garments);
+  ["input","change"].forEach(ev=> $("custMobile").dispatchEvent(new Event(ev)));
+  updateLiveTotals(); renderInvoiceDraftBanner();
+  showToast("رجعت الفاتورة بالعميل والثياب والمقاسات — أضف الدفعة واحفظ");
 }
 function loadInvoiceIntoForm(inv){
   switchTab("invoice");

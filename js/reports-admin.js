@@ -845,10 +845,7 @@ function showConfirm(message){
     yesBtn.addEventListener("click", onYes); noBtn.addEventListener("click", onNo);
   });
 }
-async function sha256Hex(text){
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
-}
+// sha256Hex() comes from print-einvoice.js
 // the deposit bypass code counts only while it has a hash and (for a timed code) its end time hasn't passed
 function depositBypassActive(){
   const s = state.settings;
@@ -1334,7 +1331,7 @@ function performTabSwitch(name){
   if(name==="mail") renderMailTab(); // opening the mail clears its unread count
   if(name==="invoice" && !editingId){
     // refresh dropdowns (e.g. newly-added measurement options) without discarding data already entered
-    renderGarmentFields(readGarmentFields());
+    renderGarmentFields(garmentsFromForm()); // keeps the "بدون قماش" pick
     // only recompute the auto-estimated delivery date if the form is still fresh (untouched) — don't clobber a manual edit in progress
     if(!isInvoiceFormDirty()) $("invDeliveryDate").value = formatDateInput(computeExpectedDeliveryDate(parseInt($("invCount").value)||1));
   }
@@ -1474,6 +1471,24 @@ $("manualCardType").addEventListener("change", updateManualCardLabels);
 $("itemImportTemplateBtn").addEventListener("click", downloadItemImportTemplate);
 $("itemImportFile").addEventListener("change", ()=>{ const f=$("itemImportFile").files[0]; if(f) previewItemImport(f); });
 $("purchType").addEventListener("change", refreshPurchaseForm);
+// phones (Samsung / iPhone keyboards) report a tapped datalist suggestion as "change" — or only on blur —
+// without the "input" every search box here listens to, so the pick looked typed but never took. Any
+// box with a list gets its "input" replayed when the value moved without one.
+// every keystroke in the new-invoice form keeps the device draft up to date
+["input","change","click","keyup"].forEach(ev=> $("tab-invoice").addEventListener(ev, ()=>{ if(typeof saveInvoiceDraftSoon==="function") saveInvoiceDraftSoon(); }));
+["input","change","click","keyup"].forEach(ev=> $("tab-salesInvoice").addEventListener(ev, ()=>{ if(typeof saveSaleDraftSoon==="function") saveSaleDraftSoon(); }));
+(function replayDatalistPicks(){
+  const isListBox = t=> t && t.tagName==="INPUT" && t.hasAttribute("list");
+  document.addEventListener("input", e=>{ if(isListBox(e.target)) e.target.dataset.lastInputValue = e.target.value; }, true);
+  const replay = e=>{
+    const t = e.target;
+    if(!isListBox(t) || t.dataset.lastInputValue===t.value) return;
+    t.dataset.lastInputValue = t.value;
+    t.dispatchEvent(new Event("input", {bubbles:true}));
+  };
+  document.addEventListener("change", replay, true);
+  document.addEventListener("focusout", replay, true);
+})();
 $("purchItemName").addEventListener("input", updatePurchItemStatus);
 $("purchSupplierSearch").addEventListener("input", ()=>{
   const val = $("purchSupplierSearch").value.trim();

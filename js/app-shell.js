@@ -396,7 +396,22 @@ function mergeCatalogInto(data){
   catalogKeys().forEach(k=>{ if(catalogSaved[k]) data[k] = JSON.parse(JSON.stringify(catalogSaved[k].items)); });
   return data;
 }
+// ---- no internet: a banner on top, and a save fails at once with a clear message instead of hanging on
+// a transaction that can't reach the server (the screen keeps what was typed; drafts keep the invoices) ----
+function isOffline(){ return typeof navigator!=="undefined" && navigator.onLine===false; }
+function updateOfflineBanner(){
+  const b = document.getElementById("offlineBanner"); if(!b) return;
+  b.style.display = isOffline() ? "" : "none";
+  document.body.style.paddingTop = isOffline() ? (b.offsetHeight||36)+"px" : "";
+}
+if(typeof window!=="undefined"){
+  window.addEventListener("offline", ()=>{ updateOfflineBanner(); });
+  window.addEventListener("online", ()=>{ updateOfflineBanner(); if(typeof showToast==="function") showToast("رجع الاتصال بالإنترنت — تقدر تحفظ الحين"); });
+  window.addEventListener("load", updateOfflineBanner);
+}
+const OFFLINE_SAVE_MSG = "ما انحفظ — ما فيه اتصال بالإنترنت. اللي كتبته باقي بالشاشة، احفظ أول ما يرجع النت";
 function saveState(){
+  if(isOffline()){ updateOfflineBanner(); if(typeof showToast==="function") showToast(OFFLINE_SAVE_MSG); return Promise.resolve(false); }
   // captured now, so a later in-memory change can't leak into this save; queued so this device's
   // own back-to-back saves never race (and reject) each other
   const payload = JSON.parse(JSON.stringify(state));
@@ -563,7 +578,7 @@ async function commitStatePayload(payload){
       return false;
     }
     else if(e && e.code==="unauthenticated") msg = "تعذّر الحفظ — الدخول المجهول (Anonymous Auth) مو شغّال، فعّله من لوحة Firebase ← Authentication";
-    else if(e && e.code==="unavailable") msg = "تعذّر الحفظ — تحقق من الاتصال بالإنترنت";
+    else if(e && e.code==="unavailable") msg = OFFLINE_SAVE_MSG;
     showToast(msg);
     return false;
   }
@@ -641,6 +656,8 @@ async function afterSignedIn(){
 // ---------------- daily backups (disaster recovery — keeps the last 14 days) ----------------
 const BACKUPS_COL = db.collection("backups");
 async function maybeBackupStateToday(){
+  // no internet: try again once it's back instead of failing in the background
+  if(isOffline()){ window.addEventListener("online", ()=> setTimeout(maybeBackupStateToday, 3000), {once:true}); return; }
   try{
     const today = todayStr();
     const ref = BACKUPS_COL.doc(today);
