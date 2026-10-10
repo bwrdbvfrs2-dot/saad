@@ -1269,6 +1269,8 @@ $("exportCsvBtn").addEventListener("click", exportCsv);
 $("closeMonthBtn").addEventListener("click", performCloseMonth);
 $("searchBox").addEventListener("input", renderSearch);
 $("searchScope").addEventListener("change", renderSearch);
+["searchTailor","searchStatus"].forEach(id=> $(id).addEventListener("change", renderSearch));
+["searchPriceMin","searchPriceMax"].forEach(id=> $(id).addEventListener("input", renderSearch));
 $("customerSearch").addEventListener("input", renderCustomers);
 $("customerFilter").addEventListener("change", renderCustomers);
 $("printUndeliveredBtn").addEventListener("click", printUndelivered);

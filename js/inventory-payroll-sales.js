@@ -1871,20 +1871,52 @@ function renderSearch(){
   const invs = scope==="current"? state.invoices.filter(i=>i.originMonth===state.settings.currentMonth) : state.invoices;
   const statusTotals={}; STATUSES.forEach(st=>statusTotals[st.v]={count:0,amount:0});
   const rows=[]; let embroCount=0, embroRevenue=0;
+  // filters: tailor, status, sale price range — the dropdowns are filled from what exists, keeping the pick
+  const tSel = $("searchTailor"), sSel = $("searchStatus");
+  if(tSel){ const cur = tSel.value; const names = [...new Set([...state.users.filter(u=>u.role==="خياط").map(u=>u.username), ...invs.flatMap(i=>i.garments.map(g=>g.tailor)).filter(Boolean)])];
+    tSel.innerHTML = `<option value="">كل الخياطين</option>` + names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("") + `<option value="__none__">بدون خياط بعد</option>`; tSel.value = cur; }
+  if(sSel && sSel.options.length<=1){ sSel.innerHTML = `<option value="">كل الحالات</option>` + STATUSES.map(st=>`<option value="${st.v}">${st.label}</option>`).join(""); }
+  const fTailor = tSel ? tSel.value : "", fStatus = sSel ? sSel.value : "";
+  const num = id=>{ const v = parseFloat(($(id)||{}).value); return isNaN(v) ? null : v; };
+  const fMin = num("searchPriceMin"), fMax = num("searchPriceMax");
   invs.forEach(inv=> inv.garments.forEach(g=>{
     statusTotals[g.status].count++; statusTotals[g.status].amount += garmentSalePrice(g);
     if(g.hasEmbroidery){ embroCount++; embroRevenue += (g.embroideryPrice||0); }
     const hay=(inv.number+" "+(g.tailor||"")+" "+deliveryReceiptOf(inv,g)+" "+(inv.customerMobile||"")).toLowerCase();
-    if(!q||hay.includes(q)) rows.push({inv,g});
+    if(q && !hay.includes(q)) return;
+    const price = garmentSalePrice(g);
+    if(fTailor && (fTailor==="__none__" ? !!g.tailor : g.tailor!==fTailor)) return;
+    if(fStatus && g.status!==fStatus) return;
+    if(fMin!==null && price < fMin - 0.001) return;
+    if(fMax!==null && price > fMax + 0.001) return;
+    rows.push({inv,g,price});
   }));
   $("statusReport").innerHTML = STATUSES.map(st=>`<div class="report-card"><div class="st">${st.label}</div>
     <div class="amt">${statusTotals[st.v].amount.toFixed(0)} ﷼</div><div class="cnt">${statusTotals[st.v].count} ثوب</div></div>`).join("");
   $("embroReport").innerHTML = `<div class="report-card"><div class="st">نشاط التطريز</div>
     <div class="amt">${embroRevenue.toFixed(0)} ﷼</div><div class="cnt">${embroCount} ثوب مطرّز</div></div>`;
   const tbody=$("searchResults"); tbody.innerHTML="";
-  if(rows.length===0){ tbody.innerHTML=`<tr><td colspan="5">${emptyStateHtml("search-x","لا نتائج")}</td></tr>`; refreshLucideIcons(); return; }
-  rows.forEach(({inv,g})=>{ const st=STATUSES.find(x=>x.v===g.status);
-    tbody.innerHTML += `<tr><td>${esc(inv.number)}</td><td>${esc(g.tailor||"—")}</td><td><span class="badge ${st.cls}">${st.label}</span></td><td>${fmtSar(garmentSalePrice(g))} ﷼</td><td>${esc(deliveryReceiptOf(inv,g))}</td></tr>`; });
+  const foot=$("searchTotals"), avgBody=$("searchAverages");
+  if(rows.length===0){ tbody.innerHTML=`<tr><td colspan="7">${emptyStateHtml("search-x","لا نتائج")}</td></tr>`; if(foot) foot.innerHTML=""; if(avgBody) avgBody.innerHTML=""; refreshLucideIcons(); return; }
+  // same invoice + tailor + status + price + receipt → one line with its thobe count
+  const groups = [];
+  rows.forEach(r=>{
+    const receipt = deliveryReceiptOf(r.inv, r.g), key = [r.inv.id, r.g.tailor||"", r.g.status, r.price.toFixed(2), receipt].join("|");
+    let gr = groups.find(x=>x.key===key);
+    if(!gr){ gr = {key, inv:r.inv, g:r.g, price:r.price, receipt, count:0}; groups.push(gr); }
+    gr.count++;
+  });
+  tbody.innerHTML = groups.map(gr=>{ const st=STATUSES.find(x=>x.v===gr.g.status);
+    return `<tr><td>${esc(gr.inv.number)}</td><td>${esc(gr.g.tailor||"—")}</td><td><span class="badge ${st.cls}">${st.label}</span></td><td>${fmtSar(gr.price)} ﷼</td><td>${gr.count}</td><td>${fmtSar(gr.price*gr.count)} ﷼</td><td>${esc(gr.receipt)}</td></tr>`; }).join("");
+  const live = rows.filter(r=> r.g.status!=="ملغي" || fStatus==="ملغي");
+  const totalAmt = live.reduce((a,r)=>a+r.price,0);
+  if(foot) foot.innerHTML = `<tr style="font-weight:800;"><td colspan="4">الإجمالي${live.length!==rows.length?" (بدون الملغي)":""}</td><td>${live.length}</td><td>${fmtSar(totalAmt)} ﷼</td><td></td></tr>`;
+  // average sale price per thobe: all thobes, then by category
+  const avgRow = (label, list)=>{ const t = list.reduce((a,r)=>a+r.price,0); return list.length ? `<tr${label==="كل الثياب"?' style="font-weight:800;"':""}><td>${label}</td><td>${list.length}</td><td>${fmtSar(t)} ﷼</td><td>${fmtSar(Math.round(t/list.length*100)/100)} ﷼</td></tr>` : ""; };
+  if(avgBody) avgBody.innerHTML = avgRow("كل الثياب", live)
+    + BODY_CATEGORIES.map(c=> avgRow(c, live.filter(r=>(r.g.category||"رجال")===c))).join("")
+    + avgRow("أجرة تفصيل (بدون قماش)", live.filter(r=>!r.g.itemCardId))
+    + avgRow("بقماش المحل", live.filter(r=>!!r.g.itemCardId));
 }
 
 function getCustomers(){

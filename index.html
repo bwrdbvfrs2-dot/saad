@@ -1039,9 +1039,18 @@
   </div>
   <div class="report-grid" id="statusReport"></div>
   <div class="report-grid" id="embroReport" style="grid-template-columns:1fr;"></div>
-  <div class="table-wrap" style="margin-top:16px;">
-    <table><thead><tr><th>رقم الفاتورة</th><th>الخياط</th><th>الحالة</th><th>سعر البيع</th><th>رقم إيصال التسليم</th></tr></thead><tbody id="searchResults"></tbody></table>
+  <div class="row-3" style="margin-top:16px;">
+    <div class="field"><label>الخياط</label><select id="searchTailor"><option value="">كل الخياطين</option></select></div>
+    <div class="field"><label>الحالة</label><select id="searchStatus"><option value="">كل الحالات</option></select></div>
+    <div class="field"><label>سعر البيع (ريال)</label><div style="display:flex;gap:6px;"><input type="number" id="searchPriceMin" min="0" placeholder="من"><input type="number" id="searchPriceMax" min="0" placeholder="إلى"></div></div>
   </div>
+  <div class="table-wrap" style="margin-top:8px;">
+    <table><thead><tr><th>رقم الفاتورة</th><th>الخياط</th><th>الحالة</th><th>سعر البيع</th><th>عدد الثياب</th><th>المبلغ</th><th>رقم إيصال التسليم</th></tr></thead><tbody id="searchResults"></tbody>
+    <tfoot id="searchTotals"></tfoot></table>
+  </div>
+  <h3 style="margin:18px 0 8px;font-size:15px;">متوسط سعر البيع للثوب</h3>
+  <p class="sub" style="margin:0 0 8px;">حسب الفلاتر اللي فوق — بدون الثياب الملغاة.</p>
+  <div class="table-wrap"><table><thead><tr><th>الفئة</th><th>عدد الثياب</th><th>إجمالي البيع</th><th>متوسط سعر الثوب</th></tr></thead><tbody id="searchAverages"></tbody></table></div>
   
 </div>
 </div>
