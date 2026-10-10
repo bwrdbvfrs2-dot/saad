@@ -99,7 +99,7 @@ async function deliverRepair(id){
     const {payment, error} = readRepairPayment("rpp-"+id+"-", owed);
     if(error){ state = snapshot; showToast(error); return; }
     const got = payment ? payment.cash + payment.network : 0;
-    if(got < owed - 0.001){ state = snapshot; showToast(`باقي على العميل ${owed.toFixed(0)} ريال — اكتبه بخانات الدفع قبل التسليم`); return; }
+    if(got < owed - 0.001){ state = snapshot; showToast(`باقي على العميل ${fmtSar(owed)} ريال — اكتبه بخانات الدفع قبل التسليم`); return; }
     r.payments.push(payment); applyPaymentToBalances(payment);
   }
   r.status = "تسليم"; r.deliveredDate = todayStr(); r.deliveredBy = currentUser.username;
@@ -173,14 +173,14 @@ function renderRepairsList(){
       <p style="margin:6px 0;"><b>${esc(r.customerName)}</b> — ${esc(r.customerMobile)} <a href="${waLink(r.customerMobile)}" target="_blank" class="icon-btn" title="واتساب"><i data-lucide="message-circle"></i></a></p>
       <p style="margin:4px 0;white-space:pre-line;">${esc(r.description)}</p>
       ${r.notes?`<p class="sub" style="margin:4px 0;">ملاحظات: ${esc(r.notes)}</p>`:""}
-      <p style="margin:4px 0;">السعر: <b>${(r.price||0).toFixed(0)} ﷼</b> — المدفوع: ${repairPaid(r).toFixed(0)} ﷼ — <span style="color:${owed>0.001?"var(--loss)":"var(--profit)"};font-weight:700;">المتبقي: ${owed.toFixed(0)} ﷼</span></p>
+      <p style="margin:4px 0;">السعر: <b>${(r.price||0).toFixed(0)} ﷼</b> — المدفوع: ${repairPaid(r).toFixed(0)} ﷼ — <span style="color:${owed>0.001?"var(--loss)":"var(--profit)"};font-weight:700;">المتبقي: ${fmtSar(owed)} ﷼</span></p>
       ${r.status==="استلام" ? `<div class="field" style="max-width:220px;"><label>الخياط</label><select id="rpt-${r.id}"><option value="">-- اختر --</option>${tailors.map(u=>`<option value="${esc(u.username)}" ${u.username===r.tailor?"selected":""}>${esc(u.username)}</option>`).join("")}</select></div>`
         : `<p class="sub" style="margin:4px 0;">الخياط: ${esc(r.tailor||"—")}${r.readyDate?` — جاهز ${r.readyDate}`:""}${r.deliveredDate?` — تسلّم ${r.deliveredDate}`:""}${r.cancelledDate?` — انلغى ${r.cancelledDate}`:""}</p>`}
       ${payFields}
       <div class="actions-row" style="margin-top:6px;flex-wrap:wrap;gap:6px;">
         ${open && owed>0.001 ? `<button class="btn btn-ghost btn-sm" onclick="addRepairPayment('${r.id}')">تسجيل دفعة</button>` : ""}
         ${r.status==="استلام" ? `<button class="btn btn-gold btn-sm" onclick="markRepairReady('${r.id}')">جاهز</button>` : ""}
-        ${r.status==="جاهز" ? `<button class="btn btn-gold btn-sm" onclick="deliverRepair('${r.id}')">تسليم${owed>0.001?` وتحصيل ${owed.toFixed(0)} ﷼`:""}</button>` : ""}
+        ${r.status==="جاهز" ? `<button class="btn btn-gold btn-sm" onclick="deliverRepair('${r.id}')">تسليم${owed>0.001?` وتحصيل ${fmtSar(owed)} ﷼`:""}</button>` : ""}
         <button class="btn btn-ghost btn-sm" onclick="printRepairReceipt('${r.id}')">إيصال العميل</button>
         <button class="btn btn-ghost btn-sm" onclick="printRepairTag('${r.id}')">بطاقة الثوب</button>
         ${open ? `<button class="btn btn-ghost btn-sm" style="color:var(--loss);" onclick="cancelRepair('${r.id}')">إلغاء</button>` : ""}

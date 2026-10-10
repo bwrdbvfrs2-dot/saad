@@ -698,11 +698,11 @@ async function confirmLegacyDeliver(){
   const qty = parseInt($("legDeliverQtyInput").value)||0;
   const amountReceived = parseFloat($("legDeliverAmountInput").value)||0;
   if(qty<=0 || qty>remainingCount){ showToast(`أدخل كمية صحيحة (1 إلى ${remainingCount})`); return; }
-  if(amountReceived>item.remaining+0.01){ showToast(`المبلغ أكبر من المتبقي (${item.remaining.toFixed(0)} ريال)`); return; }
+  if(amountReceived>item.remaining+0.01){ showToast(`المبلغ أكبر من المتبقي (${fmtSar(item.remaining)} ريال)`); return; }
   const newRemaining = Math.max(0, item.remaining - amountReceived);
   const isAdmin = currentUser.role==="مدير";
   if(newRemaining>0.01){
-    if(!isAdmin){ showToast(`لازم تحصّل كامل المبلغ المتبقي (${item.remaining.toFixed(0)} ريال) قبل التسليم`); return; }
+    if(!isAdmin){ showToast(`لازم تحصّل كامل المبلغ المتبقي (${fmtSar(item.remaining)} ريال) قبل التسليم`); return; }
     closeLegacyDeliverModal(); // close first — two modal-overlay elements stacking at once makes the nested confirm unclickable
     if(!await showConfirm(`بعد استلام ${amountReceived.toFixed(0)} ريال، بيفضل متبقي ${newRemaining.toFixed(0)} ريال. تسليم بدين كمدير؟`)) return;
   }
@@ -726,7 +726,7 @@ function renderLegacyItems(){
   tbody.innerHTML = state.legacyItems.slice().reverse().map(x=>{
     const remainingCount = x.count - (x.deliveredCount||0);
     return `<tr>
-    <td>${esc(x.name)}</td><td>${esc(x.mobile)}</td><td>${esc(x.desc)}</td><td>${x.deliveredCount||0} / ${x.count}</td><td>${x.remaining?x.remaining.toFixed(0)+" ﷼":"—"}</td>
+    <td>${esc(x.name)}</td><td>${esc(x.mobile)}</td><td>${esc(x.desc)}</td><td>${x.deliveredCount||0} / ${x.count}</td><td>${x.remaining?fmtSar(x.remaining)+" ﷼":"—"}</td>
     <td><span class="badge ${x.status==="تم التسليم"?"b-done":"b-new"}">${x.status}</span></td>
     <td>${x.status!=="تم التسليم"?`<button class="btn btn-ghost btn-sm" onclick="openLegacyDeliverModal('${x.id}')">تسليم</button>`:""}</td>
   </tr>`;}).join("");

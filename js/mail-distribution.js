@@ -802,7 +802,7 @@ function renderDistributionArea(inv){
       ${summaryField("عدد الثياب", activeGarmentCount)}
       ${summaryField("الإجمالي", total.toFixed(0)+" ﷼")}
       ${summaryField("المدفوع", paid.toFixed(0)+" ﷼")}
-      ${summaryField("المتبقي", remaining.toFixed(0)+" ﷼")}
+      ${summaryField("المتبقي", fmtSar(remaining)+" ﷼")}
     </div>
   </div>`;
   area.innerHTML = summaryHtml + `${inv.notes?`<p class="sub" style="margin:10px 0;">ملاحظات الفاتورة: ${esc(inv.notes)}</p>`:""}${(inv.appliedOffers&&inv.appliedOffers.length)?`<p class="sub" style="margin-bottom:10px;color:var(--gold-soft);">عروض مطبّقة: ${inv.appliedOffers.join("، ")}</p>`:""}` +
@@ -840,7 +840,7 @@ function renderDistributionArea(inv){
     <div id="distPaymentsList">${paymentsHtml}</div>
     <div class="remaining-box">
       <span>الإجمالي: ${total.toFixed(0)} ﷼ — المدفوع: ${paid.toFixed(0)} ﷼${discountTotal?` — الخصم: ${discountTotal.toFixed(0)} ﷼`:""}</span>
-      <span class="amt">المتبقي: ${remaining.toFixed(0)} ﷼</span>
+      <span class="amt">المتبقي: ${fmtSar(remaining)} ﷼</span>
     </div>
     <div class="row-3">
       <div class="field"><label>كاش (ريال)</label><input type="number" id="distPayCash" min="0" placeholder="0"></div>
@@ -866,7 +866,7 @@ async function addDistPayment(inv){
   if(cash<=0 && network<=0 && discount<=0){ showToast("أدخل مبلغ كاش أو شبكة أو خصم"); return; }
   if(network>0 && !networkReceiptNo){ showToast("أدخل رقم سند الشبكة"); return; }
   const remaining = invoiceRemaining(inv);
-  if((cash+network+discount) - remaining > 0.01){ showToast(`المبلغ أكبر من المتبقي (${remaining.toFixed(0)} ريال)`); return; }
+  if((cash+network+discount) - remaining > 0.01){ showToast(`المبلغ أكبر من المتبقي (${fmtSar(remaining)} ريال)`); return; }
   const snapshot = JSON.parse(JSON.stringify(state));
   // capture any tailor values currently typed in the garment cards so they aren't lost on refresh
   const isAdmin = currentUser.role==="مدير";

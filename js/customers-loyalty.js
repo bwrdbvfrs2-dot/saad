@@ -912,7 +912,9 @@ function currentFixedShare(extra=0, monthLabel=state.settings.currentMonth){
   return n>0 ? effectiveFixed/n : 0;
 }
 function garmentAddonsInfo(g){ return (g.addons||[]).map(id=>state.addonDefs.find(a=>a.id===id)).filter(Boolean); }
-function addonUnitPrice(a){ return a.kind==="service" ? (a.servicePrice||0) : (findItemCard(a.itemCardId)?.currentCost||0)*(1+(a.markupPercent||0)/100)*(a.qtyPerGarment||1); }
+// a product add-on's sale price is cost × markup — rounded to whole riyals, the price the list shows the
+// cashier (an unrounded 3.60 made the invoice 97.60 while the screen said 98, and the exact-amount check refused 98)
+function addonUnitPrice(a){ return a.kind==="service" ? (a.servicePrice||0) : Math.round((findItemCard(a.itemCardId)?.currentCost||0)*(1+(a.markupPercent||0)/100)*(a.qtyPerGarment||1)); }
 function garmentAddonsTotal(g){
   // once an invoice is saved, g.addonsSaleSnapshot freezes what the customer was actually charged
   // for addons — same treatment as g.price/g.embroideryPrice, so it can't drift after the fact.
