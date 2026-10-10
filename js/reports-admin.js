@@ -766,26 +766,64 @@ function showNoFabricWageReport(){
   $("noFabricWageView").innerHTML = html + `<button class="btn btn-ghost btn-sm" id="printNoFabricWageBtn" style="margin-top:10px;">طباعة التقرير</button>`;
   $("printNoFabricWageBtn").addEventListener("click", ()=>{ printHtml(html); });
 }
-function showExpenseSubItemsReport(){
-  const groups = {};
+// every money-out that counts as an expense, as {cat, sub, amount, date}: recorded expenses, plus (optional)
+// the bank fee on card payments and payment vouchers — those two never showed here before
+function expenseReportEntries(includeOther){
+  const out = [];
   state.expenses.forEach(e=>{
-    if(!dateMatchesPeriod("expSub", e.date)) return;
     const cat = state.expenseCategories.find(c=>c.id===e.categoryId);
-    const catLabel = cat ? cat.label : "—";
-    const subLabel = e.subItemLabel || "بدون بند فرعي";
-    const key = catLabel+"|"+subLabel;
-    if(!groups[key]) groups[key] = {catLabel, subLabel, count:0, total:0};
+    out.push({cat: cat ? cat.label : "بدون تصنيف", sub: e.subItemLabel || "بدون بند فرعي", amount: e.amount||0, date: e.date});
+  });
+  if(includeOther){
+    (typeof allCardPayments==="function" ? allCardPayments() : []).forEach(p=>{
+      const fee = networkFeeOf(p); if(fee>0.001) out.push({cat:"عمولة الشبكة", sub: p.cardType==="visa" ? "فيزا / ماستر" : "مدى", amount: fee, date: p.date});
+    });
+    (state.vouchers||[]).filter(v=>v.type==="payment").forEach(v=> out.push({cat:"سندات صرف", sub: v.reason || v.party || "بدون بيان", amount: v.amount||0, date: v.date}));
+  }
+  return out;
+}
+function refreshExpenseSubFilters(){
+  const catSel = $("expSubCatFilter"), subSel = $("expSubItemFilter"); if(!catSel || !subSel) return;
+  const entries = expenseReportEntries($("expSubIncludeOther") ? $("expSubIncludeOther").checked : true);
+  const cats = [...new Set(state.expenseCategories.map(c=>c.label).concat(entries.map(e=>e.cat)))];
+  const curCat = catSel.value, curSub = subSel.value;
+  catSel.innerHTML = `<option value="">كل التصنيفات</option>` + cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("");
+  catSel.value = cats.includes(curCat) ? curCat : "";
+  const subs = [...new Set(entries.filter(e=> !catSel.value || e.cat===catSel.value).map(e=>e.sub)
+    .concat(catSel.value ? ((state.expenseCategories.find(c=>c.label===catSel.value)||{}).subItems||[]).map(s=>s.label) : []))];
+  subSel.innerHTML = `<option value="">كل البنود</option>` + subs.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("");
+  subSel.value = subs.includes(curSub) ? curSub : "";
+}
+function showExpenseSubItemsReport(){
+  refreshExpenseSubFilters();
+  const fCat = ($("expSubCatFilter")||{}).value || "", fSub = ($("expSubItemFilter")||{}).value || "";
+  const includeOther = $("expSubIncludeOther") ? $("expSubIncludeOther").checked : true;
+  const groups = {};
+  expenseReportEntries(includeOther).forEach(e=>{
+    if(!dateMatchesPeriod("expSub", e.date)) return;
+    if(fCat && e.cat!==fCat) return;
+    if(fSub && e.sub!==fSub) return;
+    const key = e.cat+"|"+e.sub;
+    if(!groups[key]) groups[key] = {catLabel:e.cat, subLabel:e.sub, count:0, total:0};
     groups[key].count++; groups[key].total += e.amount;
   });
-  const list = Object.values(groups).sort((a,b)=> b.total-a.total);
-  const grandTotal = list.reduce((a,g)=>a+g.total,0);
-  const title = `تقرير المصروفات حسب البند الفرعي — ${periodLabel("expSub")}`;
+  const list = Object.values(groups).sort((a,b)=> a.catLabel.localeCompare(b.catLabel) || b.total-a.total);
+  const grandTotal = list.reduce((a,g)=>a+g.total,0), grandCount = list.reduce((a,g)=>a+g.count,0);
+  const title = `تقرير المصروفات حسب البند الفرعي — ${periodLabel("expSub")}${fCat?` — ${esc(fCat)}`:""}${fSub?` / ${esc(fSub)}`:""}`;
   let html = `<h2>${title}</h2>`;
-  html += `<p>إجمالي المصروفات: <b>${grandTotal.toFixed(0)} ﷼</b></p>`;
+  html += `<p>إجمالي المصروفات: <b>${fmtSar(grandTotal)} ﷼</b> — عددها: <b>${grandCount}</b></p>`;
   html += `<table><thead><tr><th>التصنيف</th><th>البند الفرعي</th><th>عدد المصروفات</th><th>الإجمالي</th></tr></thead><tbody>`;
-  list.forEach(g=> html+=`<tr><td>${esc(g.catLabel)}</td><td>${esc(g.subLabel)}</td><td>${g.count}</td><td>${g.total.toFixed(0)} ﷼</td></tr>`);
+  // a subtotal line under each category when it has more than one sub-item
+  const cats = [...new Set(list.map(g=>g.catLabel))];
+  cats.forEach(c=>{
+    const lines = list.filter(g=>g.catLabel===c);
+    lines.forEach(g=> html+=`<tr><td>${esc(g.catLabel)}</td><td>${esc(g.subLabel)}</td><td>${g.count}</td><td>${fmtSar(g.total)} ﷼</td></tr>`);
+    if(lines.length>1) html+=`<tr style="font-weight:700;background:var(--surface2);"><td colspan="2">مجموع ${esc(c)}</td><td>${lines.reduce((a,g)=>a+g.count,0)}</td><td>${fmtSar(lines.reduce((a,g)=>a+g.total,0))} ﷼</td></tr>`;
+  });
   if(!list.length) html+=`<tr><td colspan="4" style="text-align:center;">لا يوجد</td></tr>`;
+  else html+=`<tr style="font-weight:800;border-top:2px solid var(--border);"><td colspan="2">الإجمالي</td><td>${grandCount}</td><td>${fmtSar(grandTotal)} ﷼</td></tr>`;
   html += `</tbody></table>`;
+  html += `<p class="sub" style="margin-top:6px;">لا يدخل في هذا التقرير: الرواتب والسلف، والمشتريات، وسداد الموردين والدائنين، والتحويلات بين الصناديق — لها تقاريرها الخاصة.</p>`;
   $("expenseSubItemsReportView").innerHTML = html + `<button class="btn btn-ghost btn-sm" id="printExpenseSubItemsBtn" style="margin-top:10px;">طباعة التقرير</button>`;
   $("printExpenseSubItemsBtn").addEventListener("click", ()=>{ printHtml(html); });
 }
@@ -1277,6 +1315,7 @@ $("printUndeliveredBtn").addEventListener("click", printUndelivered);
 $("showGarmentInventoryBtn").addEventListener("click", showGarmentInventory);
 $("showNoFabricWageBtn").addEventListener("click", showNoFabricWageReport);
 $("showExpenseSubItemsBtn").addEventListener("click", showExpenseSubItemsReport);
+["expSubCatFilter","expSubItemFilter","expSubIncludeOther"].forEach(id=> $(id).addEventListener("change", ()=>{ if(id==="expSubCatFilter") $("expSubItemFilter").value=""; showExpenseSubItemsReport(); }));
 $("showSalesRankingBtn").addEventListener("click", showSalesRankingReport);
 $("printCustomersBtn").addEventListener("click", printCustomers);
 $("exportCustomersBtn").addEventListener("click", exportCustomersCsv);
@@ -1332,6 +1371,7 @@ function performTabSwitch(name){
   if(name==="repairs") renderRepairsTab();
   if(name==="report-myDaily") renderMyDaily();
   if(name==="report-daily") renderDailyPreview();
+  if(name==="report-expenseSubItems") refreshExpenseSubFilters();
   if(name==="mail") renderMailTab(); // opening the mail clears its unread count
   if(name==="invoice" && !editingId){
     // refresh dropdowns (e.g. newly-added measurement options) without discarding data already entered

@@ -1249,6 +1249,11 @@
   <h3 style="margin:0 0 10px;font-size:14px;">تقرير المصروفات حسب البند الفرعي</h3>
   <p class="sub">تجميع كل المصروفات (بأي تصنيف) حسب البند الفرعي المختار لها — يفيد بمعرفة تفصيل أدق للمصاريف، مثل صيانة مكيفات مقابل صيانة مقصات تحت نفس تصنيف الصيانة.</p>
   <div id="expenseSubItemsPeriodWrap"></div>
+  <div class="row-3">
+    <div class="field"><label>التصنيف</label><select id="expSubCatFilter"><option value="">كل التصنيفات</option></select></div>
+    <div class="field"><label>البند الفرعي</label><select id="expSubItemFilter"><option value="">كل البنود</option></select></div>
+    <div class="field" style="display:flex;align-items:flex-end;"><label style="display:flex;align-items:center;gap:6px;margin:0;"><input type="checkbox" id="expSubIncludeOther" checked> مع عمولة الشبكة وسندات الصرف</label></div>
+  </div>
   <button class="btn btn-ghost btn-sm" id="showExpenseSubItemsBtn">عرض التقرير</button>
   <div id="expenseSubItemsReportView" style="margin-top:12px;"></div>
 
