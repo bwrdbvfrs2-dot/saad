@@ -967,7 +967,7 @@ function saleOfferEvaluation(offer, lines){
     const units = matching.reduce((a,l)=>a+l.qty,0);
     if(units < offer.requiredQty) return {eligible:false, discount:0};
     const cheapest = Math.min(...matching.map(l=>l.price));
-    return {eligible:true, discount: cheapest*(offer.discountPercent||0)/100};
+    return {eligible:true, discount: Math.round(cheapest*(offer.discountPercent||0)/100)}; // whole riyals
   }
   const units = lines.reduce((a,l)=>a+l.qty,0);
   if(units < (offer.minGarments||1)) return {eligible:false, discount:0};

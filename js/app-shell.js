@@ -256,6 +256,17 @@ function normalizeState(){
   if(!state.heldInvoices) state.heldInvoices=[];
   // payments from the quick-pay screen used to be saved without an id — an edit request needs one to point
   // at. Derived from the invoice and the payment's place, so it's the same on every device and every load.
+  // thobes that went past cutting without a cut date (taken by the tailor straight from "جديد") get the cut
+  // recorded once — on the day the tailor finished it — so their fabric leaves the reserve and their costs count
+  (state.invoices||[]).forEach(inv=>{
+    if((state.closingReports||[]).some(r=>r.monthLabel===inv.originMonth)) return;
+    (inv.garments||[]).forEach(g=>{
+      if(!g || g.cutDate || !["تفصيل","جاهز","تسليم","معلقة"].includes(g.status)) return;
+      if(g.status==="معلقة" && !g.tailorCompletedDate) return;
+      if(g.itemCardId && g.stockApplied==="reserved" && typeof consumeFabricForGarment==="function") consumeFabricForGarment(g, g.qtyUsed||0);
+      g.cutDate = g.tailorCompletedDate || g.readyDate || g.deliveredDate || inv.date; g.cutAuto = true;
+    });
+  });
   (state.invoices||[]).forEach(inv=> (inv.payments||[]).forEach((p,i)=>{
     if(!p) return;
     if(!p.id) p.id = `${inv.id}-p${i}`;

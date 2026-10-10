@@ -85,20 +85,23 @@ function renderAll(){
   const body=$("invoicesBody"); body.innerHTML="";
   $("emptyState").style.display = curInvoices.length?"none":"block";
   const isAdmin = currentUser && currentUser.role==="مدير";
+  // an invoice's profit is for the manager and the accountant — the cashier doesn't see it
+  const showProfit = !!currentUser && (currentUser.role==="مدير" || currentUser.role==="محاسب");
+  if($("invProfitTh")) $("invProfitTh").style.display = showProfit ? "" : "none";
   curInvoices.forEach(inv=>{
     const s=invoiceSaleTotal(inv), paid=invoicePaid(inv), rem=invoiceRemaining(inv);
     const profitData = invoiceProfitColumnData(inv);
     const tr=document.createElement("tr"); tr.className="invoice-row";
     const profitCell = !profitData ? `<span class="sub">—</span>`
-      : `<span class="${profitData.value>=0?'profit-pos':'profit-neg'}">${profitData.value.toFixed(0)} ﷼</span><br><span class="sub" style="font-size:10px;">${profitData.mode==="expected"?"الربح المتوقع (بعد التسليم)":"الربح والخسارة (قبل التسليم)"}</span>`;
+      : `<span class="${profitData.value>=0?'profit-pos':'profit-neg'}">${fmtSar(profitData.value)} ﷼</span><br><span class="sub" style="font-size:10px;">${profitData.mode==="expected"?"الربح المتوقع (بعد التسليم)":"الربح والخسارة (قبل التسليم)"}</span>`;
     const byLine = `<br><span class="sub" style="font-size:10px;">سجّلها: ${esc(inv.createdBy||"—")}${inv.lastEditedBy?` — آخر تعديل: ${esc(inv.lastEditedBy)}${inv.lastEditedAt?" "+inv.lastEditedAt.slice(0,10):""}`:""}</span>`;
     tr.innerHTML = `<td><b>${esc(inv.number)}</b></td><td>${esc(inv.customerName||"—")}${byLine}</td><td>${inv.date}</td>
-      <td>${s.toFixed(0)} ﷼</td><td>${paid.toFixed(0)} ﷼</td><td>${rem.toFixed(0)} ﷼</td>
-      <td>${profitCell}</td>
+      <td>${fmtSar(s)} ﷼</td><td>${fmtSar(paid)} ﷼</td><td>${fmtSar(rem)} ﷼</td>
+      ${showProfit ? `<td>${profitCell}</td>` : ""}
       <td style="white-space:nowrap;">${isAdmin?`<button class="btn btn-ghost btn-sm" style="color:var(--gold-soft);border-color:var(--gold-soft);" onclick="editInvoice('${inv.id}')" title="تعديل الفاتورة">تعديل</button> <button class="btn btn-ghost btn-sm" onclick="createInvoiceReturn('${inv.id}')" title="تسجيل مرتجع">مرتجع</button>`:""}<button class="icon-btn" onclick="editInvoiceMeasurements('${inv.id}')" title="تعديل المقاس"><i data-lucide="ruler"></i></button><button class="icon-btn" onclick="printCustomerReceipt('${inv.id}')" title="طباعة فاتورة العميل"><i data-lucide="printer"></i></button><button class="icon-btn" onclick="shareReceiptViaWhatsApp('${inv.id}')" title="إرسال الفاتورة واتساب"><i data-lucide="send"></i></button>${inv.einvoice?`<button class="icon-btn" onclick="showEinvoiceDetails('${inv.id}')" title="بيانات الفوترة الإلكترونية"><i data-lucide="receipt"></i></button>`:""}</td>`;
     body.appendChild(tr);
     const badges = inv.garments.map(g=>{const st=STATUSES.find(x=>x.v===g.status);return `<span class="badge ${st.cls}">${st.label}${esc(g.tailor?" — "+g.tailor:"")}</span>`;}).join(" ");
-    const tr2=document.createElement("tr"); tr2.innerHTML=`<td colspan="8" style="padding-top:0;padding-bottom:14px;">${badges}</td>`; body.appendChild(tr2);
+    const tr2=document.createElement("tr"); tr2.innerHTML=`<td colspan="${showProfit?8:7}" style="padding-top:0;padding-bottom:14px;">${badges}</td>`; body.appendChild(tr2);
   });
 
   renderClosedReports(); renderGrowthReport(); renderSearch(); renderReturnResponsibleSelect(); renderTailorReportSelector(); renderBroadcastList(); renderSensitiveGate(); renderCustomers(); renderPendingList(); updateFixedShareNote(); renderLegacyItems(); renderBalancesTab(); renderDebtsTab(); renderCustomerDebts(); renderInventoryTab(); renderInventoryValuation(); renderSalesInvoicesList(); refreshSaleLineOptions(); renderAddonsList(); refreshAddonForm(); renderScanTab(); renderPayrollTab(); renderEntitlementPreview(); renderAlterationSettings(); renderAlterationsLog(); renderQcTab(); updateManualCardLabels(); renderCustomShopFields(); renderFabricOrigins(); if($("setPrintOriginOnLabel")) $("setPrintOriginOnLabel").checked = state.settings.printOriginOnLabel; renderOffers(); renderOptionLists(); renderCustomMeasurementFields(); renderOverdueDashboard(); renderOverdueDashboard("dashboardOverdue", true); renderDashboardKPIs(); renderDashboardWorkDistribution(); renderShiftClosingsLog(); renderQuickMenuBar(); renderQuickMenuEditor(); renderReturnsLog(); renderPromoCodesAdmin(); renderAppliedPromoBanner(); renderVouchersTab(); renderTopExpensesReport(); renderVatLedger(); renderProductionTracking(); renderSeasonsList(); renderCustomerNameDatalist("custNameDatalist"); renderCuttingImageEditor(); applyShopBranding(); renderMailTab(); if(currentUser && currentUser.role==="مدير"){ renderUsers(); renderPermissionsEditor(); }
