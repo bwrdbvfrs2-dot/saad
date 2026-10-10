@@ -984,6 +984,12 @@ function claimSingleTailorGarment(inv, idx, number, conflicts){
   if(!g || g.status==="تسليم" || g.status==="ملغي" || g.status==="تفصيل" || g.status==="جاهز"){ showToast("هذا الثوب ما عاد متاح للتسجيل — يمكن سجّله خياط ثاني قبلك"); $("tailorScanPicker").innerHTML=""; return; }
   if(g.qcReturnedTo && g.qcReturnedTo!==currentUser.username){ showToast(`هذا الثوب راجع للخياط ${g.qcReturnedTo} لإصلاحه`); $("tailorScanPicker").innerHTML=""; return; }
   const wasRepair = !!g.qcReturnedTo;
+  // a thobe the tailor takes straight from "جديد" was cut all the same: without the cut its fabric stayed
+  // reserved and its fabric cost and fixed-cost share never reached the month (the profit showed "—")
+  if(!g.cutDate){
+    if(g.itemCardId && g.stockApplied==="reserved") consumeFabricForGarment(g, g.qtyUsed||0);
+    g.cutDate = todayStr(); g.cutAuto = true;
+  }
   g.tailor = currentUser.username; g.status = "تفصيل"; g.tailorCompletedDate = todayStr();
   syncGarmentWageAdvisory(g);
   delete g.qcReturnedTo;
