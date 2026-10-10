@@ -1874,7 +1874,7 @@ function renderSearch(){
   invs.forEach(inv=> inv.garments.forEach(g=>{
     statusTotals[g.status].count++; statusTotals[g.status].amount += garmentSalePrice(g);
     if(g.hasEmbroidery){ embroCount++; embroRevenue += (g.embroideryPrice||0); }
-    const hay=(inv.number+" "+(g.tailor||"")+" "+g.deliveryReceipt+" "+(inv.customerMobile||"")).toLowerCase();
+    const hay=(inv.number+" "+(g.tailor||"")+" "+deliveryReceiptOf(inv,g)+" "+(inv.customerMobile||"")).toLowerCase();
     if(!q||hay.includes(q)) rows.push({inv,g});
   }));
   $("statusReport").innerHTML = STATUSES.map(st=>`<div class="report-card"><div class="st">${st.label}</div>
@@ -1884,7 +1884,7 @@ function renderSearch(){
   const tbody=$("searchResults"); tbody.innerHTML="";
   if(rows.length===0){ tbody.innerHTML=`<tr><td colspan="5">${emptyStateHtml("search-x","لا نتائج")}</td></tr>`; refreshLucideIcons(); return; }
   rows.forEach(({inv,g})=>{ const st=STATUSES.find(x=>x.v===g.status);
-    tbody.innerHTML += `<tr><td>${esc(inv.number)}</td><td>${esc(g.tailor||"—")}</td><td><span class="badge ${st.cls}">${st.label}</span></td><td>${garmentSalePrice(g).toFixed(0)} ﷼</td><td>${g.deliveryReceipt||"—"}</td></tr>`; });
+    tbody.innerHTML += `<tr><td>${esc(inv.number)}</td><td>${esc(g.tailor||"—")}</td><td><span class="badge ${st.cls}">${st.label}</span></td><td>${fmtSar(garmentSalePrice(g))} ﷼</td><td>${esc(deliveryReceiptOf(inv,g))}</td></tr>`; });
 }
 
 function getCustomers(){

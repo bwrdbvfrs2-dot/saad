@@ -300,10 +300,12 @@ function renderDailyPreview(){
 }
 // a section only appears when it has something in it — an empty day isn't a page of "لا يوجد" tables
 // the delivery's receipt: the one typed at delivery, else the receipt of the payment taken that same day
+// (no screen asks for a separate delivery receipt any more — the payment's voucher / card slip is the receipt)
 function deliveryReceiptOf(inv, g){
   if(g.deliveryReceipt) return String(g.deliveryReceipt);
+  if(g.status!=="تسليم" || !g.deliveredDate) return "—";
   const p = (inv.payments||[]).filter(x=> x.date===g.deliveredDate && ((x.cash||0)+(x.network||0))>0).pop();
-  if(!p) return "—";
+  if(!p) return g.creditDelivered ? "مسلّم بالدين" : "مسدد قبل التسليم";
   return [p.cashReceiptNo ? `كاش ${p.cashReceiptNo}` : "", (p.networkReceiptNo||p.receipt) ? `شبكة ${p.networkReceiptNo||p.receipt}` : ""].filter(Boolean).join(" / ") || "—";
 }
 // what a tailoring payment was for: the deposit taken with the invoice, the balance paid at delivery,
@@ -820,7 +822,7 @@ function exportCustomersCsv(){
 function buildCsvString(){
   const rows=[["رقم الفاتورة","العميل","الجوال","التاريخ","شهر الإصدار","نوع القماش","تطريز","سعر البيع","تكلفة الثوب","الحالة","الخياط","رقم إيصال التسليم"]];
   state.invoices.forEach(inv=> inv.garments.forEach(g=>{
-    rows.push([inv.number, inv.customerName||"", inv.customerMobile||"", inv.date, inv.originMonth, g.fabricType, g.hasEmbroidery?("نعم - "+g.embroideryPrice):"لا", garmentSalePrice(g), garmentCostFor(g,inv).toFixed(2), g.status, g.tailor||"", g.deliveryReceipt||""]);
+    rows.push([inv.number, inv.customerName||"", inv.customerMobile||"", inv.date, inv.originMonth, g.fabricType, g.hasEmbroidery?("نعم - "+g.embroideryPrice):"لا", garmentSalePrice(g), garmentCostFor(g,inv).toFixed(2), g.status, g.tailor||"", deliveryReceiptOf(inv,g)==="—" ? "" : deliveryReceiptOf(inv,g)]);
   }));
   return "\uFEFF"+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
 }
