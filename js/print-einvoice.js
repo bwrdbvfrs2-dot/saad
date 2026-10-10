@@ -459,7 +459,7 @@ ${itemsLines}
 
 الإجمالي: ${total.toFixed(0)} ريال
 المدفوع: ${paid.toFixed(0)} ريال
-المتبقي: ${remaining.toFixed(0)} ريال
+المتبقي: ${fmtSar(remaining)} ريال
 
 شكراً لثقتك بنا 🌹`;
 }

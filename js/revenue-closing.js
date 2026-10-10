@@ -428,7 +428,7 @@ function renderSensitiveFinancials(){
     <div class="stat-card" style="border-color:var(--gold-soft);"><div class="lbl">أمانات معلّقة (عربونات لم تتحرر بعد)</div><div class="val" style="color:var(--gold-soft);">${pendingCustody.toFixed(0)} ﷼</div></div>
     <div class="stat-card sales"><div class="lbl">إجمالي قيمة الفواتير الصادرة (هذا الشهر)</div><div class="val">${issued.total.toFixed(0)} ﷼</div></div>
     <div class="stat-card" style="border-color:var(--gold-soft);"><div class="lbl">عربون الفواتير الصادرة (هذا الشهر)</div><div class="val" style="color:var(--gold-soft);">${issued.paid.toFixed(0)} ﷼</div></div>
-    <div class="stat-card cost"><div class="lbl">باقي الفواتير الصادرة (هذا الشهر)</div><div class="val">${issued.remaining.toFixed(0)} ﷼</div></div>
+    <div class="stat-card cost"><div class="lbl">باقي الفواتير الصادرة (هذا الشهر)</div><div class="val">${fmtSar(issued.remaining)} ﷼</div></div>
     <div class="stat-card"><div class="lbl">جاهزة للبيع (لكل الفترات)</div><div class="val" style="font-size:16px;">${rfs.all.length} ثوب<br><span style="font-size:12px;color:var(--muted);">${rfs.allTotal.toFixed(0)} ﷼ مشطوبة</span></div></div>
     <div class="stat-card"><div class="lbl">جاهزة للبيع (هذا الشهر)</div><div class="val" style="font-size:16px;">${rfs.thisMonth.length} ثوب<br><span style="font-size:12px;color:var(--muted);">${rfs.thisMonthTotal.toFixed(0)} ﷼</span></div></div>
     <div class="stat-card" style="grid-column:span 2;"><div class="lbl">نقطة التعادل (الشهر الحالي)</div><div class="val" style="font-size:15px;color:${remainingToBreakEven>0?'var(--loss)':'var(--profit)'};">${remainingToBreakEven>0?`لسا محتاج ${remainingToBreakEven.toFixed(0)} ﷼`:`تجاوزتها بـ${Math.abs(remainingToBreakEven).toFixed(0)} ﷼`}</div></div>`;
@@ -444,7 +444,7 @@ function renderStuckInvoicesReportInto(targetId){
     if(!rows.length) return `<p class="sub">${emptyMsg}</p>`;
     const total = rows.reduce((a,r)=>a+r.remaining,0);
     return `<div class="table-wrap"><table><thead><tr><th>فاتورة</th><th>العميل</th><th>تاريخ الجاهزية</th><th>أيام التعثر</th><th>يتحوّل للبيع بعد</th><th>المتبقي</th><th></th></tr></thead><tbody>
-      ${rows.map(({inv,g,daysOverdue,remaining})=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")} ${inv.customerMobile?`<a href="${waLink(inv.customerMobile)}" target="_blank" class="icon-btn" title="فتح واتساب"><i data-lucide="message-circle"></i></a>`:""}</td><td>${g.readyDate}</td><td style="color:var(--loss);font-weight:700;">${daysOverdue} يوم</td><td>${Math.max(0, readyToSaleDays()-daysSinceDate(g.readyDate))} يوم</td><td>${remaining.toFixed(0)} ﷼</td><td><button class="btn btn-ghost btn-sm" onclick="switchTab('distribution'); setTimeout(()=>openDistributionInvoiceByNumber('${inv.number.replace(/'/g,"\\'")}'),150);">↩ فتح للتسوية</button></td></tr>`).join("")}
+      ${rows.map(({inv,g,daysOverdue,remaining})=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")} ${inv.customerMobile?`<a href="${waLink(inv.customerMobile)}" target="_blank" class="icon-btn" title="فتح واتساب"><i data-lucide="message-circle"></i></a>`:""}</td><td>${g.readyDate}</td><td style="color:var(--loss);font-weight:700;">${daysOverdue} يوم</td><td>${Math.max(0, readyToSaleDays()-daysSinceDate(g.readyDate))} يوم</td><td>${fmtSar(remaining)} ﷼</td><td><button class="btn btn-ghost btn-sm" onclick="switchTab('distribution'); setTimeout(()=>openDistributionInvoiceByNumber('${inv.number.replace(/'/g,"\\'")}'),150);">↩ فتح للتسوية</button></td></tr>`).join("")}
     </tbody></table></div>
     <p style="margin-top:8px;font-weight:700;">إجمالي: ${rows.length} ثوب متعثر — ${total.toFixed(0)} ﷼ متبقي</p>`;
   };
@@ -486,7 +486,7 @@ function buildInvoiceStatusReport(inv){
   return `<div class="garment-card" style="margin-bottom:10px;">
     <div style="display:flex;justify-content:space-between;"><b>فاتورة ${esc(inv.number)}</b><span class="sub">${esc(inv.customerName||"—")}</span></div>
     <div style="margin-top:6px;">${rows}</div>
-    ${Math.abs(remaining)>0.01 ? `<p style="margin:6px 0 0;color:var(--loss);font-size:12px;">متبقي عليها: ${remaining.toFixed(0)} ريال</p>` : `<p style="margin:6px 0 0;color:var(--profit);font-size:12px;">مسددة بالكامل</p>`}
+    ${Math.abs(remaining)>0.01 ? `<p style="margin:6px 0 0;color:var(--loss);font-size:12px;">متبقي عليها: ${fmtSar(remaining)} ريال</p>` : `<p style="margin:6px 0 0;color:var(--profit);font-size:12px;">مسددة بالكامل</p>`}
   </div>`;
 }
 function handleQuickScan(){
@@ -583,9 +583,9 @@ function showQuickDeliveryPayment(inv, idx, remaining, targetId){
   const target = targetId || "quickScanPicker";
   const idxArg = Array.isArray(idx) ? `[${idx.join(",")}]` : idx;
   $(target).innerHTML = `<div class="garment-card">
-    <p style="margin:0 0 10px;color:var(--loss);font-weight:700;">متبقي على الفاتورة ${remaining.toFixed(0)} ريال — حصّل المبلغ عشان تكمل التسليم</p>
+    <p style="margin:0 0 10px;color:var(--loss);font-weight:700;">متبقي على الفاتورة ${fmtSar(remaining)} ريال — حصّل المبلغ عشان تكمل التسليم</p>
     <div class="row-2">
-      <div class="field"><label>كاش (ريال)</label><input type="number" id="quickPayCash" min="0" value="${remaining.toFixed(0)}"></div>
+      <div class="field"><label>كاش (ريال)</label><input type="number" id="quickPayCash" min="0" value="${+remaining.toFixed(2)}"></div>
       <div class="field"><label>شبكة (ريال)</label><input type="number" id="quickPayNetwork" min="0" value="0"></div>
     </div>
     <div class="field"><label>نوع البطاقة</label><select id="quickPayCard" class="card-type-select">${cardTypeOptionsHtml()}</select></div>
@@ -602,7 +602,7 @@ function confirmQuickDeliveryPayment(invId, idx){
   const receipt = $("quickPayReceipt").value.trim();
   if(network>0 && !receipt){ showToast("أدخل رقم سند الشبكة"); return; }
   const remaining = invoiceRemaining(inv);
-  if(Math.abs((cash+network)-remaining)>0.01){ showToast(`المبلغ لازم يساوي المتبقي بالضبط (${remaining.toFixed(0)} ريال)`); return; }
+  if(Math.round((cash+network)*100) !== Math.round(remaining*100)){ showToast(`المبلغ لازم يساوي المتبقي بالضبط (${fmtSar(remaining)} ريال)`); return; }
   const snapshot = JSON.parse(JSON.stringify(state));
   // the card slip number goes where every report and the receipt search read it (it was saved as receiptNo,
   // which nothing reads), and cash gets its voucher number like any other payment
@@ -667,7 +667,7 @@ function renderDebtsTab(){
     return `<div class="garment-card">
       <span class="tag">فاتورة ${esc(inv.number)} — ${esc(inv.customerName||"—")} (${esc(g.fabricType)})</span>
       <p class="sub" style="margin:6px 0;">القيمة الأصلية: ${g.creditAmount.toFixed(0)} ﷼ — المسدد: ${g.creditPaid.toFixed(0)} ﷼</p>
-      <p style="margin:4px 0 10px;font-weight:700;color:var(--loss);">المتبقي عليه: ${owed.toFixed(0)} ﷼</p>
+      <p style="margin:4px 0 10px;font-weight:700;color:var(--loss);">المتبقي عليه: ${fmtSar(owed)} ﷼</p>
       <div class="row-3">
         <div class="field"><label>كاش (ريال)</label><input type="number" class="debt-cash" data-inv="${inv.id}" data-idx="${idx}" min="0" placeholder="0"></div>
         <div class="field"><label>شبكة (ريال)</label><input type="number" class="debt-network" data-inv="${inv.id}" data-idx="${idx}" min="0" placeholder="0"></div>
@@ -705,9 +705,9 @@ function renderCustomerDebts(){
       return `<div class="garment-card">
         <span class="tag">دين سابق — عميل ${c.code} — ${esc(customerDisplayName(c))}</span>
         <p class="sub" style="margin:6px 0;">الجوال: ${esc(c.mobile)} — سُجّل بتاريخ ${c.openingDebtDate||"—"} بمبلغ ${(c.openingDebt||0).toFixed(0)} ﷼${c.openingDebtNote?` — ${esc(c.openingDebtNote)}`:""}</p>
-        <p style="font-weight:700;color:var(--loss);margin:6px 0;">المبلغ المتبقي: ${remaining.toFixed(0)} ﷼</p>
+        <p style="font-weight:700;color:var(--loss);margin:6px 0;">المبلغ المتبقي: ${fmtSar(remaining)} ﷼</p>
         <div class="row-2">
-          <div class="field" style="margin-bottom:0;"><label>مبلغ السداد (ريال)</label><input type="number" class="od-settle-amount" data-cust="${c.id}" min="0" max="${remaining}" placeholder="${remaining.toFixed(0)}"></div>
+          <div class="field" style="margin-bottom:0;"><label>مبلغ السداد (ريال)</label><input type="number" class="od-settle-amount" data-cust="${c.id}" min="0" max="${remaining}" placeholder="${fmtSar(remaining)}"></div>
           <div class="field" style="margin-bottom:0;"><label>طريقة السداد</label><select class="od-settle-method" data-cust="${c.id}"><option value="cash">كاش</option><option value="network">شبكة — مدى</option><option value="network_visa" ${cardFeeRate("visa")===null?"disabled":""}>شبكة — فيزا / ماستر</option></select></div>
         </div>
         <div class="actions-row" style="margin-top:8px;">
@@ -732,9 +732,9 @@ function renderCustomerDebts(){
       return `<div class="garment-card">
         <span class="tag">فاتورة ${esc(inv.number)} — ${esc(inv.customerName||"—")}</span>
         <p class="sub" style="margin:6px 0;">الجوال: ${esc(inv.customerMobile||"—")} — التاريخ: ${inv.date}</p>
-        <p style="font-weight:700;color:var(--loss);margin:6px 0;">المبلغ المتبقي: ${remaining.toFixed(0)} ﷼</p>
+        <p style="font-weight:700;color:var(--loss);margin:6px 0;">المبلغ المتبقي: ${fmtSar(remaining)} ﷼</p>
         <div class="row-2">
-          <div class="field" style="margin-bottom:0;"><label>مبلغ السداد (ريال)</label><input type="number" class="debt-settle-amount" data-inv="${inv.id}" min="0" max="${remaining}" placeholder="${remaining.toFixed(0)}"></div>
+          <div class="field" style="margin-bottom:0;"><label>مبلغ السداد (ريال)</label><input type="number" class="debt-settle-amount" data-inv="${inv.id}" min="0" max="${remaining}" placeholder="${fmtSar(remaining)}"></div>
           <div class="field" style="margin-bottom:0;"><label>طريقة السداد</label><select class="debt-settle-method" data-inv="${inv.id}"><option value="cash">كاش</option><option value="network">شبكة — مدى</option><option value="network_visa" ${cardFeeRate("visa")===null?"disabled":""}>شبكة — فيزا / ماستر</option></select></div>
         </div>
         <div class="actions-row" style="margin-top:8px;">
@@ -762,7 +762,7 @@ async function settleCustomerDebt(invId){
   const remaining = invoiceRemaining(inv);
   const amount = parseFloat(amountInp.value) || remaining;
   if(amount<=0){ showToast("أدخل مبلغ سداد صحيح"); return; }
-  if(amount - remaining > 0.01){ showToast(`المبلغ أكبر من المتبقي (${remaining.toFixed(0)} ريال)`); return; }
+  if(amount - remaining > 0.01){ showToast(`المبلغ أكبر من المتبقي (${fmtSar(remaining)} ريال)`); return; }
   const method = methodSel.value;
   if(!inv.payments) inv.payments=[];
   const snapshot = JSON.parse(JSON.stringify(state));
@@ -832,14 +832,14 @@ async function writeOffOpeningDebt(custId){
   if(remaining<=0.01){ showToast("ما عليه متبقي"); return; }
   const reason = openingDebtAdminReason(custId);
   if(!reason){ showToast("اكتب سبب الإتلاف"); return; }
-  if(!await showConfirm(`إتلاف المتبقي من الدين السابق على العميل ${cust.code} (${remaining.toFixed(0)} ريال)؟ يختفي من المديونيات والتنبيهات ويبقى مسجّلاً في سجل التدقيق.`)) return;
+  if(!await showConfirm(`إتلاف المتبقي من الدين السابق على العميل ${cust.code} (${fmtSar(remaining)} ريال)؟ يختفي من المديونيات والتنبيهات ويبقى مسجّلاً في سجل التدقيق.`)) return;
   const snapshot = JSON.parse(JSON.stringify(state));
   // the debt was never booked as revenue, so writing it off moves no money and touches no P&L figure
   cust.openingDebtWrittenOff = (cust.openingDebtWrittenOff||0) + remaining;
   cust.openingDebtWriteOffs = (cust.openingDebtWriteOffs||[]).concat([{date:todayStr(), amount:remaining, reason, by:currentUser.username}]);
   if(await saveStateWithRollback(snapshot)){
     logAudit("opening_debt_written_off", {customerCode:cust.code, amount:remaining, reason});
-    showToast(`تم إتلاف ${remaining.toFixed(0)} ريال من الدين السابق للعميل ${cust.code}`);
+    showToast(`تم إتلاف ${fmtSar(remaining)} ريال من الدين السابق للعميل ${cust.code}`);
   }
 }
 async function deleteOpeningDebt(custId){
@@ -864,7 +864,7 @@ async function settleOpeningDebt(custId){
   const amount = parseFloat(document.querySelector(`.od-settle-amount[data-cust="${custId}"]`).value) || remaining;
   const method = document.querySelector(`.od-settle-method[data-cust="${custId}"]`).value;
   if(amount<=0){ showToast("أدخل مبلغ سداد صحيح"); return; }
-  if(amount - remaining > 0.01){ showToast(`المبلغ أكبر من المتبقي (${remaining.toFixed(0)} ريال)`); return; }
+  if(amount - remaining > 0.01){ showToast(`المبلغ أكبر من المتبقي (${fmtSar(remaining)} ريال)`); return; }
   const snapshot = JSON.parse(JSON.stringify(state));
   const payment = {id:newId(), customerId:cust.id, customerCode:cust.code, mobile:cust.mobile, date:todayStr(), cash: method==="cash"?amount:0, network: isNetworkMethod(method)?amount:0, recordedBy: currentUser.username, cardType: isNetworkMethod(method) ? readMethodCard(method) : undefined};
   state.openingDebtPayments.push(payment);
@@ -886,7 +886,7 @@ async function payCreditDebt(invId, idx){
   if(cash<=0 && network<=0){ showToast("أدخل مبلغ كاش أو شبكة"); return; }
   if(network>0 && !receipt){ showToast("أدخل رقم السند لدفعة الشبكة"); return; }
   const owed = creditGarmentOwed(g, inv);
-  if((cash+network) - owed > 0.01){ showToast(`المبلغ أكبر من المتبقي على هذا الثوب (${owed.toFixed(0)} ريال)`); return; }
+  if((cash+network) - owed > 0.01){ showToast(`المبلغ أكبر من المتبقي على هذا الثوب (${fmtSar(owed)} ريال)`); return; }
   const snapshot = JSON.parse(JSON.stringify(state));
   const cardSel = document.querySelector(`.debt-card[data-inv="${invId}"][data-idx="${idx}"]`);
   const payment = {id:newId(), date:todayStr(), cash, network, receipt, networkReceiptNo: network>0 ? receipt : "", cashReceiptNo: cash>0 ? nextVoucherNo() : null, discount:0, cardType: network>0 ? readCardType(cardSel) : undefined};
@@ -918,7 +918,7 @@ async function saveDistribution(inv){
     if(intent.newStatus==="جاهز" && state.settings.qcEnabled && !g.qcPassedDate){ showToast(`ثوب ${i+1} لازم يجتاز فحص الجودة (من شاشة فحص الجودة) قبل ما يصير "جاهز"`); return; }
     if(intent.newStatus==="تسليم"){
       if(g.status!=="جاهز"){ showToast(`لا يمكن تسليم ثوب ${i+1} قبل اكتمال التفصيل فعلياً ووصوله لمرحلة "جاهز"`); return; }
-      if(Math.abs(remaining)>0.01){ showToast(`لا يمكن التسليم قبل سداد كامل الفاتورة (المتبقي ${remaining.toFixed(0)} ريال)`); return; }
+      if(Math.abs(remaining)>0.01){ showToast(`لا يمكن التسليم قبل سداد كامل الفاتورة (المتبقي ${fmtSar(remaining)} ريال)`); return; }
     }
   }
   const changes = inv.garments.map((g,i)=>({g, i, newStatus: intents[i].newStatus})).filter(c=>c.newStatus!==c.g.status);
