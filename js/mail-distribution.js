@@ -499,8 +499,6 @@ async function saveInvoice(){
         reverseLoyaltyPoints(custMobile, pointsToRedeem);
         state.loyaltyLedger.push({id:Date.now()+"-r", date, mobile:custMobile, type:"redeem", points:pointsToRedeem, invoiceNumber:number});
       }
-      invData.loyaltyPointsEarned = appliedPromoCode ? 0 : earnLoyaltyPoints(custMobile, saleTotal);
-      if(invData.loyaltyPointsEarned>0) state.loyaltyLedger.push({id:Date.now()+"-e", date, mobile:custMobile, type:"earn", points:invData.loyaltyPointsEarned, invoiceNumber:number});
     }
     // promo codes and the direct discount apply to every customer — VIPs are only kept out of the
     // loyalty program (tiers / points) above. This used to sit inside that VIP exclusion, so a VIP's
@@ -532,6 +530,15 @@ async function saveInvoice(){
     if(directDiscountVal>0.01){
       invData.payments.push({id:Date.now()+"-direct", date: isNewInvoice ? date : todayStr(), cash:0, network:0, receipt:"", discount:directDiscountVal, auto:true, note:"خصم مباشر", recordedBy:currentUser.username});
     }
+  }
+  // loyalty points on what the customer actually pays: the offer already lowered the thobe's price, and
+  // every discount on the invoice (tier, points redeemed, direct) is taken off first — a discount earns
+  // nothing (it used to earn on the full price). A promo-code invoice earns none, as before.
+  if(isNewInvoice && !isCustomerVip(custMobile)){
+    const saleTotal = garments.filter(g=>g.status!=="ملغي").reduce((a,g)=>a+garmentSalePrice(g),0);
+    const discounts = invData.payments.reduce((a,p)=>a+(p.discount||0),0);
+    invData.loyaltyPointsEarned = appliedPromoCode ? 0 : earnLoyaltyPoints(custMobile, saleTotal - discounts);
+    if(invData.loyaltyPointsEarned>0) state.loyaltyLedger.push({id:Date.now()+"-e", date, mobile:custMobile, type:"earn", points:invData.loyaltyPointsEarned, invoiceNumber:number});
   }
   if(isNewInvoice && state.settings.einvoiceEnabled){
     invData.einvoice = await generateEinvoiceForNewInvoice(invData);

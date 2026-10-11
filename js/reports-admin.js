@@ -1723,6 +1723,7 @@ $("setMeasureUnit").addEventListener("change", ()=>{
   showToast(`تم تحويل كل الكميات إلى ${newUnit==="yard"?"اليارده":"المتر"}`);
 });
 $("setLoyEarnRate").addEventListener("input", ()=>{ state.settings.loyaltyEarnRate=parseFloat($("setLoyEarnRate").value)||1; saveState(); });
+$("setLoyEarnPoints").addEventListener("input", ()=>{ const v=parseFloat($("setLoyEarnPoints").value); state.settings.loyaltyEarnPoints = v>0 ? v : 1; saveState(); });
 $("setLoyRedeemRate").addEventListener("input", ()=>{ state.settings.loyaltyRedeemRate=parseFloat($("setLoyRedeemRate").value)||0; saveState(); });
 $("setLoyMinRedeem").addEventListener("input", ()=>{ state.settings.loyaltyMinRedeem=parseFloat($("setLoyMinRedeem").value)||0; saveState(); });
 $("setLoySilverThreshold").addEventListener("input", ()=>{ state.settings.loyaltySilverThreshold=parseFloat($("setLoySilverThreshold").value)||0; saveState(); });

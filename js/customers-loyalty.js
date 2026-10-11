@@ -669,14 +669,16 @@ function earnLoyaltyPoints(mobile, saleAmount){
   const cust = findCustomerByMobile(mobile);
   if(!cust) return 0;
   const tier = customerTier(mobile);
-  const points = Math.floor(saleAmount / (state.settings.loyaltyEarnRate||10)) * tierMultiplier(tier);
-  cust.loyaltyPoints = (cust.loyaltyPoints||0) + points;
+  // every full «كل كم ريال» earns «كم نقطة» (0.5 per 10 riyals → 260 earns 13)
+  const per = state.settings.loyaltyEarnPoints>0 ? state.settings.loyaltyEarnPoints : 1;
+  const points = Math.round(Math.floor(Math.max(0, saleAmount) / (state.settings.loyaltyEarnRate||10)) * per * tierMultiplier(tier) * 100)/100;
+  cust.loyaltyPoints = Math.round(((cust.loyaltyPoints||0) + points)*100)/100;
   return points;
 }
 function reverseLoyaltyPoints(mobile, points){
   if(!mobile || !points) return;
   const cust = findCustomerByMobile(mobile);
-  if(cust) cust.loyaltyPoints = Math.max(0, (cust.loyaltyPoints||0) - points);
+  if(cust) cust.loyaltyPoints = Math.max(0, Math.round(((cust.loyaltyPoints||0) - points)*100)/100);
 }
 function reverseInvoiceLoyaltyIfNeeded(inv, reasonNote){
   if(inv.loyaltyPointsEarned && !inv.loyaltyReversed){
