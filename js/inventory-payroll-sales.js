@@ -1328,7 +1328,7 @@ function computeItemSalesTotals(){
     if(g.status==="ملغي" || !g.itemCardId || g.stockApplied!=="consumed") return;
     if(!totals[g.itemCardId]) totals[g.itemCardId] = {qty:0, revenue:0};
     totals[g.itemCardId].qty += g.qtyUsed||0;
-    totals[g.itemCardId].revenue += garmentSalePrice(g);
+    totals[g.itemCardId].revenue += garmentNetSalePrice(g, inv);
   }));
   state.salesInvoices.forEach(inv=> inv.items.forEach(it=>{
     if(!totals[it.itemCardId]) totals[it.itemCardId] = {qty:0, revenue:0};
@@ -2023,10 +2023,10 @@ function renderSearch(){
   const fMin = num("searchPriceMin"), fMax = num("searchPriceMax");
   const exactIds = q ? searchExactInvoiceIds(invs, q) : null;
   invs.forEach(inv=> inv.garments.forEach(g=>{
-    statusTotals[g.status].count++; statusTotals[g.status].amount += garmentSalePrice(g);
+    statusTotals[g.status].count++; statusTotals[g.status].amount += garmentNetSalePrice(g, inv);
     if(g.hasEmbroidery){ embroCount++; embroRevenue += (g.embroideryPrice||0); }
     if(q && !(exactIds ? exactIds.has(inv.id) : searchTextMatches(inv, g, q))) return;
-    const price = garmentSalePrice(g);
+    const price = garmentNetSalePrice(g, inv); // after the invoice's discount
     if(fTailor && (fTailor==="__none__" ? !!g.tailor : g.tailor!==fTailor)) return;
     if(fStatus && g.status!==fStatus) return;
     if(fMin!==null && price < fMin - 0.001) return;

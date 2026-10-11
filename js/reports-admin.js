@@ -223,7 +223,7 @@ function showCustomerReport(mobile, filterName){
     totalSale+=s; totalPaid+=paid; totalDiscount+=disc;
     html += `<div class="garment-card"><span class="tag">فاتورة ${esc(inv.number)} — ${inv.date||"—"} (${monthDisplay(inv.originMonth)})</span>
       <table style="margin-top:8px;"><thead><tr><th>نوع القماش</th><th>السعر</th><th>الحالة</th></tr></thead><tbody>
-      ${inv.garments.map(g=>`<tr><td>${esc(g.fabricType)}</td><td>${garmentSalePrice(g).toFixed(0)} ﷼</td><td>${STATUSES.find(x=>x.v===g.status)?.label||g.status}</td></tr>`).join("")}
+      ${inv.garments.map(g=>`<tr><td>${esc(g.fabricType)}</td><td>${netPriceCell(g, inv)}</td><td>${STATUSES.find(x=>x.v===g.status)?.label||g.status}</td></tr>`).join("")}
       </tbody></table>
       <p class="sub" style="margin:8px 0 4px;">الدفعات:</p>
       ${(inv.payments&&inv.payments.length) ? `<table><thead><tr><th>التاريخ</th><th>كاش</th><th>سند الكاش</th><th>شبكة</th><th>سند الشبكة</th><th>خصم</th></tr></thead><tbody>
@@ -331,7 +331,7 @@ function showInvoiceDetails(invId){
   }).join("") || `<tr><td colspan="7">لا توجد دفعات</td></tr>`;
   const thobes = inv.garments.map((g,i)=>{
     const st = STATUSES.find(x=>x.v===g.status) || {label:g.status, cls:""};
-    return `<tr><td>${i+1}</td><td>${esc(g.fabricType||"—")}${g.category?`<br><span class="sub">${esc(g.category)}</span>`:""}</td><td>${fmtSar(garmentSalePrice(g))} ﷼</td><td>${usr(g.tailor)}</td><td><span class="badge ${st.cls}">${esc(st.label)}</span>${g.creditDelivered?'<br><span class="sub">مسلّم بالدين</span>':""}</td>
+    return `<tr><td>${i+1}</td><td>${esc(g.fabricType||"—")}${g.category?`<br><span class="sub">${esc(g.category)}</span>`:""}</td><td>${netPriceCell(g, inv)}</td><td>${usr(g.tailor)}</td><td><span class="badge ${st.cls}">${esc(st.label)}</span>${g.creditDelivered?'<br><span class="sub">مسلّم بالدين</span>':""}</td>
       <td>${d(inv.date)}</td><td>${d(g.cutDate)}${g.cutAuto?'<br><span class="sub">تقديري</span>':""}</td><td>${d(g.tailorCompletedDate)}</td><td>${d(g.qcPassedDate)}</td><td>${d(g.readyDate)}</td><td>${d(g.deliveredDate)}${g.deliveredBy?`<br><span class="sub">${esc(g.deliveredBy)}</span>`:""}</td><td>${g.status==="ملغي"?d(g.cancelledDate):"—"}</td><td>${esc(deliveryReceiptOf(inv,g))}</td></tr>`;
   }).join("");
   $("invoiceDetailsBody").innerHTML = `<h3 style="margin:0 0 6px;text-align:center;">تفاصيل الفاتورة #${esc(inv.number)}</h3>
@@ -385,9 +385,9 @@ function buildDailyReportHtml(day, r, username){
     r.newInvoices.map(inv=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${inv.garments.length}</td><td>${sar(invoiceSaleTotal(inv))}</td></tr>`),
     {foot:`<td colspan="3">الإجمالي</td><td>${sar(r.newInvoices.reduce((a,i)=>a+invoiceSaleTotal(i),0))}</td>`}));
   parts.push(dailySection("تسليمات — من الشهر الحالي", ["رقم الفاتورة","نوع القماش","السعر","رقم الإيصال"],
-    r.deliveredThisMonth.map(({inv,g})=>`<tr><td>${esc(inv.number)}</td><td>${esc(g.fabricType)}</td><td>${sar(garmentSalePrice(g))}</td><td>${esc(deliveryReceiptOf(inv,g))}</td></tr>`)));
+    r.deliveredThisMonth.map(({inv,g})=>`<tr><td>${esc(inv.number)}</td><td>${esc(g.fabricType)}</td><td>${sar(garmentNetSalePrice(g, inv))}</td><td>${esc(deliveryReceiptOf(inv,g))}</td></tr>`)));
   parts.push(dailySection("تسليمات — متعثرة من أشهر سابقة", ["رقم الفاتورة","الشهر الأصلي","نوع القماش","السعر","رقم الإيصال"],
-    r.deliveredOverdue.map(({inv,g})=>`<tr><td>${esc(inv.number)}</td><td>${monthDisplay(inv.originMonth)}</td><td>${esc(g.fabricType)}</td><td>${sar(garmentSalePrice(g))}</td><td>${esc(deliveryReceiptOf(inv,g))}</td></tr>`)));
+    r.deliveredOverdue.map(({inv,g})=>`<tr><td>${esc(inv.number)}</td><td>${monthDisplay(inv.originMonth)}</td><td>${esc(g.fabricType)}</td><td>${sar(garmentNetSalePrice(g, inv))}</td><td>${esc(deliveryReceiptOf(inv,g))}</td></tr>`)));
   if(!username) parts.push(dailySection("تسليمات الجرد الافتتاحي", ["اسم العميل","الجوال","الوصف","المتبقي وقت التسليم"],
     r.legacyDelivered.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.mobile)}</td><td>${esc(x.desc)}</td><td>${x.remaining?sar(x.remaining):"—"}</td></tr>`)));
   // every amount received, tailoring payments and ready-made sales together, each with what it was for
@@ -784,7 +784,7 @@ function showGarmentInventory(){
   let html = `<h2>${title}</h2>`;
   html += `<p>إجمالي العدد: <b>${rows.length}</b></p>`;
   html += `<table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>الجوال</th><th>نوع القماش</th><th>الخياط</th><th>السعر</th><th>الحالة</th><th>شهر الإصدار</th></tr></thead><tbody>`;
-  rows.forEach(({inv,g})=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${esc(g.fabricType)}</td><td>${esc(g.tailor||"—")}</td><td>${garmentSalePrice(g).toFixed(0)} ﷼</td><td>${STATUSES.find(s=>s.v===g.status)?.label||g.status}</td><td>${monthDisplay(inv.originMonth)}</td></tr>`);
+  rows.forEach(({inv,g})=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${esc(g.fabricType)}</td><td>${esc(g.tailor||"—")}</td><td>${fmtSar(garmentNetSalePrice(g, inv))} ﷼</td><td>${STATUSES.find(s=>s.v===g.status)?.label||g.status}</td><td>${monthDisplay(inv.originMonth)}</td></tr>`);
   if(!rows.length) html+=`<tr><td colspan="8" style="text-align:center;">لا يوجد</td></tr>`;
   html += `</tbody></table>`;
   $("garmentInventoryView").innerHTML = html + `<button class="btn btn-ghost btn-sm" id="printGarmentInventoryBtn" style="margin-top:10px;">طباعة الجرد</button>`;
@@ -798,9 +798,9 @@ function showNoFabricWageReport(){
   });
   const title = `تقرير أجرة تفصيل بدون قماش — ${periodLabel("noFabricWage")}`;
   let html = `<h2>${title}</h2>`;
-  html += `<p>إجمالي عدد الثياب: <b>${rows.length}</b> — إجمالي الأجرة: <b>${rows.reduce((a,{g})=>a+garmentSalePrice(g),0).toFixed(0)} ﷼</b></p>`;
+  html += `<p>إجمالي عدد الثياب: <b>${rows.length}</b> — إجمالي الأجرة: <b>${fmtSar(rows.reduce((a,{inv,g})=>a+garmentNetSalePrice(g, inv),0))} ﷼</b></p>`;
   html += `<table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>الجوال</th><th>الخياط</th><th>الأجرة</th><th>الحالة</th><th>شهر الإصدار</th></tr></thead><tbody>`;
-  rows.forEach(({inv,g})=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${esc(g.tailor||"—")}</td><td>${garmentSalePrice(g).toFixed(0)} ﷼</td><td>${STATUSES.find(s=>s.v===g.status)?.label||g.status}</td><td>${monthDisplay(inv.originMonth)}</td></tr>`);
+  rows.forEach(({inv,g})=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${esc(g.tailor||"—")}</td><td>${fmtSar(garmentNetSalePrice(g, inv))} ﷼</td><td>${STATUSES.find(s=>s.v===g.status)?.label||g.status}</td><td>${monthDisplay(inv.originMonth)}</td></tr>`);
   if(!rows.length) html+=`<tr><td colspan="7" style="text-align:center;">لا يوجد</td></tr>`;
   html += `</tbody></table>`;
   $("noFabricWageView").innerHTML = html + `<button class="btn btn-ghost btn-sm" id="printNoFabricWageBtn" style="margin-top:10px;">طباعة التقرير</button>`;
@@ -874,7 +874,7 @@ function printUndelivered(){
     inv.garments.forEach(g=>{ if(g.status!=="تسليم"&&g.status!=="ملغي") rows.push({inv,g}); });
   });
   let html = `<h2>تقرير الثياب غير المسلّمة — ${periodLabel("undel")}</h2><table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>الجوال</th><th>نوع القماش</th><th>الخياط</th><th>السعر</th><th>الحالة</th><th>شهر الإصدار</th></tr></thead><tbody>`;
-  rows.forEach(({inv,g})=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${esc(g.fabricType)}</td><td>${esc(g.tailor||"—")}</td><td>${garmentSalePrice(g).toFixed(0)} ﷼</td><td>${STATUSES.find(s=>s.v===g.status).label}</td><td>${monthDisplay(inv.originMonth)}</td></tr>`);
+  rows.forEach(({inv,g})=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${esc(g.fabricType)}</td><td>${esc(g.tailor||"—")}</td><td>${fmtSar(garmentNetSalePrice(g, inv))} ﷼</td><td>${STATUSES.find(s=>s.v===g.status).label}</td><td>${monthDisplay(inv.originMonth)}</td></tr>`);
   if(!rows.length) html+=`<tr><td colspan="8">لا يوجد</td></tr>`;
   html += `</tbody></table><p>إجمالي: ${rows.length}</p>`;
   $("undeliveredReportView").innerHTML = html + `<button class="btn btn-ghost btn-sm" id="printUndeliveredNowBtn" style="margin-top:10px;">طباعة</button>`;
@@ -900,7 +900,7 @@ function exportCustomersCsv(){
 function buildCsvString(){
   const rows=[["رقم الفاتورة","العميل","الجوال","التاريخ","شهر الإصدار","نوع القماش","تطريز","سعر البيع","تكلفة الثوب","الحالة","الخياط","رقم إيصال التسليم"]];
   state.invoices.forEach(inv=> inv.garments.forEach(g=>{
-    rows.push([inv.number, inv.customerName||"", inv.customerMobile||"", inv.date, inv.originMonth, g.fabricType, g.hasEmbroidery?("نعم - "+g.embroideryPrice):"لا", garmentSalePrice(g), garmentCostFor(g,inv).toFixed(2), g.status, g.tailor||"", deliveryReceiptOf(inv,g)==="—" ? "" : deliveryReceiptOf(inv,g)]);
+    rows.push([inv.number, inv.customerName||"", inv.customerMobile||"", inv.date, inv.originMonth, g.fabricType, g.hasEmbroidery?("نعم - "+g.embroideryPrice):"لا", garmentNetSalePrice(g, inv), garmentCostFor(g,inv).toFixed(2), g.status, g.tailor||"", deliveryReceiptOf(inv,g)==="—" ? "" : deliveryReceiptOf(inv,g)]);
   }));
   return "\uFEFF"+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
 }
