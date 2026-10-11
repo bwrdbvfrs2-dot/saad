@@ -90,14 +90,15 @@ function renderAll(){
   const showProfit = !!currentUser && (currentUser.role==="مدير" || currentUser.role==="محاسب");
   if($("invProfitTh")) $("invProfitTh").style.display = showProfit ? "" : "none";
   curInvoices.forEach(inv=>{
-    const s=invoiceSaleTotal(inv), paid=invoicePaid(inv), rem=invoiceRemaining(inv);
+    // the total after the invoice's discounts, so total − paid = remaining (it showed the full price)
+    const gross=invoiceSaleTotal(inv), disc=invoiceDiscountTotal(inv), s=gross-disc, paid=invoicePaid(inv), rem=invoiceRemaining(inv);
     const profitData = invoiceProfitColumnData(inv);
     const tr=document.createElement("tr"); tr.className="invoice-row";
     const profitCell = !profitData ? `<span class="sub">—</span>`
       : `<span class="${profitData.value>=0?'profit-pos':'profit-neg'}">${fmtSar(profitData.value)} ﷼</span><br><span class="sub" style="font-size:10px;">${profitData.mode==="expected"?"الربح المتوقع (بعد التسليم)":"الربح والخسارة (قبل التسليم)"}</span>`;
     const byLine = `<br><span class="sub" style="font-size:10px;">سجّلها: ${esc(inv.createdBy||"—")}${inv.lastEditedBy?` — آخر تعديل: ${esc(inv.lastEditedBy)}${inv.lastEditedAt?" "+inv.lastEditedAt.slice(0,10):""}`:""}</span>`;
     tr.innerHTML = `<td><b>${esc(inv.number)}</b></td><td>${esc(inv.customerName||"—")}${byLine}</td><td>${inv.date}</td>
-      <td>${fmtSar(s)} ﷼</td><td>${fmtSar(paid)} ﷼</td><td>${fmtSar(rem)} ﷼</td>
+      <td>${fmtSar(s)} ﷼${disc>0.004?`<br><span class="sub" style="font-size:10px;">قبل الخصم ${fmtSar(gross)} — خصم ${fmtSar(disc)}</span>`:""}</td><td>${fmtSar(paid)} ﷼</td><td>${fmtSar(rem)} ﷼</td>
       ${showProfit ? `<td>${profitCell}</td>` : ""}
       <td style="white-space:nowrap;">${isAdmin?`<button class="btn btn-ghost btn-sm" style="color:var(--gold-soft);border-color:var(--gold-soft);" onclick="editInvoice('${inv.id}')" title="تعديل الفاتورة">تعديل</button> <button class="btn btn-ghost btn-sm" onclick="createInvoiceReturn('${inv.id}')" title="تسجيل مرتجع">مرتجع</button>`:""}<button class="icon-btn" onclick="editInvoiceMeasurements('${inv.id}')" title="تعديل المقاس"><i data-lucide="ruler"></i></button><button class="icon-btn" onclick="printCustomerReceipt('${inv.id}')" title="طباعة فاتورة العميل"><i data-lucide="printer"></i></button><button class="icon-btn" onclick="shareReceiptViaWhatsApp('${inv.id}')" title="إرسال الفاتورة واتساب"><i data-lucide="send"></i></button>${inv.einvoice?`<button class="icon-btn" onclick="showEinvoiceDetails('${inv.id}')" title="بيانات الفوترة الإلكترونية"><i data-lucide="receipt"></i></button>`:""}</td>`;
     body.appendChild(tr);

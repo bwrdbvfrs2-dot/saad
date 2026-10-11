@@ -320,17 +320,12 @@ function buildMannequinPreviewHtml(m){
   if(!garmentTypeItem || !garmentTypeItem.image || !garmentTypeItem.imageBack){
     return `<div class="note-box" style="font-size:11px;text-align:center;">اختر "نوع الثوب" أول عشان تظهر صورة المنكل</div>`;
   }
-  const collarItem = (state.collarTypes||[]).find(o=>o.code===m.collarType);
-  const chestPocketItem = (state.chestPocketTypes||[]).find(o=>o.code===m.chestPocketType);
-  const jabzourItem = (state.jabzourTypes||[]).find(o=>o.code===m.jabzourType);
-  const cufflinkItem = (state.cufflinkTypes||[]).find(o=>o.code===m.cufflinkType);
+  // the plain mannequin only — the collar / pocket / placket / cuff pictures no longer sit on top of it
   const view = (src, isFront, label)=> `<div style="position:relative;background:#fff;border-radius:8px;overflow:hidden;margin-bottom:8px;">
       <img src="${src}" style="width:100%;display:block;">
-      ${isFront ? mannequinFrontOverlayHtml(collarItem, chestPocketItem, jabzourItem, cufflinkItem) : ""}
       <div style="position:absolute;bottom:2px;left:2px;background:rgba(0,0,0,.55);color:#fff;font-size:9px;padding:1px 5px;border-radius:4px;">${label}</div>
     </div>`;
   return `<div>${view(garmentTypeItem.image,true,"أمام")}${view(garmentTypeItem.imageBack,false,"خلف")}
-    <p class="sub" style="font-size:10px;margin:0;">هذي معاينة للتأكد من الأنواع المختارة — كرت القصاص المطبوع يعرض أرقام القياسات على المنكل بدل الصور.</p>
   </div>`;
 }
 function renderMeasurementPanelHtml(g, idx){
