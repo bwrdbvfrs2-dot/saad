@@ -43,6 +43,7 @@ function renderAll(){
   if($("setQcEnabled")) $("setQcEnabled").checked = !!state.settings.qcEnabled;
   if($("setCuttingCardTemplate")) $("setCuttingCardTemplate").value = state.settings.cuttingCardTemplate||"default";
   $("setLoyEarnRate").value = state.settings.loyaltyEarnRate;
+  $("setLoyEarnPoints").value = state.settings.loyaltyEarnPoints>0 ? state.settings.loyaltyEarnPoints : 1;
   $("setLoyRedeemRate").value = state.settings.loyaltyRedeemRate;
   $("setLoyMinRedeem").value = state.settings.loyaltyMinRedeem;
   $("setLoySilverThreshold").value = state.settings.loyaltySilverThreshold;

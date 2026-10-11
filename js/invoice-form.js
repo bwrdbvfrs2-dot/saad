@@ -368,6 +368,58 @@ async function submitVoucher(){
     showToast(`تم تسجيل سند ${type==="receipt"?"قبض":"صرف"} رقم ${voucherNo}`);
   }
 }
+// every numbered document in one list, for the lookup by number: سند قبض (cash taken anywhere, manual
+// receipts, a transfer received), سند صرف (expenses, refunds, supplier / salary / advance payments, paid
+// purchases, manual payment vouchers) and card slips
+function allVoucherEntries(){
+  const out = [];
+  const boxName = id=>{ const b = findCashBox(id); return b ? `${b.owner} — ${b.name} (${typeLabel(b.type)})` : "—"; };
+  const mainBox = (u,t)=>{ const b = u ? mainBoxOf(u,t) : null; return b ? boxName(b.id) : "—"; };
+  const push = (kind, no, e)=>{ if(no!==null && no!==undefined && no!=="") out.push({kind, no:String(no), ...e}); };
+  const pay = (p, title, extra)=>{
+    if((p.cash||0)>0) push("قبض", p.cashReceiptNo, {date:p.date, amount:p.cash, title, by:p.recordedBy, box:mainBox(p.recordedBy,"cash"), ...extra});
+    if((p.network||0)>0) push("شبكة", p.networkReceiptNo||p.receipt, {date:p.date, amount:p.network, title: title+(p.cardType==="visa"?" — فيزا":" — مدى"), by:p.recordedBy, box:mainBox(p.recordedBy,"network"), ...extra});
+  };
+  state.invoices.forEach(inv=> (inv.payments||[]).forEach(p=> pay(p, `دفعة ${paymentKindLabel(inv,p)||""} — فاتورة تفصيل #${inv.number} — ${inv.customerName||"—"} ${inv.customerMobile||""}`, {invId:inv.id})));
+  (state.salesInvoices||[]).forEach(x=>{ if(x.payment) pay({...x.payment, date:x.payment.date||x.date, recordedBy:x.payment.recordedBy||x.recordedBy}, `فاتورة مبيعات #${x.number} — ${x.customerName||"—"}`); });
+  (state.openingDebtPayments||[]).forEach(p=> pay(p, `تحصيل دين سابق — عميل ${p.customerCode||""} ${p.mobile||""}`));
+  (state.repairs||[]).forEach(r=>{
+    (r.payments||[]).forEach(p=> pay(p, `دفعة صيانة ص-${r.number}${r.customerName?" — "+r.customerName:""}`));
+    (r.refunds||[]).forEach(f=> push("صرف", f.voucherNo, {date:f.date, amount:(f.cash||0)+(f.network||0), title:`استرداد صيانة ملغاة ص-${r.number}`, by:f.owner, box:mainBox(f.owner, f.cash?"cash":"network")}));
+  });
+  (state.legacyPayments||[]).forEach(l=> push("قبض", l.voucherNo, {date:l.date, amount:l.amount, title:"تحصيل قطعة قديمة", by:l.recordedBy, box:mainBox(l.recordedBy,"cash")}));
+  (state.vouchers||[]).forEach(v=> push(v.type==="receipt"?"قبض":"صرف", v.voucherNo, {date:v.date, amount:v.amount, title:`سند ${v.type==="receipt"?"قبض":"صرف"} يدوي — ${v.type==="receipt"?"استلمنا من":"صرفنا لـ"} ${v.party||"—"}`, note:v.reason, by:v.recordedBy, box:boxName(v.boxId), voucherId:v.id}));
+  (state.transferRequests||[]).forEach(t=> push("قبض", t.voucherNumber, {date:t.resolvedAt, amount:t.amount, title:`تحويل مستلم من ${t.fromOwner||""} إلى ${t.toOwner||""}`, note:t.purpose, by:t.toOwner, box:mainBox(t.toOwner, transferBoxType(t))}));
+  (state.expenses||[]).forEach(e=>{ const cat = state.expenseCategories.find(c=>c.id===e.categoryId);
+    push("صرف", e.voucherNo, {date:e.date, amount:e.amount, title:`مصروف — ${cat?cat.label:"بدون تصنيف"}${e.subItemLabel?" / "+e.subItemLabel:""}`, note:[e.paidTo&&("دفع لـ "+e.paidTo), e.storeName, e.invoiceNumber&&("فاتورة المورد "+e.invoiceNumber), e.notes].filter(Boolean).join(" — "), by:e.recordedBy, box:boxName(e.sourceBoxId)}); });
+  (state.invoiceReturns||[]).forEach(r=> push("صرف", r.voucherNo, {date:r.date, amount:r.refundAmount, title:`استرداد مرتجع فاتورة #${r.invoiceNumber}`, note:r.reason, by:r.recordedBy, box:boxName(r.boxId), invId:r.invoiceId}));
+  (state.salesReturns||[]).forEach(r=> push("صرف", r.voucherNo, {date:r.date, amount:r.refundAmount, title:`استرداد مرتجع مبيعات #${r.saleInvoiceNumber}`, note:r.reason, by:r.recordedBy, box:boxName(r.boxId)}));
+  (state.suppliers||[]).forEach(su=> (su.payments||[]).forEach(sp=> push("صرف", sp.voucherNo, {date:sp.date, amount:sp.amount, title:`تسديد ${su.kind||"مورد"} — ${su.name}`, by:sp.recordedBy, box:boxName(sp.boxId)})));
+  (state.payrollLedger||[]).forEach(e=>{ if(e.type==="payment"||e.type==="advance") push("صرف", e.voucherNo, {date:e.date, amount:e.amount, title:`${e.type==="advance"?"سلفة":"راتب"} — ${e.username}`, note:e.note, by:e.recordedBy, box:boxName(e.boxId)}); });
+  (state.purchases||[]).forEach(p=>{ if(p.payStatus==="paid"){ const su = state.suppliers.find(x=>x.id===p.supplierId); push("صرف", p.voucherNo, {date:p.date, amount:p.total, title:`فاتورة شراء ${p.invoiceNo||""}${su?" — "+su.name:""}`, by:p.recordedBy, box:boxName(p.sourceBoxId)}); } });
+  return out;
+}
+function renderVoucherLookup(){
+  const el = $("voucherLookupResults"); if(!el || !currentUser) return;
+  const q = searchNorm($("voucherLookupNo").value), kind = $("voucherLookupType").value;
+  if(!q){ el.innerHTML = ""; return; }
+  // the manager and the accountant see every document; anyone else only the ones they recorded
+  const seeAll = currentUser.role==="مدير" || currentUser.role==="محاسب";
+  const hits = allVoucherEntries().filter(e=> searchNorm(e.no)===q && (!kind || e.kind===kind) && (seeAll || e.by===currentUser.username));
+  if(!hits.length){ el.innerHTML = `<p class="sub">ما فيه سند بهذا الرقم${seeAll?"":" من السندات اللي سجلتها أنت"}.</p>`; return; }
+  const color = k=> k==="صرف" ? "var(--loss)" : (k==="قبض" ? "var(--profit)" : "var(--info)");
+  el.innerHTML = hits.map(e=>`<div class="garment-card" style="margin-bottom:8px;">
+      <span class="tag" style="background:transparent;border:1px solid ${color(e.kind)};color:${color(e.kind)};">${e.kind==="شبكة"?"إيصال شبكة":"سند "+e.kind} رقم ${esc(e.no)}</span>
+      <p style="margin:8px 0 4px;font-weight:700;">${esc(e.title)}</p>
+      <p class="sub" style="margin:2px 0;">المبلغ: <b>${fmtSar(e.amount||0)} ﷼</b> — التاريخ: ${esc(e.date||"—")}</p>
+      <p class="sub" style="margin:2px 0;">سجّله: ${esc(e.by||"—")} — الصندوق: ${esc(e.box||"—")}</p>
+      ${e.note?`<p class="sub" style="margin:2px 0;">البيان: ${esc(e.note)}</p>`:""}
+      <div class="actions-row" style="margin-top:6px;">
+        ${e.invId && state.invoices.some(i=>i.id===e.invId) ? `<button class="btn btn-ghost btn-sm" onclick="showInvoiceDetails('${e.invId}')">تفاصيل الفاتورة</button>` : ""}
+        ${e.voucherId ? `<button class="btn btn-ghost btn-sm" onclick="printVoucher('${e.voucherId}')">طباعة السند</button>` : ""}
+      </div>
+    </div>`).join("") + (hits.length>1 ? `<p class="sub">طلع أكثر من سند بنفس الرقم — اختر النوع (قبض / صرف / شبكة) من فوق عشان تحدد.</p>` : "");
+}
 function renderVouchersLog(){
   const el = $("vouchersLog");
   if(!el || !currentUser) return;
