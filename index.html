@@ -1366,6 +1366,14 @@
 <div class="panel">
   <h2>تقرير النمو</h2>
   <p class="sub">يقارن كل شهر مقفل بالشهر اللي قبله (نمو شهري) وبنفس الشهر بالسنة اللي قبلها (نمو سنوي) — بناءً على أرقام الإقفال المجمّدة فقط.</p>
+  <h3 style="margin:14px 0 6px;font-size:14px;">المبيعات اليومية — نفس اليوم عبر أسابيع الشهر</h3>
+  <p class="sub">كل سطر يوم من أيام الأسبوع، وكل عمود أسبوع من الشهر (الأسبوع الأول = أيام 1-7، الثاني 8-14، الثالث 15-21، الرابع 22-28، الخامس 29-31). تحت كل رقم نسبة تغيّره عن نفس اليوم بالأسبوع اللي قبله.</p>
+  <div class="row-2">
+    <div class="field"><label>الشهر</label><select id="weekdayGrowthMonth"></select></div>
+    <div class="field"><label>المقياس</label><select id="weekdayGrowthMetric"><option value="sales">المبيعات المفوترة (تفصيل + جاهز)</option><option value="collected">المقبوض فعلياً (كاش + شبكة)</option></select></div>
+  </div>
+  <div id="weekdayGrowthView"></div>
+  <div class="stitch"></div>
   <div id="inventoryGrowthCard"></div>
   <div class="stitch"></div>
   <h3 style="margin:18px 0 10px;font-size:14px;">نمو حجم الشغل (مبيعات وثياب)</h3>

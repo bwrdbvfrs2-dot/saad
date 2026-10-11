@@ -1722,7 +1722,59 @@ function renderPeriodRollups(reports){
     rows.map(p=>`<tr><td><b>${p.label}</b></td><td>${p.months} من ${p.size}${p.months<p.size?` <span style="color:var(--gold-soft);">(ناقصة)</span>`:""}</td><td>${p.revenue.toFixed(0)} ﷼</td><td>${p.cost.toFixed(0)} ﷼</td><td style="color:${p.profit>=0?"var(--profit)":"var(--loss)"};font-weight:700;">${p.profit.toFixed(0)} ﷼</td><td>${p.collected.toFixed(0)} ﷼</td><td>${p.invoices} / ${p.garments}</td></tr>`).join("")
   }</tbody></table></div>`;
 }
+// daily sales of one month laid out weekday × week of the month, so each Saturday (say) sits next to the
+// month's other Saturdays: week 1 = days 1-7, week 2 = 8-14 … week 5 = 29-31. Works on live data, open months included.
+const WEEKDAY_ROWS = [[6,"السبت"],[0,"الأحد"],[1,"الاثنين"],[2,"الثلاثاء"],[3,"الأربعاء"],[4,"الخميس"],[5,"الجمعة"]];
+function dailySalesByDate(month, metric){
+  const days = {}; // "YYYY-MM-DD" → {amount, thobes}
+  const add = (date, amount, thobes)=>{ if(!date || date.slice(0,7)!==month) return; const d = days[date] || (days[date] = {amount:0, thobes:0}); d.amount += amount||0; d.thobes += thobes||0; };
+  if(metric==="collected"){
+    const paid = p=> (p.cash||0)+(p.network||0);
+    state.invoices.forEach(inv=> (inv.payments||[]).forEach(p=> add(p.date, paid(p))));
+    (state.salesInvoices||[]).forEach(x=>{ if(x.payment) add(x.payment.date||x.date, paid(x.payment)); });
+    (state.openingDebtPayments||[]).forEach(p=> add(p.date, paid(p)));
+    (state.repairs||[]).forEach(r=> (r.payments||[]).forEach(p=> add(p.date, paid(p))));
+    (state.legacyPayments||[]).forEach(l=> add(l.date, l.amount));
+  } else {
+    state.invoices.forEach(inv=>{ const live = inv.garments.filter(g=>g.status!=="ملغي"); add(inv.date, invoiceSaleTotal(inv) - invoiceDiscountTotal(inv), live.length); });
+    (state.salesInvoices||[]).forEach(x=> add(x.date, saleNetTotal(x)));
+  }
+  return days;
+}
+function renderWeekdayGrowth(){
+  const mSel = $("weekdayGrowthMonth"), view = $("weekdayGrowthView"); if(!mSel || !view) return;
+  const metric = ($("weekdayGrowthMetric")||{}).value || "sales";
+  const months = [...new Set([state.settings.currentMonth, ...state.invoices.map(i=>(i.date||"").slice(0,7)), ...(state.salesInvoices||[]).map(x=>(x.date||"").slice(0,7))].filter(m=>/^\d{4}-\d{2}$/.test(m||"")))].sort().reverse();
+  const cur = mSel.value;
+  mSel.innerHTML = months.map(m=>`<option value="${m}">${monthDisplay(m)}</option>`).join("");
+  mSel.value = months.includes(cur) ? cur : (months.includes(state.settings.currentMonth) ? state.settings.currentMonth : months[0]);
+  const month = mSel.value; if(!month){ view.innerHTML = `<p class="sub">ما فيه بيانات بعد.</p>`; return; }
+  const [y, m] = month.split("-").map(Number), daysInMonth = new Date(y, m, 0).getDate(), weeks = Math.ceil(daysInMonth/7);
+  const data = dailySalesByDate(month, metric), today = todayStr();
+  // grid[weekday][week] = the date of that weekday falling in that week (or null)
+  const grid = {}; WEEKDAY_ROWS.forEach(([wd])=> grid[wd] = Array(weeks).fill(null));
+  for(let d=1; d<=daysInMonth; d++){ const wd = new Date(y, m-1, d).getDay(); grid[wd][Math.ceil(d/7)-1] = `${month}-${String(d).padStart(2,"0")}`; }
+  const val = date=> date && date<=today ? (data[date] || {amount:0, thobes:0}) : null;
+  const weekTotals = Array(weeks).fill(0);
+  const rows = WEEKDAY_ROWS.map(([wd, name])=>{
+    let prev = null, sum = 0, n = 0;
+    const cells = grid[wd].map((date, w)=>{
+      const v = val(date);
+      if(!date) return `<td class="sub">—</td>`;
+      if(!v){ prev = null; return `<td class="sub">${date.slice(8)}<br>لم يأتِ بعد</td>`; }
+      sum += v.amount; n++; weekTotals[w] += v.amount;
+      const g = prev ? pctGrowth(v.amount, prev.amount) : null;
+      const cell = `<td><span class="sub" style="font-size:10.5px;">${date.slice(8)}/${String(m).padStart(2,"0")}</span><br><b>${fmtSar(v.amount)} ﷼</b>${metric==="sales"?`<br><span class="sub">${v.thobes} ثوب</span>`:""}${prev?`<br><span style="font-size:11px;">${fmtGrowth(g).replace("لا توجد بيانات للمقارنة","—")}</span>`:""}</td>`;
+      prev = v; return cell;
+    }).join("");
+    return `<tr><td><b>${name}</b></td>${cells}<td>${n?fmtSar(Math.round(sum/n*100)/100)+" ﷼":"—"}</td></tr>`;
+  }).join("");
+  const head = `<tr><th>اليوم</th>${Array.from({length:weeks},(_,i)=>`<th>الأسبوع ${["الأول","الثاني","الثالث","الرابع","الخامس"][i]}</th>`).join("")}<th>متوسط اليوم</th></tr>`;
+  const foot = `<tr style="font-weight:800;"><td>إجمالي الأسبوع</td>${weekTotals.map((t,i)=>`<td>${fmtSar(t)} ﷼${i?`<br><span style="font-size:11px;">${fmtGrowth(pctGrowth(t, weekTotals[i-1])).replace("لا توجد بيانات للمقارنة","—")}</span>`:""}</td>`).join("")}<td>الشهر: ${fmtSar(weekTotals.reduce((a,t)=>a+t,0))} ﷼</td></tr>`;
+  view.innerHTML = `<div class="table-wrap"><table><thead>${head}</thead><tbody>${rows}</tbody><tfoot>${foot}</tfoot></table></div>`;
+}
 function renderGrowthReport(){
+  renderWeekdayGrowth();
   const reports = state.closingReports.slice().sort((a,b)=>a.monthLabel.localeCompare(b.monthLabel));
   const monthlyEl = $("monthlyGrowthList"), qEl = $("quarterlyGrowthList");
   const profitMonthlyEl = $("monthlyProfitGrowthList"), profitQEl = $("quarterlyProfitGrowthList");
