@@ -238,7 +238,7 @@ function measurementSnapshotFromPanel(idx){
   const card = $("garmentsHolder").children[idx];
   if(!card) return null;
   const measurements = {};
-  card.querySelectorAll(".meas-field").forEach(inp=>{ if(inp.value!=="") measurements[inp.dataset.key] = parseFloat(inp.value)||0; });
+  card.querySelectorAll(".meas-field").forEach(inp=>{ const v = parseMeasureValue(inp.value); if(v!==null) measurements[inp.dataset.key] = v; });
   card.querySelectorAll(".meas-choice").forEach(sel=>{ if(sel.value) measurements[sel.dataset.key] = sel.value; });
   const categorySel = card.querySelector(".g-category");
   return { date: todayStr(), measurements, category: categorySel ? categorySel.value : undefined };
@@ -320,28 +320,31 @@ function buildMannequinPreviewHtml(m){
   if(!garmentTypeItem || !garmentTypeItem.image || !garmentTypeItem.imageBack){
     return `<div class="note-box" style="font-size:11px;text-align:center;">اختر "نوع الثوب" أول عشان تظهر صورة المنكل</div>`;
   }
-  const collarItem = (state.collarTypes||[]).find(o=>o.code===m.collarType);
-  const chestPocketItem = (state.chestPocketTypes||[]).find(o=>o.code===m.chestPocketType);
-  const jabzourItem = (state.jabzourTypes||[]).find(o=>o.code===m.jabzourType);
-  const cufflinkItem = (state.cufflinkTypes||[]).find(o=>o.code===m.cufflinkType);
+  // the plain mannequin only — the collar / pocket / placket / cuff pictures no longer sit on top of it
   const view = (src, isFront, label)=> `<div style="position:relative;background:#fff;border-radius:8px;overflow:hidden;margin-bottom:8px;">
       <img src="${src}" style="width:100%;display:block;">
-      ${isFront ? mannequinFrontOverlayHtml(collarItem, chestPocketItem, jabzourItem, cufflinkItem) : ""}
       <div style="position:absolute;bottom:2px;left:2px;background:rgba(0,0,0,.55);color:#fff;font-size:9px;padding:1px 5px;border-radius:4px;">${label}</div>
     </div>`;
   return `<div>${view(garmentTypeItem.image,true,"أمام")}${view(garmentTypeItem.imageBack,false,"خلف")}
-    <p class="sub" style="font-size:10px;margin:0;">هذي معاينة للتأكد من الأنواع المختارة — كرت القصاص المطبوع يعرض أرقام القياسات على المنكل بدل الصور.</p>
   </div>`;
+}
+// a measurement as typed: Arabic digits and an Arabic / comma decimal separator count (17٫51, ١٧٫٥١, 17,51 → 17.51)
+// — a number field took none of them and dropped the whole measurement, so it never printed
+function parseMeasureValue(raw){
+  const t = String(raw==null?"":raw).trim().replace(/[٠-٩]/g, d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/[۰-۹]/g, d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)).replace(/[٫,،]/g, ".").replace(/[^0-9.\-]/g, "");
+  if(!t) return null;
+  const v = parseFloat(t);
+  return isNaN(v) ? null : Math.round(v*100)/100;
 }
 function renderMeasurementPanelHtml(g, idx){
   const m = g.measurements || {};
   const pairedKeys = new Set(Object.values(PAIRED_SIZE_FIELDS).flat().concat(UNLINKED_SIZE_GROUPS.flatMap(gr=>gr.keys)));
   const numFieldsHtml = MEASUREMENT_FIELDS.filter(f=>!pairedKeys.has(f.key)).map(f=>
-    `<div class="field" style="margin-bottom:6px;"><label style="font-size:11px;">${f.label}</label><input type="number" step="0.01" class="meas-field" data-idx="${idx}" data-key="${f.key}" value="${m[f.key]!==undefined && m[f.key]!==null ? m[f.key] : ""}" placeholder="0"></div>`
+    `<div class="field" style="margin-bottom:6px;"><label style="font-size:11px;">${f.label}</label><input type="text" inputmode="decimal" class="meas-field" data-idx="${idx}" data-key="${f.key}" value="${m[f.key]!==undefined && m[f.key]!==null ? m[f.key] : ""}" placeholder="0"></div>`
   ).join("");
   const sizeInputHtml = key=>{
     const f = MEASUREMENT_FIELDS.find(x=>x.key===key);
-    return `<div class="field" style="margin-bottom:0;"><label style="font-size:10.5px;">${f.label}</label><input type="number" step="0.01" class="meas-field" data-idx="${idx}" data-key="${key}" value="${m[key]!==undefined && m[key]!==null ? m[key] : ""}" placeholder="0"></div>`;
+    return `<div class="field" style="margin-bottom:0;"><label style="font-size:10.5px;">${f.label}</label><input type="text" inputmode="decimal" class="meas-field" data-idx="${idx}" data-key="${key}" value="${m[key]!==undefined && m[key]!==null ? m[key] : ""}" placeholder="0"></div>`;
   };
   const garmentTypeField = MEASUREMENT_CHOICE_FIELDS.find(f=>f.key==="garmentType");
   const buildChoiceFieldHtml = f=>{

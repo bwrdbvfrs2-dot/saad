@@ -274,28 +274,33 @@ function buildCuttingCardHtml(inv, gIdx){
         ${unmappedFields.map(f=>`<div style="display:flex;justify-content:space-between;gap:4px;font-size:8.5px;border-bottom:1px dotted #ccc;padding:1px 0;"><span>${esc(f.label)}</span><b>${val(f.key)}</b></div>`).join("")}
       </div>
     </div>` : "";
+  // the other chosen types (cuff, side-pocket stitching, filling, model) each in its own box like the
+  // collar — they were a line of plain text in the header; the "جداول" template already boxes them all
+  const extraTypesLine = "";
+  const extraTypeBoxes = tablesBodyHtml ? "" : [
+    cufflinkImg ? infoBox("نوع الكبك", cufflinkImg, cufflinkSizeLine) : "",
+    pocketImg ? infoBox("نوع خياطة الجيب الجانبي", pocketImg, null) : "",
+    fillingItem ? infoBox("نوع الحشوة", fillingItem, null) : "",
+    modelItem ? infoBox("نوع الموديل", modelItem, null) : "",
+  ].join("");
+  const extraTypesRowHtml = extraTypeBoxes ? `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:5px;">${extraTypeBoxes}</div>` : "";
   const bodyHtml = tablesBodyHtml ? tablesBodyHtml : diagramParts ? `<div>
     <div style="display:flex;gap:6px;align-items:flex-start;">
       <div style="flex:1.1;">${diagramParts.front}<div style="text-align:center;font-size:9px;color:#666;">أمام</div></div>
       <div style="flex:1.1;">${diagramParts.back}<div style="text-align:center;font-size:9px;color:#666;">خلف</div></div>
       <div style="width:108px;flex-shrink:0;">${leftBoxesHtml}</div>
     </div>
+    ${extraTypesRowHtml}
     ${unmappedTableHtml}
   </div>` : `<div>
     <div style="display:flex;gap:6px;align-items:flex-start;">
       <div style="flex:1;">${buildFallbackDiagramSvg(val)}</div>
       <div style="width:108px;flex-shrink:0;">${leftBoxesHtml}</div>
     </div>
+    ${extraTypesRowHtml}
     ${unmappedTableHtml}
   </div>`;
   const customerCode = customer ? customer.code : "—";
-  // "جداول" template already shows these inside their own boxes — no need to repeat them in the header line
-  const extraTypesLine = tablesBodyHtml ? "" : [
-    cufflinkImg ? `نوع الكبك: ${esc(cufflinkImg.label)} (${cufflinkSizeLine})` : "",
-    pocketImg ? `نوع خياطة الجيب الجانبي: ${esc(pocketImg.label)}` : "",
-    fillingItem ? `نوع الحشوة: ${esc(fillingItem.label)}` : "",
-    modelItem ? `نوع الموديل: ${esc(modelItem.label)}` : "",
-  ].filter(Boolean).join(" &nbsp;—&nbsp; ");
   return `<div style="width:700px;font-family:var(--font-main);direction:rtl;text-align:right;font-size:12px;line-height:1.3;">
     <div style="display:grid;grid-template-columns:1.2fr 1fr 1fr auto;gap:6px;border-bottom:2px solid #333;padding-bottom:5px;align-items:start;">
       <div>

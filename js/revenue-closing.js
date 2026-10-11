@@ -353,7 +353,8 @@ function invoiceProfitColumnData(inv){
   const totalDirectCost = cutGarments.reduce((a,g)=>a+garmentDirectCostOnly(g),0) + freeGiftsCost(inv);
   const allDelivered = activeGarments.every(g=>g.status==="تسليم");
   if(allDelivered){
-    const totalPrice = activeGarments.reduce((a,g)=>a+garmentSalePrice(g),0);
+    // what the customer actually pays: the price less the invoice's discounts (it took the full price)
+    const totalPrice = activeGarments.reduce((a,g)=>a+garmentSalePrice(g),0) - invoiceDiscountTotal(inv);
     return {mode:"expected", value: totalPrice - totalDirectCost};
   }
   const recognizedRevenue = invoiceRecognizedRevenueToDate(inv);
