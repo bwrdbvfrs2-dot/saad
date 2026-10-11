@@ -1865,6 +1865,26 @@ function renderAlterationsMonthlyReport(){
       rows.map(({a,tailor})=>`<tr><td>${a.dateReceived}</td><td>${esc(String(a.alterationNumber||""))}</td><td>${esc(a.invoiceNumber||"")} (ثوب ${a.garmentIndex+1})</td><td>${esc(tailor)}</td><td>${esc(a.reason||"—")}</td><td>${esc(a.responsible||"—")}</td><td>${a.status==="completed"?"تم":"عند الخياط"}</td></tr>`).join("")
     }</tbody></table></div>`;
 }
+// search: an invoice number, customer mobile or voucher / card slip number must match exactly
+// (3 doesn't bring up 13 or 30) and brings up that invoice only; text still finds a tailor or customer name
+function searchNorm(v){ return String(v==null?"":v).trim().toLowerCase().replace(/[٠-٩]/g, d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/[۰-۹]/g, d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)); }
+function searchMobileNorm(v){ return searchNorm(v).replace(/[\s+-]/g,"").replace(/^00966|^966/,"").replace(/^0+/,""); }
+// which invoices an exact search points at — invoice number first, then the customer's mobile, then a
+// voucher / card slip number (voucher 3 and invoice 3 can both exist: typing 3 means the invoice);
+// null when nothing matches exactly, so the text goes to the tailor / customer name instead
+function searchExactInvoiceIds(invs, q){
+  q = searchNorm(q); if(!q) return null;
+  const pick = test=>{ const ids = invs.filter(test).map(i=>i.id); return ids.length ? new Set(ids) : null; };
+  const qm = searchMobileNorm(q);
+  return pick(inv=> searchNorm(inv.number)===q)
+    || (qm.length>=7 ? pick(inv=> inv.customerMobile && searchMobileNorm(inv.customerMobile)===qm) : null)
+    || pick(inv=> [...inv.garments.map(g=>g.deliveryReceipt), ...(inv.payments||[]).flatMap(p=>[p.cashReceiptNo, p.networkReceiptNo, p.receipt])].some(x=> x!=null && x!=="" && searchNorm(x)===q));
+}
+function searchTextMatches(inv, g, q){
+  q = searchNorm(q);
+  if(!q || /^[0-9\s+-]+$/.test(q)) return false; // a number that matched nothing exactly finds nothing
+  return (g.tailor||"").toLowerCase().includes(q) || (inv.customerName||"").toLowerCase().includes(q);
+}
 function renderSearch(){
   const q=($("searchBox").value||"").trim().toLowerCase();
   const scope=$("searchScope").value;
@@ -1879,11 +1899,11 @@ function renderSearch(){
   const fTailor = tSel ? tSel.value : "", fStatus = sSel ? sSel.value : "";
   const num = id=>{ const v = parseFloat(($(id)||{}).value); return isNaN(v) ? null : v; };
   const fMin = num("searchPriceMin"), fMax = num("searchPriceMax");
+  const exactIds = q ? searchExactInvoiceIds(invs, q) : null;
   invs.forEach(inv=> inv.garments.forEach(g=>{
     statusTotals[g.status].count++; statusTotals[g.status].amount += garmentSalePrice(g);
     if(g.hasEmbroidery){ embroCount++; embroRevenue += (g.embroideryPrice||0); }
-    const hay=(inv.number+" "+(g.tailor||"")+" "+deliveryReceiptOf(inv,g)+" "+(inv.customerMobile||"")).toLowerCase();
-    if(q && !hay.includes(q)) return;
+    if(q && !(exactIds ? exactIds.has(inv.id) : searchTextMatches(inv, g, q))) return;
     const price = garmentSalePrice(g);
     if(fTailor && (fTailor==="__none__" ? !!g.tailor : g.tailor!==fTailor)) return;
     if(fStatus && g.status!==fStatus) return;
@@ -1897,7 +1917,7 @@ function renderSearch(){
     <div class="amt">${embroRevenue.toFixed(0)} ﷼</div><div class="cnt">${embroCount} ثوب مطرّز</div></div>`;
   const tbody=$("searchResults"); tbody.innerHTML="";
   const foot=$("searchTotals"), avgBody=$("searchAverages");
-  if(rows.length===0){ tbody.innerHTML=`<tr><td colspan="7">${emptyStateHtml("search-x","لا نتائج")}</td></tr>`; if(foot) foot.innerHTML=""; if(avgBody) avgBody.innerHTML=""; refreshLucideIcons(); return; }
+  if(rows.length===0){ tbody.innerHTML=`<tr><td colspan="8">${emptyStateHtml("search-x","لا نتائج")}</td></tr>`; if(foot) foot.innerHTML=""; if(avgBody) avgBody.innerHTML=""; refreshLucideIcons(); return; }
   // same invoice + tailor + status + price + receipt → one line with its thobe count
   const groups = [];
   rows.forEach(r=>{
@@ -1907,16 +1927,17 @@ function renderSearch(){
     gr.count++;
   });
   tbody.innerHTML = groups.map(gr=>{ const st=STATUSES.find(x=>x.v===gr.g.status);
-    return `<tr><td>${esc(gr.inv.number)}</td><td>${esc(gr.g.tailor||"—")}</td><td><span class="badge ${st.cls}">${st.label}</span></td><td>${fmtSar(gr.price)} ﷼</td><td>${gr.count}</td><td>${fmtSar(gr.price*gr.count)} ﷼</td><td>${esc(gr.receipt)}</td></tr>`; }).join("");
+    return `<tr><td>${esc(gr.inv.number)}</td><td>${esc(gr.g.tailor||"—")}</td><td><span class="badge ${st.cls}">${st.label}</span></td><td>${fmtSar(gr.price)} ﷼</td><td>${gr.count}</td><td>${fmtSar(gr.price*gr.count)} ﷼</td><td>${esc(gr.receipt)}</td><td><button class="btn btn-ghost btn-sm" title="تفاصيل الفاتورة" aria-label="تفاصيل الفاتورة" onclick="showInvoiceDetails('${gr.inv.id}')"><i data-lucide="file-text"></i></button></td></tr>`; }).join("");
   const live = rows.filter(r=> r.g.status!=="ملغي" || fStatus==="ملغي");
   const totalAmt = live.reduce((a,r)=>a+r.price,0);
-  if(foot) foot.innerHTML = `<tr style="font-weight:800;"><td colspan="4">الإجمالي${live.length!==rows.length?" (بدون الملغي)":""}</td><td>${live.length}</td><td>${fmtSar(totalAmt)} ﷼</td><td></td></tr>`;
+  if(foot) foot.innerHTML = `<tr style="font-weight:800;"><td colspan="4">الإجمالي${live.length!==rows.length?" (بدون الملغي)":""}</td><td>${live.length}</td><td>${fmtSar(totalAmt)} ﷼</td><td colspan="2"></td></tr>`;
   // average sale price per thobe: all thobes, then by category
   const avgRow = (label, list)=>{ const t = list.reduce((a,r)=>a+r.price,0); return list.length ? `<tr${label==="كل الثياب"?' style="font-weight:800;"':""}><td>${label}</td><td>${list.length}</td><td>${fmtSar(t)} ﷼</td><td>${fmtSar(Math.round(t/list.length*100)/100)} ﷼</td></tr>` : ""; };
   if(avgBody) avgBody.innerHTML = avgRow("كل الثياب", live)
     + BODY_CATEGORIES.map(c=> avgRow(c, live.filter(r=>(r.g.category||"رجال")===c))).join("")
     + avgRow("أجرة تفصيل (بدون قماش)", live.filter(r=>!r.g.itemCardId))
     + avgRow("بقماش المحل", live.filter(r=>!!r.g.itemCardId));
+  refreshLucideIcons();
 }
 
 function getCustomers(){

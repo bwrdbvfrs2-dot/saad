@@ -303,10 +303,50 @@ function renderDailyPreview(){
 // (no screen asks for a separate delivery receipt any more — the payment's voucher / card slip is the receipt)
 function deliveryReceiptOf(inv, g){
   if(g.deliveryReceipt) return String(g.deliveryReceipt);
-  if(g.status!=="تسليم" || !g.deliveredDate) return "—";
-  const p = (inv.payments||[]).filter(x=> x.date===g.deliveredDate && ((x.cash||0)+(x.network||0))>0).pop();
+  if(g.status!=="تسليم") return "—";
+  const paid = (inv.payments||[]).filter(x=> ((x.cash||0)+(x.network||0))>0);
+  // a thobe delivered before the delivery date was recorded: the last payment taken stands for it
+  const p = g.deliveredDate ? paid.filter(x=> x.date===g.deliveredDate).pop() : paid[paid.length-1];
   if(!p) return g.creditDelivered ? "مسلّم بالدين" : "مسدد قبل التسليم";
-  return [p.cashReceiptNo ? `كاش ${p.cashReceiptNo}` : "", (p.networkReceiptNo||p.receipt) ? `شبكة ${p.networkReceiptNo||p.receipt}` : ""].filter(Boolean).join(" / ") || "—";
+  return paymentReceiptText(p);
+}
+// a payment's voucher / card slip — an old cash payment taken before vouchers were numbered says so with its amount
+function paymentReceiptText(p){
+  const parts = [];
+  if((p.cash||0)>0) parts.push(p.cashReceiptNo ? `كاش ${p.cashReceiptNo}` : `كاش ${fmtSar(p.cash)} ﷼ (بدون رقم سند)`);
+  if((p.network||0)>0) parts.push((p.networkReceiptNo||p.receipt) ? `شبكة ${p.networkReceiptNo||p.receipt}` : `شبكة ${fmtSar(p.network)} ﷼ (بدون رقم إيصال)`);
+  return parts.join(" / ") || "—";
+}
+// the whole invoice in one window, opened from the status search: customer, totals, every payment with its kind,
+// voucher / slip and who took it, and per thobe its fabric, price, tailor and the date of every stage it reached
+function showInvoiceDetails(invId){
+  const inv = state.invoices.find(i=>i.id===invId); if(!inv) return;
+  const d = v=> v ? esc(String(v).slice(0,10)) : "—";
+  const usr = v=> v ? esc(v) : "—";
+  const remaining = invoiceRemaining(inv);
+  const pays = (inv.payments||[]).map((p,i)=>{
+    const amt = (p.cash||0)+(p.network||0);
+    const type = [(p.cash||0)>0?`كاش ${fmtSar(p.cash)}`:"", (p.network||0)>0?`شبكة ${fmtSar(p.network)}${p.cardType==="visa"?" (فيزا)":""}`:"", p.discount?`خصم ${fmtSar(p.discount)}`:""].filter(Boolean).join(" + ");
+    return `<tr><td>${i+1}</td><td>${d(p.date)}</td><td>${esc(paymentKindLabel(inv,p)||"—")}</td><td>${amt?fmtSar(amt)+" ﷼":"—"}</td><td>${esc(type||"—")}</td><td>${amt?esc(paymentReceiptText(p)):"—"}</td><td>${usr(p.recordedBy)}${p.correction?' <span class="badge b-pending">معدّلة</span>':""}</td></tr>`;
+  }).join("") || `<tr><td colspan="7">لا توجد دفعات</td></tr>`;
+  const thobes = inv.garments.map((g,i)=>{
+    const st = STATUSES.find(x=>x.v===g.status) || {label:g.status, cls:""};
+    return `<tr><td>${i+1}</td><td>${esc(g.fabricType||"—")}${g.category?`<br><span class="sub">${esc(g.category)}</span>`:""}</td><td>${fmtSar(garmentSalePrice(g))} ﷼</td><td>${usr(g.tailor)}</td><td><span class="badge ${st.cls}">${esc(st.label)}</span>${g.creditDelivered?'<br><span class="sub">مسلّم بالدين</span>':""}</td>
+      <td>${d(inv.date)}</td><td>${d(g.cutDate)}${g.cutAuto?'<br><span class="sub">تقديري</span>':""}</td><td>${d(g.tailorCompletedDate)}</td><td>${d(g.qcPassedDate)}</td><td>${d(g.readyDate)}</td><td>${d(g.deliveredDate)}${g.deliveredBy?`<br><span class="sub">${esc(g.deliveredBy)}</span>`:""}</td><td>${g.status==="ملغي"?d(g.cancelledDate):"—"}</td><td>${esc(deliveryReceiptOf(inv,g))}</td></tr>`;
+  }).join("");
+  $("invoiceDetailsBody").innerHTML = `<h3 style="margin:0 0 6px;text-align:center;">تفاصيل الفاتورة #${esc(inv.number)}</h3>
+    <div class="table-wrap"><table><tbody>
+      <tr><td>العميل</td><td>${esc(inv.customerName||"—")}</td><td>الجوال</td><td>${esc(inv.customerMobile||"—")}</td></tr>
+      <tr><td>تاريخ الفاتورة</td><td>${d(inv.date)}</td><td>موعد التسليم</td><td>${d(inv.expectedDeliveryDate)}</td></tr>
+      <tr><td>أنشأها</td><td>${usr(inv.createdBy)}</td><td>آخر تعديل</td><td>${inv.lastEditedBy?`${esc(inv.lastEditedBy)} — ${d(inv.lastEditedAt)}`:"—"}</td></tr>
+      <tr><td>إجمالي البيع</td><td>${fmtSar(invoiceSaleTotal(inv))} ﷼</td><td>المدفوع</td><td>${fmtSar(invoicePaid(inv))} ﷼${invoiceDiscountTotal(inv)?` + خصم ${fmtSar(invoiceDiscountTotal(inv))}`:""}</td></tr>
+      <tr><td>المتبقي</td><td style="font-weight:800;color:${remaining>0.004?"var(--loss)":"inherit"};">${fmtSar(remaining)} ﷼</td><td>ملاحظات</td><td>${esc(inv.notes||"—")}</td></tr>
+    </tbody></table></div>
+    <h4 style="margin:12px 0 4px;">الدفعات</h4>
+    <div class="table-wrap"><table><thead><tr><th>#</th><th>التاريخ</th><th>النوع</th><th>المبلغ</th><th>الطريقة</th><th>السند / الإيصال</th><th>سجّلها</th></tr></thead><tbody>${pays}</tbody></table></div>
+    <h4 style="margin:12px 0 4px;">الثياب ومراحلها</h4>
+    <div class="table-wrap"><table><thead><tr><th>#</th><th>القماش</th><th>السعر</th><th>الخياط</th><th>الحالة</th><th>الفاتورة</th><th>القص</th><th>انتهاء التفصيل</th><th>فحص الجودة</th><th>جاهز</th><th>التسليم</th><th>الإلغاء</th><th>إيصال التسليم</th></tr></thead><tbody>${thobes}</tbody></table></div>`;
+  $("invoiceDetailsModalOverlay").classList.remove("hidden");
 }
 // what a tailoring payment was for: the deposit taken with the invoice, the balance paid at delivery,
 // a payment in between, or a discount

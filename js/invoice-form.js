@@ -714,7 +714,10 @@ function readGarmentFields(existing){
     card.querySelectorAll(".meas-field").forEach(inp=>{ if(inp.value) measurements[inp.dataset.key] = parseFloat(inp.value)||0; });
     card.querySelectorAll(".meas-choice").forEach(sel=>{ if(sel.value) measurements[sel.dataset.key] = sel.value; });
     const old = existing && existing[i] ? existing[i] : {};
+    // an edit keeps everything the thobe already carries (its stage dates, who delivered it, credit delivery…)
+    // and only overwrites what the form edits — it used to drop cutDate / readyDate / deliveredBy and the rest
     return {
+      ...old,
       fabricType, itemCardId, category, price, qtyUsed, hasEmbroidery, embroideryPrice, addons, measurementNotes,
       measurements, urgent, sample, cutter,
       tailor: old.tailor||"", status: old.status||"جديد", deliveryReceipt: old.deliveryReceipt||"",
