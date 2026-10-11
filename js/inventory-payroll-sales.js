@@ -1328,7 +1328,7 @@ function computeItemSalesTotals(){
     if(g.status==="ملغي" || !g.itemCardId || g.stockApplied!=="consumed") return;
     if(!totals[g.itemCardId]) totals[g.itemCardId] = {qty:0, revenue:0};
     totals[g.itemCardId].qty += g.qtyUsed||0;
-    totals[g.itemCardId].revenue += garmentSalePrice(g);
+    totals[g.itemCardId].revenue += garmentNetSalePrice(g, inv);
   }));
   state.salesInvoices.forEach(inv=> inv.items.forEach(it=>{
     if(!totals[it.itemCardId]) totals[it.itemCardId] = {qty:0, revenue:0};
@@ -1671,8 +1671,8 @@ function renderBalancesTab(){
   expTbody.innerHTML = visibleExpenses.length ? visibleExpenses.map(e=>{
     const cat = state.expenseCategories.find(c=>c.id===e.categoryId);
     const box = findCashBox(e.sourceBoxId);
-    return `<tr><td>${e.date}</td><td>${cat?esc(cat.label):"—"}</td><td>${esc(e.subItemLabel||"—")}</td><td>${e.amount.toFixed(0)} ﷼</td><td>${esc(e.paidTo||"—")}</td><td>${esc(e.storeName||"—")}</td><td>${box?esc(box.name):"—"}</td></tr>`;
-  }).join("") : `<tr><td colspan="7">${emptyStateHtml("receipt","ما فيه مصروفات مسجّلة بعد.")}</td></tr>`;
+    return `<tr><td>${e.voucherNo?`صرف ${e.voucherNo}`:"—"}</td><td>${e.date}</td><td>${cat?esc(cat.label):"—"}</td><td>${esc(e.subItemLabel||"—")}</td><td>${e.amount.toFixed(0)} ﷼</td><td>${esc(e.paidTo||"—")}</td><td>${esc(e.storeName||"—")}</td><td>${box?esc(box.name):"—"}</td></tr>`;
+  }).join("") : `<tr><td colspan="8">${emptyStateHtml("receipt","ما فيه مصروفات مسجّلة بعد.")}</td></tr>`;
 }
 function renderClosedReports(){
   const el=$("archiveList");
@@ -1722,7 +1722,99 @@ function renderPeriodRollups(reports){
     rows.map(p=>`<tr><td><b>${p.label}</b></td><td>${p.months} من ${p.size}${p.months<p.size?` <span style="color:var(--gold-soft);">(ناقصة)</span>`:""}</td><td>${p.revenue.toFixed(0)} ﷼</td><td>${p.cost.toFixed(0)} ﷼</td><td style="color:${p.profit>=0?"var(--profit)":"var(--loss)"};font-weight:700;">${p.profit.toFixed(0)} ﷼</td><td>${p.collected.toFixed(0)} ﷼</td><td>${p.invoices} / ${p.garments}</td></tr>`).join("")
   }</tbody></table></div>`;
 }
+// daily sales of one month laid out weekday × week of the month, so each Saturday (say) sits next to the
+// month's other Saturdays: week 1 = days 1-7, week 2 = 8-14 … week 5 = 29-31. Works on live data, open months included.
+// a small bar chart drawn as inline SVG (no library, works offline): groups along the x axis laid out right
+// to left like the page, one bar per series in each group, negative values below the zero line, an optional
+// coloured note above each group (a growth %) and a second label line under it; hovering a bar shows its value
+const CHART_COLORS = ["#2f6fb0","#b8863a","#1f9d5c","#c23b3b","#7a4fb0"];
+function svgBarChart({labels, sub, series, above, fmt}){
+  fmt = fmt || (v=> fmtSar(v));
+  const n = labels.length; if(!n) return `<p class="sub">ما فيه بيانات للرسم بعد.</p>`;
+  const k = series.length;
+  const all = series.flatMap(x=>x.values).filter(v=>typeof v==="number");
+  const max = Math.max(0, ...all), min = Math.min(0, ...all), span = (max-min) || 1;
+  const W = (window.innerWidth||800) < 600 ? 360 : 640, left = 6, right = 6, top = 34, plotH = 170, negPad = min<0 ? 14 : 0, bottom = (sub ? 44 : 30) + negPad;
+  const H = top + plotH + bottom, slot = (W-left-right)/n;
+  const barW = Math.min(k>1 ? 22 : 46, (slot-12)/k);
+  const y = v=> top + (max - v)/span*plotH, zero = y(0);
+  const cxOf = i=> W - right - slot*(i+0.5); // right to left, like the page
+  let svg = `<line x1="${left}" x2="${W-right}" y1="${zero}" y2="${zero}" stroke="var(--border)" stroke-width="1.5"/>`;
+  labels.forEach((lab, i)=>{
+    const cx = cxOf(i), x0 = cx - k*barW/2;
+    series.forEach((s, j)=>{
+      const v = s.values[i]; if(typeof v!=="number") return;
+      const x = x0 + (k-1-j)*barW, yy = Math.min(y(v), zero), h = Math.max(1, Math.abs(y(v)-zero));
+      svg += `<rect x="${x.toFixed(1)}" y="${yy.toFixed(1)}" width="${(barW-2).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${v<0?"var(--loss)":(s.color||CHART_COLORS[j%CHART_COLORS.length])}"><title>${esc(lab)}${k>1?" — "+esc(s.name):""}: ${esc(fmt(v))}</title></rect>`;
+      if(k===1 || barW>=20) svg += `<text x="${(x+(barW-2)/2).toFixed(1)}" y="${(v<0 ? yy+h+11 : yy-3).toFixed(1)}" font-size="${k>1?8.5:10}" text-anchor="middle" fill="var(--muted)">${esc(fmt(v))}</text>`;
+    });
+    if(above && above[i]) svg += `<text x="${cx.toFixed(1)}" y="${top-18}" font-size="11" font-weight="700" text-anchor="middle" fill="${above[i].color||"var(--muted)"}">${esc(above[i].text)}</text>`;
+    svg += `<text x="${cx.toFixed(1)}" y="${top+plotH+negPad+15}" font-size="11" text-anchor="middle" fill="currentColor">${esc(lab)}</text>`;
+    if(sub && sub[i]) svg += `<text x="${cx.toFixed(1)}" y="${top+plotH+negPad+29}" font-size="9.5" text-anchor="middle" fill="var(--muted)">${esc(sub[i])}</text>`;
+  });
+  const legend = k>1 ? `<div style="display:flex;flex-wrap:wrap;gap:10px;font-size:11.5px;margin:4px 0;">${series.map((s,j)=>`<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${s.color||CHART_COLORS[j%CHART_COLORS.length]};margin-inline-end:4px;"></span>${esc(s.name)}</span>`).join("")}</div>` : "";
+  return `${legend}<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:760px;height:auto;display:block;direction:ltr;" role="img">${svg}</svg>`;
+}
+function chartMonthName(label){ return ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"][parseInt(label.slice(5,7),10)-1] || label; }
+function chartQuarterName(q){ const m = /Q(\d)/.exec(q||""); return m ? "الربع "+m[1] : quarterDisplay(q); }
+// a growth % as a coloured note over a bar
+function growthNote(g){ return g===null||g===undefined ? null : {text:(g>=0?"+":"")+g.toFixed(0)+"%", color: g>0?"var(--profit)":(g<0?"var(--loss)":"var(--muted)")}; }
+const WEEKDAY_ROWS = [[6,"السبت"],[0,"الأحد"],[1,"الاثنين"],[2,"الثلاثاء"],[3,"الأربعاء"],[4,"الخميس"],[5,"الجمعة"]];
+function dailySalesByDate(month, metric){
+  const days = {}; // "YYYY-MM-DD" → {amount, thobes}
+  const add = (date, amount, thobes)=>{ if(!date || date.slice(0,7)!==month) return; const d = days[date] || (days[date] = {amount:0, thobes:0}); d.amount += amount||0; d.thobes += thobes||0; };
+  if(metric==="collected"){
+    const paid = p=> (p.cash||0)+(p.network||0);
+    state.invoices.forEach(inv=> (inv.payments||[]).forEach(p=> add(p.date, paid(p))));
+    (state.salesInvoices||[]).forEach(x=>{ if(x.payment) add(x.payment.date||x.date, paid(x.payment)); });
+    (state.openingDebtPayments||[]).forEach(p=> add(p.date, paid(p)));
+    (state.repairs||[]).forEach(r=> (r.payments||[]).forEach(p=> add(p.date, paid(p))));
+    (state.legacyPayments||[]).forEach(l=> add(l.date, l.amount));
+  } else {
+    state.invoices.forEach(inv=>{ const live = inv.garments.filter(g=>g.status!=="ملغي"); add(inv.date, invoiceSaleTotal(inv) - invoiceDiscountTotal(inv), live.length); });
+    (state.salesInvoices||[]).forEach(x=> add(x.date, saleNetTotal(x)));
+  }
+  return days;
+}
+function renderWeekdayGrowth(){
+  const mSel = $("weekdayGrowthMonth"), view = $("weekdayGrowthView"); if(!mSel || !view) return;
+  const metric = ($("weekdayGrowthMetric")||{}).value || "sales";
+  const months = [...new Set([state.settings.currentMonth, ...state.invoices.map(i=>(i.date||"").slice(0,7)), ...(state.salesInvoices||[]).map(x=>(x.date||"").slice(0,7))].filter(m=>/^\d{4}-\d{2}$/.test(m||"")))].sort().reverse();
+  const cur = mSel.value;
+  mSel.innerHTML = months.map(m=>`<option value="${m}">${monthDisplay(m)}</option>`).join("");
+  mSel.value = months.includes(cur) ? cur : (months.includes(state.settings.currentMonth) ? state.settings.currentMonth : months[0]);
+  const month = mSel.value; if(!month){ view.innerHTML = `<p class="sub">ما فيه بيانات بعد.</p>`; return; }
+  const [y, m] = month.split("-").map(Number), daysInMonth = new Date(y, m, 0).getDate(), weeks = Math.ceil(daysInMonth/7);
+  const data = dailySalesByDate(month, metric), today = todayStr();
+  // grid[weekday][week] = the date of that weekday falling in that week (or null)
+  const grid = {}; WEEKDAY_ROWS.forEach(([wd])=> grid[wd] = Array(weeks).fill(null));
+  for(let d=1; d<=daysInMonth; d++){ const wd = new Date(y, m-1, d).getDay(); grid[wd][Math.ceil(d/7)-1] = `${month}-${String(d).padStart(2,"0")}`; }
+  const val = date=> date && date<=today ? (data[date] || {amount:0, thobes:0}) : null;
+  const weekTotals = Array(weeks).fill(0);
+  const rows = WEEKDAY_ROWS.map(([wd, name])=>{
+    let prev = null, sum = 0, n = 0;
+    const cells = grid[wd].map((date, w)=>{
+      const v = val(date);
+      if(!date) return `<td class="sub">—</td>`;
+      if(!v){ prev = null; return `<td class="sub">${date.slice(8)}<br>لم يأتِ بعد</td>`; }
+      sum += v.amount; n++; weekTotals[w] += v.amount;
+      const g = prev ? pctGrowth(v.amount, prev.amount) : null;
+      const cell = `<td><span class="sub" style="font-size:10.5px;">${date.slice(8)}/${String(m).padStart(2,"0")}</span><br><b>${fmtSar(v.amount)} ﷼</b>${metric==="sales"?`<br><span class="sub">${v.thobes} ثوب</span>`:""}${prev?`<br><span style="font-size:11px;">${fmtGrowth(g).replace("لا توجد بيانات للمقارنة","—")}</span>`:""}</td>`;
+      prev = v; return cell;
+    }).join("");
+    return `<tr><td><b>${name}</b></td>${cells}<td>${n?fmtSar(Math.round(sum/n*100)/100)+" ﷼":"—"}</td></tr>`;
+  }).join("");
+  const head = `<tr><th>اليوم</th>${Array.from({length:weeks},(_,i)=>`<th>الأسبوع ${["الأول","الثاني","الثالث","الرابع","الخامس"][i]}</th>`).join("")}<th>متوسط اليوم</th></tr>`;
+  const foot = `<tr style="font-weight:800;"><td>إجمالي الأسبوع</td>${weekTotals.map((t,i)=>`<td>${fmtSar(t)} ﷼${i?`<br><span style="font-size:11px;">${fmtGrowth(pctGrowth(t, weekTotals[i-1])).replace("لا توجد بيانات للمقارنة","—")}</span>`:""}</td>`).join("")}<td>الشهر: ${fmtSar(weekTotals.reduce((a,t)=>a+t,0))} ﷼</td></tr>`;
+  view.innerHTML = `<div class="table-wrap"><table><thead>${head}</thead><tbody>${rows}</tbody><tfoot>${foot}</tfoot></table></div>`;
+  const wkNames = ["الأسبوع الأول","الأسبوع الثاني","الأسبوع الثالث","الأسبوع الرابع","الأسبوع الخامس"];
+  if($("weekdayGrowthChart")) $("weekdayGrowthChart").innerHTML = svgBarChart({
+    labels: WEEKDAY_ROWS.map(([,name])=>name),
+    series: Array.from({length:weeks}, (_,w)=>({name:wkNames[w], values: WEEKDAY_ROWS.map(([wd])=>{ const v = val(grid[wd][w]); return v ? Math.round(v.amount*100)/100 : null; })})),
+  });
+}
 function renderGrowthReport(){
+  renderWeekdayGrowth();
   const reports = state.closingReports.slice().sort((a,b)=>a.monthLabel.localeCompare(b.monthLabel));
   const monthlyEl = $("monthlyGrowthList"), qEl = $("quarterlyGrowthList");
   const profitMonthlyEl = $("monthlyProfitGrowthList"), profitQEl = $("quarterlyProfitGrowthList");
@@ -1731,6 +1823,7 @@ function renderGrowthReport(){
     monthlyEl.innerHTML=`<p class="sub">ما فيه أشهر مقفلة بعد.</p>`; qEl.innerHTML=`<p class="sub">ما فيه أرباع مكتملة بعد.</p>`;
     profitMonthlyEl.innerHTML=`<p class="sub">ما فيه أشهر مقفلة بعد.</p>`; profitQEl.innerHTML=`<p class="sub">ما فيه أرباع مكتملة بعد.</p>`;
     invEl.innerHTML=`<p class="sub">ما فيه أشهر مقفلة بعد — بطاقة المخزون الراكد تحتاج شهر مقفل واحد على الأقل.</p>`;
+    ["monthlyGrowthChart","monthlyProfitGrowthChart","quarterlyGrowthChart","quarterlyProfitGrowthChart"].forEach(id=>{ if($(id)) $(id).innerHTML=""; });
     return;
   }
   const byMonth={}; reports.forEach(r=>byMonth[r.monthLabel]=r);
@@ -1751,6 +1844,17 @@ function renderGrowthReport(){
     </div>`;
   }).join("");
 
+  const last12 = reports.slice(-12);
+  $("monthlyGrowthChart").innerHTML = svgBarChart({
+    labels: last12.map(r=>chartMonthName(r.monthLabel)), sub: last12.map(r=>`${r.garmentCount} ثوب`), // 12 months in a row never repeat a month name
+    series: [{name:"المبيعات", values: last12.map(r=>Math.round(r.invoicedTotal))}],
+    above: last12.map(r=>{ const pv = byMonth[prevMonthLabel(r.monthLabel)]; return pv ? growthNote(pctGrowth(r.invoicedTotal, pv.invoicedTotal)) : null; }),
+  });
+  $("monthlyProfitGrowthChart").innerHTML = svgBarChart({
+    labels: last12.map(r=>chartMonthName(r.monthLabel)),
+    series: [{name:"صافي المحل", color:"var(--profit)", values: last12.map(r=>Math.round(r.profitInvoiced))}],
+    above: last12.map(r=>{ const pv = byMonth[prevMonthLabel(r.monthLabel)]; return pv ? growthNote(pctGrowth(r.profitInvoiced, pv.profitInvoiced)) : null; }),
+  });
   // ===== Card 2: net-profit growth (same figure as closing report) =====
   profitMonthlyEl.innerHTML = reports.slice().reverse().map(r=>{
     const prev = byMonth[prevMonthLabel(r.monthLabel)];
@@ -1800,8 +1904,21 @@ function renderGrowthReport(){
   if(!completeQuarters.length){
     qEl.innerHTML=`<p class="sub">ما فيه أرباع مكتملة (3 أشهر متتالية مقفلة) بعد.</p>`;
     profitQEl.innerHTML=`<p class="sub">ما فيه أرباع مكتملة (3 أشهر متتالية مقفلة) بعد.</p>`;
+    $("quarterlyGrowthChart").innerHTML = $("quarterlyProfitGrowthChart").innerHTML = `<p class="sub">ما فيه أرباع مكتملة (3 أشهر متتالية مقفلة) بعد.</p>`;
     return;
   }
+  const qPrev = q=>{ const pq = qMap[prevQuarterLabel(q.quarter)]; return pq && pq.monthsCount===3 ? pq : null; };
+  const lastQ = completeQuarters.slice(-8);
+  $("quarterlyGrowthChart").innerHTML = svgBarChart({
+    labels: lastQ.map(q=>chartQuarterName(q.quarter)), sub: lastQ.map(q=>`${q.quarter.slice(0,4)} · ${q.garmentCount} ثوب`),
+    series: [{name:"المبيعات", values: lastQ.map(q=>Math.round(q.invoicedTotal))}],
+    above: lastQ.map(q=>{ const pq = qPrev(q); return pq ? growthNote(pctGrowth(q.invoicedTotal, pq.invoicedTotal)) : null; }),
+  });
+  $("quarterlyProfitGrowthChart").innerHTML = svgBarChart({
+    labels: lastQ.map(q=>chartQuarterName(q.quarter)), sub: lastQ.map(q=>q.quarter.slice(0,4)),
+    series: [{name:"صافي المحل", color:"var(--profit)", values: lastQ.map(q=>Math.round(q.profitInvoiced))}],
+    above: lastQ.map(q=>{ const pq = qPrev(q); return pq ? growthNote(pctGrowth(q.profitInvoiced, pq.profitInvoiced)) : null; }),
+  });
   qEl.innerHTML = completeQuarters.slice().reverse().map(q=>{
     const prev = qMap[prevQuarterLabel(q.quarter)];
     const yoy = qMap[sameQuarterLastYear(q.quarter)];
@@ -1865,10 +1982,35 @@ function renderAlterationsMonthlyReport(){
       rows.map(({a,tailor})=>`<tr><td>${a.dateReceived}</td><td>${esc(String(a.alterationNumber||""))}</td><td>${esc(a.invoiceNumber||"")} (ثوب ${a.garmentIndex+1})</td><td>${esc(tailor)}</td><td>${esc(a.reason||"—")}</td><td>${esc(a.responsible||"—")}</td><td>${a.status==="completed"?"تم":"عند الخياط"}</td></tr>`).join("")
     }</tbody></table></div>`;
 }
+// search: an invoice number, customer mobile or voucher / card slip number must match exactly
+// (3 doesn't bring up 13 or 30) and brings up that invoice only; text still finds a tailor or customer name
+function searchNorm(v){ return String(v==null?"":v).trim().toLowerCase().replace(/[٠-٩]/g, d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/[۰-۹]/g, d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)); }
+function searchMobileNorm(v){ return searchNorm(v).replace(/[\s+-]/g,"").replace(/^00966|^966/,"").replace(/^0+/,""); }
+// which invoices an exact search points at — invoice number first, then the customer's mobile, then a
+// voucher / card slip number (voucher 3 and invoice 3 can both exist: typing 3 means the invoice);
+// null when nothing matches exactly, so the text goes to the tailor / customer name instead
+function searchExactInvoiceIds(invs, q){
+  q = searchNorm(q); if(!q) return null;
+  const pick = test=>{ const ids = invs.filter(test).map(i=>i.id); return ids.length ? new Set(ids) : null; };
+  const qm = searchMobileNorm(q);
+  return pick(inv=> searchNorm(inv.number)===q)
+    || (qm.length>=7 ? pick(inv=> inv.customerMobile && searchMobileNorm(inv.customerMobile)===qm) : null)
+    || pick(inv=> [...inv.garments.map(g=>g.deliveryReceipt), ...(inv.payments||[]).flatMap(p=>[p.cashReceiptNo, p.networkReceiptNo, p.receipt])].some(x=> x!=null && x!=="" && searchNorm(x)===q));
+}
+function searchTextMatches(inv, g, q){
+  q = searchNorm(q);
+  if(!q || /^[0-9\s+-]+$/.test(q)) return false; // a number that matched nothing exactly finds nothing
+  return (g.tailor||"").toLowerCase().includes(q) || (inv.customerName||"").toLowerCase().includes(q);
+}
 function renderSearch(){
   const q=($("searchBox").value||"").trim().toLowerCase();
   const scope=$("searchScope").value;
-  const invs = scope==="current"? state.invoices.filter(i=>i.originMonth===state.settings.currentMonth) : state.invoices;
+  // a set period goes by the invoice date; an empty end is open on that side
+  const from = ($("searchFrom")||{}).value || "", to = ($("searchTo")||{}).value || "";
+  if($("searchRangeWrap")) $("searchRangeWrap").style.display = scope==="range" ? "" : "none";
+  const invs = scope==="current" ? state.invoices.filter(i=>i.originMonth===state.settings.currentMonth)
+    : scope==="range" ? state.invoices.filter(i=> (!from || (i.date||"")>=from) && (!to || (i.date||"")<=to))
+    : state.invoices;
   const statusTotals={}; STATUSES.forEach(st=>statusTotals[st.v]={count:0,amount:0});
   const rows=[]; let embroCount=0, embroRevenue=0;
   // filters: tailor, status, sale price range — the dropdowns are filled from what exists, keeping the pick
@@ -1879,12 +2021,12 @@ function renderSearch(){
   const fTailor = tSel ? tSel.value : "", fStatus = sSel ? sSel.value : "";
   const num = id=>{ const v = parseFloat(($(id)||{}).value); return isNaN(v) ? null : v; };
   const fMin = num("searchPriceMin"), fMax = num("searchPriceMax");
+  const exactIds = q ? searchExactInvoiceIds(invs, q) : null;
   invs.forEach(inv=> inv.garments.forEach(g=>{
-    statusTotals[g.status].count++; statusTotals[g.status].amount += garmentSalePrice(g);
+    statusTotals[g.status].count++; statusTotals[g.status].amount += garmentNetSalePrice(g, inv);
     if(g.hasEmbroidery){ embroCount++; embroRevenue += (g.embroideryPrice||0); }
-    const hay=(inv.number+" "+(g.tailor||"")+" "+deliveryReceiptOf(inv,g)+" "+(inv.customerMobile||"")).toLowerCase();
-    if(q && !hay.includes(q)) return;
-    const price = garmentSalePrice(g);
+    if(q && !(exactIds ? exactIds.has(inv.id) : searchTextMatches(inv, g, q))) return;
+    const price = garmentNetSalePrice(g, inv); // after the invoice's discount
     if(fTailor && (fTailor==="__none__" ? !!g.tailor : g.tailor!==fTailor)) return;
     if(fStatus && g.status!==fStatus) return;
     if(fMin!==null && price < fMin - 0.001) return;
@@ -1897,7 +2039,7 @@ function renderSearch(){
     <div class="amt">${embroRevenue.toFixed(0)} ﷼</div><div class="cnt">${embroCount} ثوب مطرّز</div></div>`;
   const tbody=$("searchResults"); tbody.innerHTML="";
   const foot=$("searchTotals"), avgBody=$("searchAverages");
-  if(rows.length===0){ tbody.innerHTML=`<tr><td colspan="7">${emptyStateHtml("search-x","لا نتائج")}</td></tr>`; if(foot) foot.innerHTML=""; if(avgBody) avgBody.innerHTML=""; refreshLucideIcons(); return; }
+  if(rows.length===0){ tbody.innerHTML=`<tr><td colspan="8">${emptyStateHtml("search-x","لا نتائج")}</td></tr>`; if(foot) foot.innerHTML=""; if(avgBody) avgBody.innerHTML=""; refreshLucideIcons(); return; }
   // same invoice + tailor + status + price + receipt → one line with its thobe count
   const groups = [];
   rows.forEach(r=>{
@@ -1907,16 +2049,17 @@ function renderSearch(){
     gr.count++;
   });
   tbody.innerHTML = groups.map(gr=>{ const st=STATUSES.find(x=>x.v===gr.g.status);
-    return `<tr><td>${esc(gr.inv.number)}</td><td>${esc(gr.g.tailor||"—")}</td><td><span class="badge ${st.cls}">${st.label}</span></td><td>${fmtSar(gr.price)} ﷼</td><td>${gr.count}</td><td>${fmtSar(gr.price*gr.count)} ﷼</td><td>${esc(gr.receipt)}</td></tr>`; }).join("");
+    return `<tr><td>${esc(gr.inv.number)}</td><td>${esc(gr.g.tailor||"—")}</td><td><span class="badge ${st.cls}">${st.label}</span></td><td>${fmtSar(gr.price)} ﷼</td><td>${gr.count}</td><td>${fmtSar(gr.price*gr.count)} ﷼</td><td>${esc(gr.receipt)}</td><td><button class="btn btn-ghost btn-sm" title="تفاصيل الفاتورة" aria-label="تفاصيل الفاتورة" onclick="showInvoiceDetails('${gr.inv.id}')"><i data-lucide="file-text"></i></button></td></tr>`; }).join("");
   const live = rows.filter(r=> r.g.status!=="ملغي" || fStatus==="ملغي");
   const totalAmt = live.reduce((a,r)=>a+r.price,0);
-  if(foot) foot.innerHTML = `<tr style="font-weight:800;"><td colspan="4">الإجمالي${live.length!==rows.length?" (بدون الملغي)":""}</td><td>${live.length}</td><td>${fmtSar(totalAmt)} ﷼</td><td></td></tr>`;
+  if(foot) foot.innerHTML = `<tr style="font-weight:800;"><td colspan="4">الإجمالي${live.length!==rows.length?" (بدون الملغي)":""}</td><td>${live.length}</td><td>${fmtSar(totalAmt)} ﷼</td><td colspan="2"></td></tr>`;
   // average sale price per thobe: all thobes, then by category
   const avgRow = (label, list)=>{ const t = list.reduce((a,r)=>a+r.price,0); return list.length ? `<tr${label==="كل الثياب"?' style="font-weight:800;"':""}><td>${label}</td><td>${list.length}</td><td>${fmtSar(t)} ﷼</td><td>${fmtSar(Math.round(t/list.length*100)/100)} ﷼</td></tr>` : ""; };
   if(avgBody) avgBody.innerHTML = avgRow("كل الثياب", live)
     + BODY_CATEGORIES.map(c=> avgRow(c, live.filter(r=>(r.g.category||"رجال")===c))).join("")
     + avgRow("أجرة تفصيل (بدون قماش)", live.filter(r=>!r.g.itemCardId))
     + avgRow("بقماش المحل", live.filter(r=>!!r.g.itemCardId));
+  refreshLucideIcons();
 }
 
 function getCustomers(){

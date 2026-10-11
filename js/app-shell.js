@@ -353,6 +353,36 @@ function normalizeState(){
     if(u.wageChild===undefined) u.wageChild=0;
     if(u.wageChildSmall===undefined) u.wageChildSmall=0;
   });
+  assignVoucherNumbers();
+}
+// every riyal in or out of a box carries a serial: cash taken (an invoice / sales / repair payment, a debt
+// settled, an old piece collected, a manual receipt) a سند قبض number, and money paid out (an expense, a
+// refund, a supplier / salary / advance payment, a paid purchase, a manual payment voucher) a سند صرف number.
+// Run on every load and before every save, so no screen can leave one out; records from before this get
+// theirs in date order. Manual receipt vouchers used their own counter — they now share the cash one.
+function assignVoucherNumbers(){
+  if(!state || !state.settings) return;
+  const st = state.settings;
+  if((st.nextReceiptVoucherNumber||1) > (st.nextVoucherNumber||1)) st.nextVoucherNumber = st.nextReceiptVoucherNumber;
+  st.nextReceiptVoucherNumber = st.nextVoucherNumber||1;
+  const ins = [], outs = [];
+  const cashIn = (p, date)=>{ if(p && (p.cash||0)>0 && !p.cashReceiptNo) ins.push({date:date||p.date||"", set:n=>{ p.cashReceiptNo = n; }}); };
+  const out = (rec, date)=>{ if(rec && !rec.voucherNo) outs.push({date:date||rec.date||"", set:n=>{ rec.voucherNo = n; }}); };
+  (state.invoices||[]).forEach(inv=> (inv.payments||[]).forEach(p=> cashIn(p)));
+  (state.salesInvoices||[]).forEach(x=> cashIn(x.payment, x.payment && (x.payment.date||x.date)));
+  (state.openingDebtPayments||[]).forEach(p=> cashIn(p));
+  (state.repairs||[]).forEach(r=>{ (r.payments||[]).forEach(p=> cashIn(p)); (r.refunds||[]).forEach(f=>{ if((f.cash||0)+(f.network||0)>0) out(f); }); });
+  (state.legacyPayments||[]).forEach(l=>{ if((l.amount||0)>0 && !l.voucherNo) ins.push({date:l.date||"", set:n=>{ l.voucherNo = n; }}); });
+  (state.expenses||[]).forEach(e=> out(e));
+  (state.invoiceReturns||[]).forEach(r=>{ if((r.refundAmount||0)>0) out(r); });
+  (state.salesReturns||[]).forEach(r=>{ if((r.refundAmount||0)>0) out(r); });
+  (state.suppliers||[]).forEach(s=> (s.payments||[]).forEach(sp=> out(sp)));
+  (state.payrollLedger||[]).forEach(e=>{ if(e.type==="payment"||e.type==="advance") out(e); });
+  (state.purchases||[]).forEach(p=>{ if(p.payStatus==="paid") out(p); });
+  const byDate = (a,b)=> a.date<b.date ? -1 : a.date>b.date ? 1 : 0; // stable: same-day records keep their order
+  ins.sort(byDate).forEach(x=> x.set(nextVoucherNo()));
+  outs.sort(byDate).forEach(x=> x.set(nextPaymentVoucherNo()));
+  st.nextReceiptVoucherNumber = st.nextVoucherNumber;
 }
 // Every save writes the WHOLE shop document, so two devices saving around the same moment used to
 // be last-writer-wins: the second save silently erased whatever the first one had just added
@@ -425,6 +455,7 @@ function saveState(){
   if(isOffline()){ updateOfflineBanner(); if(typeof showToast==="function") showToast(OFFLINE_SAVE_MSG); return Promise.resolve(false); }
   // captured now, so a later in-memory change can't leak into this save; queued so this device's
   // own back-to-back saves never race (and reject) each other
+  assignVoucherNumbers();
   const payload = JSON.parse(JSON.stringify(state));
   pendingSaves++;
   const run = saveQueue.then(()=> commitStatePayload(payload)).finally(()=>{

@@ -943,6 +943,18 @@ function reverseAddonsStock(g){
   g.addonsStockApplied = false;
 }
 function garmentSalePrice(g){ return (g.price||0) + (g.hasEmbroidery? (g.embroideryPrice||0):0) + garmentAddonsTotal(g); }
+// what the thobe actually sold for: its price less its share of the invoice's discounts (offer, promo code,
+// loyalty, direct discount — they sit on the invoice, split across its live thobes by price)
+function garmentNetSalePrice(g, inv){
+  const gross = garmentSalePrice(g);
+  if(!inv || g.status==="ملغي") return gross;
+  const total = inv.garments.reduce((a,gg)=> a+(gg.status==="ملغي"?0:garmentSalePrice(gg)),0), disc = invoiceDiscountTotal(inv);
+  if(total<=0 || disc<=0.001) return gross;
+  return Math.round(gross * (1 - Math.min(disc,total)/total) * 100)/100;
+}
+// the price for a report cell: after the discount, with the price before it underneath when they differ
+function netPriceCell(g, inv){ const net = garmentNetSalePrice(g, inv), gross = garmentSalePrice(g);
+  return `${fmtSar(net)} ﷼${Math.abs(gross-net)>0.004?`<br><span class="sub" style="font-size:10.5px;text-decoration:line-through;">${fmtSar(gross)}</span>`:""}`; }
 function tailorWageFor(g){
   const t = g.tailor ? state.users.find(u=>u.username===g.tailor && u.role==="خياط") : null;
   if(t){

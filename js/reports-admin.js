@@ -223,7 +223,7 @@ function showCustomerReport(mobile, filterName){
     totalSale+=s; totalPaid+=paid; totalDiscount+=disc;
     html += `<div class="garment-card"><span class="tag">فاتورة ${esc(inv.number)} — ${inv.date||"—"} (${monthDisplay(inv.originMonth)})</span>
       <table style="margin-top:8px;"><thead><tr><th>نوع القماش</th><th>السعر</th><th>الحالة</th></tr></thead><tbody>
-      ${inv.garments.map(g=>`<tr><td>${esc(g.fabricType)}</td><td>${garmentSalePrice(g).toFixed(0)} ﷼</td><td>${STATUSES.find(x=>x.v===g.status)?.label||g.status}</td></tr>`).join("")}
+      ${inv.garments.map(g=>`<tr><td>${esc(g.fabricType)}</td><td>${netPriceCell(g, inv)}</td><td>${STATUSES.find(x=>x.v===g.status)?.label||g.status}</td></tr>`).join("")}
       </tbody></table>
       <p class="sub" style="margin:8px 0 4px;">الدفعات:</p>
       ${(inv.payments&&inv.payments.length) ? `<table><thead><tr><th>التاريخ</th><th>كاش</th><th>سند الكاش</th><th>شبكة</th><th>سند الشبكة</th><th>خصم</th></tr></thead><tbody>
@@ -303,10 +303,50 @@ function renderDailyPreview(){
 // (no screen asks for a separate delivery receipt any more — the payment's voucher / card slip is the receipt)
 function deliveryReceiptOf(inv, g){
   if(g.deliveryReceipt) return String(g.deliveryReceipt);
-  if(g.status!=="تسليم" || !g.deliveredDate) return "—";
-  const p = (inv.payments||[]).filter(x=> x.date===g.deliveredDate && ((x.cash||0)+(x.network||0))>0).pop();
+  if(g.status!=="تسليم") return "—";
+  const paid = (inv.payments||[]).filter(x=> ((x.cash||0)+(x.network||0))>0);
+  // a thobe delivered before the delivery date was recorded: the last payment taken stands for it
+  const p = g.deliveredDate ? paid.filter(x=> x.date===g.deliveredDate).pop() : paid[paid.length-1];
   if(!p) return g.creditDelivered ? "مسلّم بالدين" : "مسدد قبل التسليم";
-  return [p.cashReceiptNo ? `كاش ${p.cashReceiptNo}` : "", (p.networkReceiptNo||p.receipt) ? `شبكة ${p.networkReceiptNo||p.receipt}` : ""].filter(Boolean).join(" / ") || "—";
+  return paymentReceiptText(p);
+}
+// a payment's voucher / card slip — an old cash payment taken before vouchers were numbered says so with its amount
+function paymentReceiptText(p){
+  const parts = [];
+  if((p.cash||0)>0) parts.push(p.cashReceiptNo ? `كاش ${p.cashReceiptNo}` : `كاش ${fmtSar(p.cash)} ﷼ (بدون رقم سند)`);
+  if((p.network||0)>0) parts.push((p.networkReceiptNo||p.receipt) ? `شبكة ${p.networkReceiptNo||p.receipt}` : `شبكة ${fmtSar(p.network)} ﷼ (بدون رقم إيصال)`);
+  return parts.join(" / ") || "—";
+}
+// the whole invoice in one window, opened from the status search: customer, totals, every payment with its kind,
+// voucher / slip and who took it, and per thobe its fabric, price, tailor and the date of every stage it reached
+function showInvoiceDetails(invId){
+  const inv = state.invoices.find(i=>i.id===invId); if(!inv) return;
+  const d = v=> v ? esc(String(v).slice(0,10)) : "—";
+  const usr = v=> v ? esc(v) : "—";
+  const remaining = invoiceRemaining(inv);
+  const pays = (inv.payments||[]).map((p,i)=>{
+    const amt = (p.cash||0)+(p.network||0);
+    const type = [(p.cash||0)>0?`كاش ${fmtSar(p.cash)}`:"", (p.network||0)>0?`شبكة ${fmtSar(p.network)}${p.cardType==="visa"?" (فيزا)":""}`:"", p.discount?`خصم ${fmtSar(p.discount)}`:""].filter(Boolean).join(" + ");
+    return `<tr><td>${i+1}</td><td>${d(p.date)}</td><td>${esc(paymentKindLabel(inv,p)||"—")}</td><td>${amt?fmtSar(amt)+" ﷼":"—"}</td><td>${esc(type||"—")}</td><td>${amt?esc(paymentReceiptText(p)):"—"}</td><td>${usr(p.recordedBy)}${p.correction?' <span class="badge b-pending">معدّلة</span>':""}</td></tr>`;
+  }).join("") || `<tr><td colspan="7">لا توجد دفعات</td></tr>`;
+  const thobes = inv.garments.map((g,i)=>{
+    const st = STATUSES.find(x=>x.v===g.status) || {label:g.status, cls:""};
+    return `<tr><td>${i+1}</td><td>${esc(g.fabricType||"—")}${g.category?`<br><span class="sub">${esc(g.category)}</span>`:""}</td><td>${netPriceCell(g, inv)}</td><td>${usr(g.tailor)}</td><td><span class="badge ${st.cls}">${esc(st.label)}</span>${g.creditDelivered?'<br><span class="sub">مسلّم بالدين</span>':""}</td>
+      <td>${d(inv.date)}</td><td>${d(g.cutDate)}${g.cutAuto?'<br><span class="sub">تقديري</span>':""}</td><td>${d(g.tailorCompletedDate)}</td><td>${d(g.qcPassedDate)}</td><td>${d(g.readyDate)}</td><td>${d(g.deliveredDate)}${g.deliveredBy?`<br><span class="sub">${esc(g.deliveredBy)}</span>`:""}</td><td>${g.status==="ملغي"?d(g.cancelledDate):"—"}</td><td>${esc(deliveryReceiptOf(inv,g))}</td></tr>`;
+  }).join("");
+  $("invoiceDetailsBody").innerHTML = `<h3 style="margin:0 0 6px;text-align:center;">تفاصيل الفاتورة #${esc(inv.number)}</h3>
+    <div class="table-wrap"><table><tbody>
+      <tr><td>العميل</td><td>${esc(inv.customerName||"—")}</td><td>الجوال</td><td>${esc(inv.customerMobile||"—")}</td></tr>
+      <tr><td>تاريخ الفاتورة</td><td>${d(inv.date)}</td><td>موعد التسليم</td><td>${d(inv.expectedDeliveryDate)}</td></tr>
+      <tr><td>أنشأها</td><td>${usr(inv.createdBy)}</td><td>آخر تعديل</td><td>${inv.lastEditedBy?`${esc(inv.lastEditedBy)} — ${d(inv.lastEditedAt)}`:"—"}</td></tr>
+      <tr><td>إجمالي البيع</td><td>${fmtSar(invoiceSaleTotal(inv))} ﷼</td><td>المدفوع</td><td>${fmtSar(invoicePaid(inv))} ﷼${invoiceDiscountTotal(inv)?` + خصم ${fmtSar(invoiceDiscountTotal(inv))}`:""}</td></tr>
+      <tr><td>المتبقي</td><td style="font-weight:800;color:${remaining>0.004?"var(--loss)":"inherit"};">${fmtSar(remaining)} ﷼</td><td>ملاحظات</td><td>${esc(inv.notes||"—")}</td></tr>
+    </tbody></table></div>
+    <h4 style="margin:12px 0 4px;">الدفعات</h4>
+    <div class="table-wrap"><table><thead><tr><th>#</th><th>التاريخ</th><th>النوع</th><th>المبلغ</th><th>الطريقة</th><th>السند / الإيصال</th><th>سجّلها</th></tr></thead><tbody>${pays}</tbody></table></div>
+    <h4 style="margin:12px 0 4px;">الثياب ومراحلها</h4>
+    <div class="table-wrap"><table><thead><tr><th>#</th><th>القماش</th><th>السعر</th><th>الخياط</th><th>الحالة</th><th>الفاتورة</th><th>القص</th><th>انتهاء التفصيل</th><th>فحص الجودة</th><th>جاهز</th><th>التسليم</th><th>الإلغاء</th><th>إيصال التسليم</th></tr></thead><tbody>${thobes}</tbody></table></div>`;
+  $("invoiceDetailsModalOverlay").classList.remove("hidden");
 }
 // what a tailoring payment was for: the deposit taken with the invoice, the balance paid at delivery,
 // a payment in between, or a discount
@@ -345,9 +385,9 @@ function buildDailyReportHtml(day, r, username){
     r.newInvoices.map(inv=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${inv.garments.length}</td><td>${sar(invoiceSaleTotal(inv))}</td></tr>`),
     {foot:`<td colspan="3">الإجمالي</td><td>${sar(r.newInvoices.reduce((a,i)=>a+invoiceSaleTotal(i),0))}</td>`}));
   parts.push(dailySection("تسليمات — من الشهر الحالي", ["رقم الفاتورة","نوع القماش","السعر","رقم الإيصال"],
-    r.deliveredThisMonth.map(({inv,g})=>`<tr><td>${esc(inv.number)}</td><td>${esc(g.fabricType)}</td><td>${sar(garmentSalePrice(g))}</td><td>${esc(deliveryReceiptOf(inv,g))}</td></tr>`)));
+    r.deliveredThisMonth.map(({inv,g})=>`<tr><td>${esc(inv.number)}</td><td>${esc(g.fabricType)}</td><td>${sar(garmentNetSalePrice(g, inv))}</td><td>${esc(deliveryReceiptOf(inv,g))}</td></tr>`)));
   parts.push(dailySection("تسليمات — متعثرة من أشهر سابقة", ["رقم الفاتورة","الشهر الأصلي","نوع القماش","السعر","رقم الإيصال"],
-    r.deliveredOverdue.map(({inv,g})=>`<tr><td>${esc(inv.number)}</td><td>${monthDisplay(inv.originMonth)}</td><td>${esc(g.fabricType)}</td><td>${sar(garmentSalePrice(g))}</td><td>${esc(deliveryReceiptOf(inv,g))}</td></tr>`)));
+    r.deliveredOverdue.map(({inv,g})=>`<tr><td>${esc(inv.number)}</td><td>${monthDisplay(inv.originMonth)}</td><td>${esc(g.fabricType)}</td><td>${sar(garmentNetSalePrice(g, inv))}</td><td>${esc(deliveryReceiptOf(inv,g))}</td></tr>`)));
   if(!username) parts.push(dailySection("تسليمات الجرد الافتتاحي", ["اسم العميل","الجوال","الوصف","المتبقي وقت التسليم"],
     r.legacyDelivered.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.mobile)}</td><td>${esc(x.desc)}</td><td>${x.remaining?sar(x.remaining):"—"}</td></tr>`)));
   // every amount received, tailoring payments and ready-made sales together, each with what it was for
@@ -744,7 +784,7 @@ function showGarmentInventory(){
   let html = `<h2>${title}</h2>`;
   html += `<p>إجمالي العدد: <b>${rows.length}</b></p>`;
   html += `<table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>الجوال</th><th>نوع القماش</th><th>الخياط</th><th>السعر</th><th>الحالة</th><th>شهر الإصدار</th></tr></thead><tbody>`;
-  rows.forEach(({inv,g})=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${esc(g.fabricType)}</td><td>${esc(g.tailor||"—")}</td><td>${garmentSalePrice(g).toFixed(0)} ﷼</td><td>${STATUSES.find(s=>s.v===g.status)?.label||g.status}</td><td>${monthDisplay(inv.originMonth)}</td></tr>`);
+  rows.forEach(({inv,g})=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${esc(g.fabricType)}</td><td>${esc(g.tailor||"—")}</td><td>${fmtSar(garmentNetSalePrice(g, inv))} ﷼</td><td>${STATUSES.find(s=>s.v===g.status)?.label||g.status}</td><td>${monthDisplay(inv.originMonth)}</td></tr>`);
   if(!rows.length) html+=`<tr><td colspan="8" style="text-align:center;">لا يوجد</td></tr>`;
   html += `</tbody></table>`;
   $("garmentInventoryView").innerHTML = html + `<button class="btn btn-ghost btn-sm" id="printGarmentInventoryBtn" style="margin-top:10px;">طباعة الجرد</button>`;
@@ -758,9 +798,9 @@ function showNoFabricWageReport(){
   });
   const title = `تقرير أجرة تفصيل بدون قماش — ${periodLabel("noFabricWage")}`;
   let html = `<h2>${title}</h2>`;
-  html += `<p>إجمالي عدد الثياب: <b>${rows.length}</b> — إجمالي الأجرة: <b>${rows.reduce((a,{g})=>a+garmentSalePrice(g),0).toFixed(0)} ﷼</b></p>`;
+  html += `<p>إجمالي عدد الثياب: <b>${rows.length}</b> — إجمالي الأجرة: <b>${fmtSar(rows.reduce((a,{inv,g})=>a+garmentNetSalePrice(g, inv),0))} ﷼</b></p>`;
   html += `<table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>الجوال</th><th>الخياط</th><th>الأجرة</th><th>الحالة</th><th>شهر الإصدار</th></tr></thead><tbody>`;
-  rows.forEach(({inv,g})=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${esc(g.tailor||"—")}</td><td>${garmentSalePrice(g).toFixed(0)} ﷼</td><td>${STATUSES.find(s=>s.v===g.status)?.label||g.status}</td><td>${monthDisplay(inv.originMonth)}</td></tr>`);
+  rows.forEach(({inv,g})=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${esc(g.tailor||"—")}</td><td>${fmtSar(garmentNetSalePrice(g, inv))} ﷼</td><td>${STATUSES.find(s=>s.v===g.status)?.label||g.status}</td><td>${monthDisplay(inv.originMonth)}</td></tr>`);
   if(!rows.length) html+=`<tr><td colspan="7" style="text-align:center;">لا يوجد</td></tr>`;
   html += `</tbody></table>`;
   $("noFabricWageView").innerHTML = html + `<button class="btn btn-ghost btn-sm" id="printNoFabricWageBtn" style="margin-top:10px;">طباعة التقرير</button>`;
@@ -772,13 +812,13 @@ function expenseReportEntries(includeOther){
   const out = [];
   state.expenses.forEach(e=>{
     const cat = state.expenseCategories.find(c=>c.id===e.categoryId);
-    out.push({cat: cat ? cat.label : "بدون تصنيف", sub: e.subItemLabel || "بدون بند فرعي", amount: e.amount||0, date: e.date});
+    out.push({cat: cat ? cat.label : "بدون تصنيف", sub: e.subItemLabel || "بدون بند فرعي", amount: e.amount||0, date: e.date, no: e.voucherNo});
   });
   if(includeOther){
     (typeof allCardPayments==="function" ? allCardPayments() : []).forEach(p=>{
       const fee = networkFeeOf(p); if(fee>0.001) out.push({cat:"عمولة الشبكة", sub: p.cardType==="visa" ? "فيزا / ماستر" : "مدى", amount: fee, date: p.date});
     });
-    (state.vouchers||[]).filter(v=>v.type==="payment").forEach(v=> out.push({cat:"سندات صرف", sub: v.reason || v.party || "بدون بيان", amount: v.amount||0, date: v.date}));
+    (state.vouchers||[]).filter(v=>v.type==="payment").forEach(v=> out.push({cat:"سندات صرف", sub: v.reason || v.party || "بدون بيان", amount: v.amount||0, date: v.date, no: v.voucherNo}));
   }
   return out;
 }
@@ -804,24 +844,24 @@ function showExpenseSubItemsReport(){
     if(fCat && e.cat!==fCat) return;
     if(fSub && e.sub!==fSub) return;
     const key = e.cat+"|"+e.sub;
-    if(!groups[key]) groups[key] = {catLabel:e.cat, subLabel:e.sub, count:0, total:0};
-    groups[key].count++; groups[key].total += e.amount;
+    if(!groups[key]) groups[key] = {catLabel:e.cat, subLabel:e.sub, count:0, total:0, nos:[]};
+    groups[key].count++; groups[key].total += e.amount; if(e.no) groups[key].nos.push(e.no);
   });
   const list = Object.values(groups).sort((a,b)=> a.catLabel.localeCompare(b.catLabel) || b.total-a.total);
   const grandTotal = list.reduce((a,g)=>a+g.total,0), grandCount = list.reduce((a,g)=>a+g.count,0);
   const title = `تقرير المصروفات حسب البند الفرعي — ${periodLabel("expSub")}${fCat?` — ${esc(fCat)}`:""}${fSub?` / ${esc(fSub)}`:""}`;
   let html = `<h2>${title}</h2>`;
   html += `<p>إجمالي المصروفات: <b>${fmtSar(grandTotal)} ﷼</b> — عددها: <b>${grandCount}</b></p>`;
-  html += `<table><thead><tr><th>التصنيف</th><th>البند الفرعي</th><th>عدد المصروفات</th><th>الإجمالي</th></tr></thead><tbody>`;
+  html += `<table><thead><tr><th>التصنيف</th><th>البند الفرعي</th><th>عدد المصروفات</th><th>الإجمالي</th><th>أرقام سندات الصرف</th></tr></thead><tbody>`;
   // a subtotal line under each category when it has more than one sub-item
   const cats = [...new Set(list.map(g=>g.catLabel))];
   cats.forEach(c=>{
     const lines = list.filter(g=>g.catLabel===c);
-    lines.forEach(g=> html+=`<tr><td>${esc(g.catLabel)}</td><td>${esc(g.subLabel)}</td><td>${g.count}</td><td>${fmtSar(g.total)} ﷼</td></tr>`);
-    if(lines.length>1) html+=`<tr style="font-weight:700;background:var(--surface2);"><td colspan="2">مجموع ${esc(c)}</td><td>${lines.reduce((a,g)=>a+g.count,0)}</td><td>${fmtSar(lines.reduce((a,g)=>a+g.total,0))} ﷼</td></tr>`;
+    lines.forEach(g=> html+=`<tr><td>${esc(g.catLabel)}</td><td>${esc(g.subLabel)}</td><td>${g.count}</td><td>${fmtSar(g.total)} ﷼</td><td style="font-size:11.5px;">${g.nos.length ? g.nos.slice().sort((a,b)=>a-b).join("، ") : "—"}</td></tr>`);
+    if(lines.length>1) html+=`<tr style="font-weight:700;background:var(--surface2);"><td colspan="2">مجموع ${esc(c)}</td><td>${lines.reduce((a,g)=>a+g.count,0)}</td><td>${fmtSar(lines.reduce((a,g)=>a+g.total,0))} ﷼</td><td></td></tr>`;
   });
-  if(!list.length) html+=`<tr><td colspan="4" style="text-align:center;">لا يوجد</td></tr>`;
-  else html+=`<tr style="font-weight:800;border-top:2px solid var(--border);"><td colspan="2">الإجمالي</td><td>${grandCount}</td><td>${fmtSar(grandTotal)} ﷼</td></tr>`;
+  if(!list.length) html+=`<tr><td colspan="5" style="text-align:center;">لا يوجد</td></tr>`;
+  else html+=`<tr style="font-weight:800;border-top:2px solid var(--border);"><td colspan="2">الإجمالي</td><td>${grandCount}</td><td>${fmtSar(grandTotal)} ﷼</td><td></td></tr>`;
   html += `</tbody></table>`;
   html += `<p class="sub" style="margin-top:6px;">لا يدخل في هذا التقرير: الرواتب والسلف، والمشتريات، وسداد الموردين والدائنين، والتحويلات بين الصناديق — لها تقاريرها الخاصة.</p>`;
   $("expenseSubItemsReportView").innerHTML = html + `<button class="btn btn-ghost btn-sm" id="printExpenseSubItemsBtn" style="margin-top:10px;">طباعة التقرير</button>`;
@@ -834,7 +874,7 @@ function printUndelivered(){
     inv.garments.forEach(g=>{ if(g.status!=="تسليم"&&g.status!=="ملغي") rows.push({inv,g}); });
   });
   let html = `<h2>تقرير الثياب غير المسلّمة — ${periodLabel("undel")}</h2><table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>الجوال</th><th>نوع القماش</th><th>الخياط</th><th>السعر</th><th>الحالة</th><th>شهر الإصدار</th></tr></thead><tbody>`;
-  rows.forEach(({inv,g})=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${esc(g.fabricType)}</td><td>${esc(g.tailor||"—")}</td><td>${garmentSalePrice(g).toFixed(0)} ﷼</td><td>${STATUSES.find(s=>s.v===g.status).label}</td><td>${monthDisplay(inv.originMonth)}</td></tr>`);
+  rows.forEach(({inv,g})=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${esc(g.fabricType)}</td><td>${esc(g.tailor||"—")}</td><td>${fmtSar(garmentNetSalePrice(g, inv))} ﷼</td><td>${STATUSES.find(s=>s.v===g.status).label}</td><td>${monthDisplay(inv.originMonth)}</td></tr>`);
   if(!rows.length) html+=`<tr><td colspan="8">لا يوجد</td></tr>`;
   html += `</tbody></table><p>إجمالي: ${rows.length}</p>`;
   $("undeliveredReportView").innerHTML = html + `<button class="btn btn-ghost btn-sm" id="printUndeliveredNowBtn" style="margin-top:10px;">طباعة</button>`;
@@ -860,7 +900,7 @@ function exportCustomersCsv(){
 function buildCsvString(){
   const rows=[["رقم الفاتورة","العميل","الجوال","التاريخ","شهر الإصدار","نوع القماش","تطريز","سعر البيع","تكلفة الثوب","الحالة","الخياط","رقم إيصال التسليم"]];
   state.invoices.forEach(inv=> inv.garments.forEach(g=>{
-    rows.push([inv.number, inv.customerName||"", inv.customerMobile||"", inv.date, inv.originMonth, g.fabricType, g.hasEmbroidery?("نعم - "+g.embroideryPrice):"لا", garmentSalePrice(g), garmentCostFor(g,inv).toFixed(2), g.status, g.tailor||"", deliveryReceiptOf(inv,g)==="—" ? "" : deliveryReceiptOf(inv,g)]);
+    rows.push([inv.number, inv.customerName||"", inv.customerMobile||"", inv.date, inv.originMonth, g.fabricType, g.hasEmbroidery?("نعم - "+g.embroideryPrice):"لا", garmentNetSalePrice(g, inv), garmentCostFor(g,inv).toFixed(2), g.status, g.tailor||"", deliveryReceiptOf(inv,g)==="—" ? "" : deliveryReceiptOf(inv,g)]);
   }));
   return "\uFEFF"+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
 }
@@ -1307,6 +1347,8 @@ $("exportCsvBtn").addEventListener("click", exportCsv);
 $("closeMonthBtn").addEventListener("click", performCloseMonth);
 $("searchBox").addEventListener("input", renderSearch);
 $("searchScope").addEventListener("change", renderSearch);
+["weekdayGrowthMonth","weekdayGrowthMetric"].forEach(id=> $(id).addEventListener("change", renderWeekdayGrowth));
+["searchFrom","searchTo"].forEach(id=> $(id).addEventListener("change", renderSearch));
 ["searchTailor","searchStatus"].forEach(id=> $(id).addEventListener("change", renderSearch));
 ["searchPriceMin","searchPriceMax"].forEach(id=> $(id).addEventListener("input", renderSearch));
 $("customerSearch").addEventListener("input", renderCustomers);
@@ -1504,7 +1546,7 @@ $("addExpenseBtn").addEventListener("click", ()=>{
   saveStateWithRollback(expenseSnapshot).then(saved=>{
     if(!saved) return;
     $("expInvNumber").value=""; $("expTaxNumber").value=""; $("expAmount").value=""; $("expPaidTo").value=""; $("expStoreName").value=""; $("expNotes").value=""; $("expSubItem").value="";
-    showToast("تم حفظ المصروف");
+    showToast(`تم حفظ المصروف — سند صرف رقم ${result.voucherNo}`);
   });
 });
 
