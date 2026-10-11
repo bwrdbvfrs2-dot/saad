@@ -334,7 +334,8 @@ function renderShiftClosingsLog(){
     mine.map(c=>`<tr><td>${c.date}</td><td>${c.username}</td><td>${c.systemTotal.toFixed(0)} ﷼</td><td>${c.physicalTotal.toFixed(0)} ﷼</td><td style="color:${Math.abs(c.diff)<0.5?'var(--profit)':'var(--loss)'}">${c.diff>=0?"+":""}${c.diff.toFixed(0)} ﷼</td></tr>`).join("") +
     `</tbody></table></div>` : `<p class="sub">ما فيه سجلات إقفال بعد.</p>`;
 }
-function nextReceiptVoucherNo(){ const n=state.settings.nextReceiptVoucherNumber||1; state.settings.nextReceiptVoucherNumber=n+1; return n; }
+// receipts share the cash-payment counter, so a سند قبض number points at one document only
+function nextReceiptVoucherNo(){ const n = nextVoucherNo(); state.settings.nextReceiptVoucherNumber = state.settings.nextVoucherNumber; return n; }
 function nextPaymentVoucherNo(){ const n=state.settings.nextPaymentVoucherNumber||1; state.settings.nextPaymentVoucherNumber=n+1; return n; }
 function renderVouchersTab(){
   const boxSel = $("voucherBox");
@@ -486,9 +487,10 @@ function addExpense(data){
     categoryId:data.categoryId, subItemId: subItem?subItem.id:"", subItemLabel: subItem?subItem.label:"",
     amount:data.amount, paidTo:data.paidTo, storeName:data.storeName,
     notes:data.notes, sourceBoxId:data.sourceBoxId, recordedBy: currentUser.username, vatStatus:data.vatStatus,
+    voucherNo: nextPaymentVoucherNo(),
   });
   logAudit("expense_recorded", {amount:data.amount, paidTo:data.paidTo, categoryId:data.categoryId, subItemLabel: subItem?subItem.label:undefined, date:data.date});
-  return {ok:true};
+  return {ok:true, voucherNo: state.expenses[state.expenses.length-1].voucherNo};
 }
 
 // ---------------- garment form ----------------

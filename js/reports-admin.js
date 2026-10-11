@@ -812,13 +812,13 @@ function expenseReportEntries(includeOther){
   const out = [];
   state.expenses.forEach(e=>{
     const cat = state.expenseCategories.find(c=>c.id===e.categoryId);
-    out.push({cat: cat ? cat.label : "بدون تصنيف", sub: e.subItemLabel || "بدون بند فرعي", amount: e.amount||0, date: e.date});
+    out.push({cat: cat ? cat.label : "بدون تصنيف", sub: e.subItemLabel || "بدون بند فرعي", amount: e.amount||0, date: e.date, no: e.voucherNo});
   });
   if(includeOther){
     (typeof allCardPayments==="function" ? allCardPayments() : []).forEach(p=>{
       const fee = networkFeeOf(p); if(fee>0.001) out.push({cat:"عمولة الشبكة", sub: p.cardType==="visa" ? "فيزا / ماستر" : "مدى", amount: fee, date: p.date});
     });
-    (state.vouchers||[]).filter(v=>v.type==="payment").forEach(v=> out.push({cat:"سندات صرف", sub: v.reason || v.party || "بدون بيان", amount: v.amount||0, date: v.date}));
+    (state.vouchers||[]).filter(v=>v.type==="payment").forEach(v=> out.push({cat:"سندات صرف", sub: v.reason || v.party || "بدون بيان", amount: v.amount||0, date: v.date, no: v.voucherNo}));
   }
   return out;
 }
@@ -844,24 +844,24 @@ function showExpenseSubItemsReport(){
     if(fCat && e.cat!==fCat) return;
     if(fSub && e.sub!==fSub) return;
     const key = e.cat+"|"+e.sub;
-    if(!groups[key]) groups[key] = {catLabel:e.cat, subLabel:e.sub, count:0, total:0};
-    groups[key].count++; groups[key].total += e.amount;
+    if(!groups[key]) groups[key] = {catLabel:e.cat, subLabel:e.sub, count:0, total:0, nos:[]};
+    groups[key].count++; groups[key].total += e.amount; if(e.no) groups[key].nos.push(e.no);
   });
   const list = Object.values(groups).sort((a,b)=> a.catLabel.localeCompare(b.catLabel) || b.total-a.total);
   const grandTotal = list.reduce((a,g)=>a+g.total,0), grandCount = list.reduce((a,g)=>a+g.count,0);
   const title = `تقرير المصروفات حسب البند الفرعي — ${periodLabel("expSub")}${fCat?` — ${esc(fCat)}`:""}${fSub?` / ${esc(fSub)}`:""}`;
   let html = `<h2>${title}</h2>`;
   html += `<p>إجمالي المصروفات: <b>${fmtSar(grandTotal)} ﷼</b> — عددها: <b>${grandCount}</b></p>`;
-  html += `<table><thead><tr><th>التصنيف</th><th>البند الفرعي</th><th>عدد المصروفات</th><th>الإجمالي</th></tr></thead><tbody>`;
+  html += `<table><thead><tr><th>التصنيف</th><th>البند الفرعي</th><th>عدد المصروفات</th><th>الإجمالي</th><th>أرقام سندات الصرف</th></tr></thead><tbody>`;
   // a subtotal line under each category when it has more than one sub-item
   const cats = [...new Set(list.map(g=>g.catLabel))];
   cats.forEach(c=>{
     const lines = list.filter(g=>g.catLabel===c);
-    lines.forEach(g=> html+=`<tr><td>${esc(g.catLabel)}</td><td>${esc(g.subLabel)}</td><td>${g.count}</td><td>${fmtSar(g.total)} ﷼</td></tr>`);
-    if(lines.length>1) html+=`<tr style="font-weight:700;background:var(--surface2);"><td colspan="2">مجموع ${esc(c)}</td><td>${lines.reduce((a,g)=>a+g.count,0)}</td><td>${fmtSar(lines.reduce((a,g)=>a+g.total,0))} ﷼</td></tr>`;
+    lines.forEach(g=> html+=`<tr><td>${esc(g.catLabel)}</td><td>${esc(g.subLabel)}</td><td>${g.count}</td><td>${fmtSar(g.total)} ﷼</td><td style="font-size:11.5px;">${g.nos.length ? g.nos.slice().sort((a,b)=>a-b).join("، ") : "—"}</td></tr>`);
+    if(lines.length>1) html+=`<tr style="font-weight:700;background:var(--surface2);"><td colspan="2">مجموع ${esc(c)}</td><td>${lines.reduce((a,g)=>a+g.count,0)}</td><td>${fmtSar(lines.reduce((a,g)=>a+g.total,0))} ﷼</td><td></td></tr>`;
   });
-  if(!list.length) html+=`<tr><td colspan="4" style="text-align:center;">لا يوجد</td></tr>`;
-  else html+=`<tr style="font-weight:800;border-top:2px solid var(--border);"><td colspan="2">الإجمالي</td><td>${grandCount}</td><td>${fmtSar(grandTotal)} ﷼</td></tr>`;
+  if(!list.length) html+=`<tr><td colspan="5" style="text-align:center;">لا يوجد</td></tr>`;
+  else html+=`<tr style="font-weight:800;border-top:2px solid var(--border);"><td colspan="2">الإجمالي</td><td>${grandCount}</td><td>${fmtSar(grandTotal)} ﷼</td><td></td></tr>`;
   html += `</tbody></table>`;
   html += `<p class="sub" style="margin-top:6px;">لا يدخل في هذا التقرير: الرواتب والسلف، والمشتريات، وسداد الموردين والدائنين، والتحويلات بين الصناديق — لها تقاريرها الخاصة.</p>`;
   $("expenseSubItemsReportView").innerHTML = html + `<button class="btn btn-ghost btn-sm" id="printExpenseSubItemsBtn" style="margin-top:10px;">طباعة التقرير</button>`;
@@ -1347,6 +1347,7 @@ $("exportCsvBtn").addEventListener("click", exportCsv);
 $("closeMonthBtn").addEventListener("click", performCloseMonth);
 $("searchBox").addEventListener("input", renderSearch);
 $("searchScope").addEventListener("change", renderSearch);
+["searchFrom","searchTo"].forEach(id=> $(id).addEventListener("change", renderSearch));
 ["searchTailor","searchStatus"].forEach(id=> $(id).addEventListener("change", renderSearch));
 ["searchPriceMin","searchPriceMax"].forEach(id=> $(id).addEventListener("input", renderSearch));
 $("customerSearch").addEventListener("input", renderCustomers);
@@ -1544,7 +1545,7 @@ $("addExpenseBtn").addEventListener("click", ()=>{
   saveStateWithRollback(expenseSnapshot).then(saved=>{
     if(!saved) return;
     $("expInvNumber").value=""; $("expTaxNumber").value=""; $("expAmount").value=""; $("expPaidTo").value=""; $("expStoreName").value=""; $("expNotes").value=""; $("expSubItem").value="";
-    showToast("تم حفظ المصروف");
+    showToast(`تم حفظ المصروف — سند صرف رقم ${result.voucherNo}`);
   });
 });
 

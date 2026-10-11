@@ -1671,8 +1671,8 @@ function renderBalancesTab(){
   expTbody.innerHTML = visibleExpenses.length ? visibleExpenses.map(e=>{
     const cat = state.expenseCategories.find(c=>c.id===e.categoryId);
     const box = findCashBox(e.sourceBoxId);
-    return `<tr><td>${e.date}</td><td>${cat?esc(cat.label):"—"}</td><td>${esc(e.subItemLabel||"—")}</td><td>${e.amount.toFixed(0)} ﷼</td><td>${esc(e.paidTo||"—")}</td><td>${esc(e.storeName||"—")}</td><td>${box?esc(box.name):"—"}</td></tr>`;
-  }).join("") : `<tr><td colspan="7">${emptyStateHtml("receipt","ما فيه مصروفات مسجّلة بعد.")}</td></tr>`;
+    return `<tr><td>${e.voucherNo?`صرف ${e.voucherNo}`:"—"}</td><td>${e.date}</td><td>${cat?esc(cat.label):"—"}</td><td>${esc(e.subItemLabel||"—")}</td><td>${e.amount.toFixed(0)} ﷼</td><td>${esc(e.paidTo||"—")}</td><td>${esc(e.storeName||"—")}</td><td>${box?esc(box.name):"—"}</td></tr>`;
+  }).join("") : `<tr><td colspan="8">${emptyStateHtml("receipt","ما فيه مصروفات مسجّلة بعد.")}</td></tr>`;
 }
 function renderClosedReports(){
   const el=$("archiveList");
@@ -1888,7 +1888,12 @@ function searchTextMatches(inv, g, q){
 function renderSearch(){
   const q=($("searchBox").value||"").trim().toLowerCase();
   const scope=$("searchScope").value;
-  const invs = scope==="current"? state.invoices.filter(i=>i.originMonth===state.settings.currentMonth) : state.invoices;
+  // a set period goes by the invoice date; an empty end is open on that side
+  const from = ($("searchFrom")||{}).value || "", to = ($("searchTo")||{}).value || "";
+  if($("searchRangeWrap")) $("searchRangeWrap").style.display = scope==="range" ? "" : "none";
+  const invs = scope==="current" ? state.invoices.filter(i=>i.originMonth===state.settings.currentMonth)
+    : scope==="range" ? state.invoices.filter(i=> (!from || (i.date||"")>=from) && (!to || (i.date||"")<=to))
+    : state.invoices;
   const statusTotals={}; STATUSES.forEach(st=>statusTotals[st.v]={count:0,amount:0});
   const rows=[]; let embroCount=0, embroRevenue=0;
   // filters: tailor, status, sale price range — the dropdowns are filled from what exists, keeping the pick
