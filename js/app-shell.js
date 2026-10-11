@@ -456,6 +456,7 @@ function saveState(){
   // captured now, so a later in-memory change can't leak into this save; queued so this device's
   // own back-to-back saves never race (and reject) each other
   assignVoucherNumbers();
+  if(typeof computeAdvisory==="function") state.advisory = computeAdvisory().totals;
   const payload = JSON.parse(JSON.stringify(state));
   pendingSaves++;
   const run = saveQueue.then(()=> commitStatePayload(payload)).finally(()=>{

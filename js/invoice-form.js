@@ -19,6 +19,36 @@ function applyGarmentAdvisory(g){
   g.advisoryCredit = credit;
   g.advisoryApplied = true;
 }
+// the guideline balances, rebuilt from what actually happened instead of a running total: a cost is owed
+// once it is incurred — fabric and padding when the thobe is cut, the tailor's wage and the embroidery
+// when the sewing is done (a cancelled thobe keeps what it had reached) — and comes off as it is paid:
+// expenses under the linked category, fabric bought through purchases, salaries / advances paid to tailors.
+// (They were credited for every thobe the moment its invoice was saved and never matched the payroll.)
+function computeAdvisory(){
+  const s = state.settings, det = {fabric:{cr:[],db:[]}, padding:{cr:[],db:[]}, wages:{cr:[],db:[]}, embroidery:{cr:[],db:[]}};
+  const cr = (k, c, date, label)=>{ if(c>0.001) det[k].cr.push({c, date, label}); };
+  const db = (k, amount, date, label)=>{ if(amount>0.001) det[k].db.push({amount, date, label}); };
+  state.invoices.forEach(inv=> inv.garments.forEach((g,i)=>{
+    const lbl = `فاتورة #${inv.number} — ثوب ${i+1}`;
+    // older thobes can be past a stage without its date: the stage they reached still counts
+    const pastCut = ["قص","تفصيل","جاهز","تسليم","معلقة"].includes(g.status), pastSewn = ["جاهز","تسليم","معلقة"].includes(g.status);
+    const cutOn = g.cutDate || (pastCut ? (g.tailorCompletedDate||g.readyDate||g.deliveredDate||inv.date) : null);
+    const sewnOn = g.tailorCompletedDate || (pastSewn ? (g.qcPassedDate||g.readyDate||g.deliveredDate||cutOn) : null);
+    if(cutOn){ cr("fabric", garmentFabricCost(g), cutOn, lbl); cr("padding", s.padding||0, cutOn, lbl); }
+    if(sewnOn){ cr("wages", tailorWageFor(g), sewnOn, lbl+(g.tailor?" — "+g.tailor:"")); if(g.hasEmbroidery) cr("embroidery", s.embroideryWage||0, sewnOn, lbl); }
+  }));
+  (state.repairs||[]).forEach(r=>{ if(r.status!=="ملغي" && (r.tailorWage||0)>0 && r.readyDate) cr("wages", r.tailorWage, r.readyDate, `صيانة ص-${r.number}${r.tailor?" — "+r.tailor:""}`); });
+  state.expenseCategories.filter(c=>c.advisoryKey && det[c.advisoryKey]).forEach(c=>
+    state.expenses.filter(e=>e.categoryId===c.id).forEach(e=> db(c.advisoryKey, e.amount||0, e.date, `مصروف${e.voucherNo?" — سند صرف "+e.voucherNo:""}${e.paidTo?" — "+e.paidTo:""}`)));
+  const isFabric = id=>{ const c = findItemCard(id); return c && c.type==="fabric"; };
+  state.purchases.filter(x=>isFabric(x.itemCardId)).forEach(x=> db("fabric", (x.quantity||0)*(x.unitPrice||0), x.date, `شراء قماش — فاتورة ${x.invoiceNo||""}`));
+  state.purchaseReturns.filter(x=>isFabric(x.itemCardId)).forEach(x=> cr("fabric", x.value||0, x.date, "مرتجع مشتريات قماش"));
+  const tailors = state.users.filter(u=>u.role==="خياط").map(u=>u.username);
+  state.payrollLedger.filter(e=>(e.type==="payment"||e.type==="advance") && tailors.includes(e.username)).forEach(e=> db("wages", e.amount||0, e.date, `${e.type==="advance"?"سلفة":"راتب"} ${e.username}${e.voucherNo?" — سند صرف "+e.voucherNo:""}`));
+  const totals = {};
+  Object.keys(det).forEach(k=>{ const d = det[k]; d.crTotal = d.cr.reduce((a,x)=>a+x.c,0); d.dbTotal = d.db.reduce((a,x)=>a+x.amount,0); totals[k] = Math.round((d.crTotal - d.dbTotal)*100)/100; });
+  return {totals, det};
+}
 // the wages guideline was credited with the default wage when the invoice was saved, but the tailor is
 // paid his own rate for the category — so once the tailor is known the credit is trued up to that rate,
 // otherwise the balance drifted negative by the difference on every thobe. A wage already paid stays as it was.

@@ -1652,36 +1652,21 @@ function renderBalancesTab(){
   }).join("") : `<p class="sub">ما فيه تحويلات بعد.</p>`;
 
   // advisory balances
-  const adv = state.advisory;
-  // each balance with where it came from: the thobes that credited it (at the rate in force when each
-  // invoice was saved) less the expenses recorded under its linked category
+  const {totals:adv, det} = computeAdvisory();
   const advDetails = key=>{
-    const credits = [], debits = [];
-    state.invoices.forEach(inv=> inv.garments.forEach((g,i)=>{ const c = g.advisoryApplied && g.advisoryCredit ? (g.advisoryCredit[key]||0) : 0; if(c>0.001) credits.push({inv, i, g, c}); }));
-    const catIds = state.expenseCategories.filter(c=>c.advisoryKey===key).map(c=>c.id);
-    state.expenses.filter(e=>catIds.includes(e.categoryId)).forEach(e=> debits.push({date:e.date, amount:e.amount, label:`مصروف${e.voucherNo?" — سند صرف "+e.voucherNo:""}${e.paidTo?" — "+e.paidTo:""}`}));
-    const isFabric = id=>{ const c = findItemCard(id); return c && c.type==="fabric"; };
-    if(key==="fabric"){
-      state.purchases.filter(x=>isFabric(x.itemCardId)).forEach(x=> debits.push({date:x.date, amount:(x.quantity||0)*(x.unitPrice||0), label:`شراء قماش — فاتورة ${x.invoiceNo||""}`}));
-      state.purchaseReturns.filter(x=>isFabric(x.itemCardId)).forEach(x=> credits.push({date:x.date, c:x.value||0, label:"مرتجع مشتريات قماش"}));
-    }
-    if(key==="wages"){
-      (state.repairs||[]).filter(r=>r.advisoryWage>0).forEach(r=> credits.push({date:r.date||r.readyDate, c:r.advisoryWage, label:`صيانة ص-${r.number}`}));
-      const tailors = state.users.filter(u=>u.role==="خياط").map(u=>u.username);
-      state.payrollLedger.filter(e=>(e.type==="payment"||e.type==="advance") && tailors.includes(e.username)).forEach(e=> debits.push({date:e.date, amount:e.amount, label:`${e.type==="advance"?"سلفة":"راتب"} ${e.username}${e.voucherNo?" — سند صرف "+e.voucherNo:""}`}));
-    }
-    const cr = credits.reduce((a,x)=>a+x.c,0), db = debits.reduce((a,e)=>a+(e.amount||0),0), diff = (adv[key]||0) - (cr - db);
-    const rows = credits.slice().reverse().slice(0,60).map(x=>`<tr><td colspan="2">${x.inv?`فاتورة #${esc(x.inv.number)} — ثوب ${x.i+1}`:esc(x.label)}</td><td>${esc((x.inv?x.inv.date:x.date)||"—")}</td><td style="color:var(--profit);">+${fmtSar(x.c)}</td></tr>`).join("")
-      + debits.slice().reverse().slice(0,30).map(e=>`<tr><td colspan="2">${esc(e.label)}</td><td>${esc(e.date||"—")}</td><td style="color:var(--loss);">−${fmtSar(e.amount||0)}</td></tr>`).join("");
+    const d = det[key];
+    const rows = [...d.cr.map(x=>({...x, sign:1})), ...d.db.map(x=>({c:x.amount, date:x.date, label:x.label, sign:-1}))]
+      .sort((x,y)=> (y.date||"").localeCompare(x.date||"")).slice(0,80)
+      .map(x=>`<tr><td>${esc(x.label)}</td><td>${esc(x.date||"—")}</td><td style="color:${x.sign>0?"var(--profit)":"var(--loss)"};">${x.sign>0?"+":"−"}${fmtSar(x.c)}</td></tr>`).join("");
     return `<details style="margin-top:6px;text-align:right;"><summary class="sub" style="cursor:pointer;">من وين جا الرصيد؟</summary>
-      <p class="sub" style="margin:6px 0;">أُضيف ${fmtSar(cr)} ﷼ (${credits.length} قيد) − نزل ${fmtSar(db)} ﷼ (${debits.length} قيد)${Math.abs(diff)>0.5?` — <b style="color:var(--loss);">فرق ${fmtSar(diff)} ﷼ من فواتير انحذفت أو قيود قديمة</b>`:""}</p>
+      <p class="sub" style="margin:6px 0;">استُحق ${fmtSar(d.crTotal)} ﷼ (${d.cr.length}) − انصرف ${fmtSar(d.dbTotal)} ﷼ (${d.db.length})</p>
       ${rows?`<div class="table-wrap"><table style="font-size:12px;"><tbody>${rows}</tbody></table></div>`:""}</details>`;
   };
   $("advisoryBalancesGrid").innerHTML = `
-    <div class="report-card"><div class="st">رصيد الأقمشة</div><div class="amt">${adv.fabric.toFixed(0)} ﷼</div>${advDetails("fabric")}</div>
-    <div class="report-card"><div class="st">رصيد الحشوات</div><div class="amt">${adv.padding.toFixed(0)} ﷼</div>${advDetails("padding")}</div>
-    <div class="report-card"><div class="st">رصيد أجور الخياطين</div><div class="amt">${adv.wages.toFixed(0)} ﷼</div>${advDetails("wages")}</div>
-    <div class="report-card"><div class="st">رصيد التطريز</div><div class="amt">${adv.embroidery.toFixed(0)} ﷼</div><div class="sub" style="font-size:11px;">أجرة التطريز الحالية ${fmtSar(state.settings.embroideryWage||0)} ﷼ للثوب</div>${advDetails("embroidery")}</div>`;
+    <div class="report-card"><div class="st">رصيد الأقمشة</div><div class="amt">${adv.fabric.toFixed(0)} ﷼</div><div class="sub" style="font-size:11px;">قماش الثياب المقصوصة − مشتريات القماش</div>${advDetails("fabric")}</div>
+    <div class="report-card"><div class="st">رصيد الحشوات</div><div class="amt">${adv.padding.toFixed(0)} ﷼</div><div class="sub" style="font-size:11px;">${fmtSar(state.settings.padding||0)} ﷼ لكل ثوب انقص</div>${advDetails("padding")}</div>
+    <div class="report-card"><div class="st">رصيد أجور الخياطين</div><div class="amt">${adv.wages.toFixed(0)} ﷼</div><div class="sub" style="font-size:11px;">أجرة كل ثوب خلص تفصيله − المدفوع للخياطين</div>${advDetails("wages")}</div>
+    <div class="report-card"><div class="st">رصيد التطريز</div><div class="amt">${adv.embroidery.toFixed(0)} ﷼</div><div class="sub" style="font-size:11px;">${fmtSar(state.settings.embroideryWage||0)} ﷼ لكل ثوب مطرّز خلص تفصيله</div>${advDetails("embroidery")}</div>`;
 
   // expense form selects
   const curExpCat = $("expCategory").value, curExpBox = $("expSourceBox").value;
