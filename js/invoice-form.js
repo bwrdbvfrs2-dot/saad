@@ -795,7 +795,7 @@ function readGarmentFields(existing){
     const sample = card.querySelector(".meas-sample") ? card.querySelector(".meas-sample").checked : false;
     const cutter = card.querySelector(".meas-cutter") ? card.querySelector(".meas-cutter").value.trim() : "";
     const measurements = {};
-    card.querySelectorAll(".meas-field").forEach(inp=>{ if(inp.value) measurements[inp.dataset.key] = parseFloat(inp.value)||0; });
+    card.querySelectorAll(".meas-field").forEach(inp=>{ const v = parseMeasureValue(inp.value); if(v!==null) measurements[inp.dataset.key] = v; });
     card.querySelectorAll(".meas-choice").forEach(sel=>{ if(sel.value) measurements[sel.dataset.key] = sel.value; });
     const old = existing && existing[i] ? existing[i] : {};
     // an edit keeps everything the thobe already carries (its stage dates, who delivered it, credit delivery…)

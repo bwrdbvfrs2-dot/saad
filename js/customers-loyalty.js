@@ -238,7 +238,7 @@ function measurementSnapshotFromPanel(idx){
   const card = $("garmentsHolder").children[idx];
   if(!card) return null;
   const measurements = {};
-  card.querySelectorAll(".meas-field").forEach(inp=>{ if(inp.value!=="") measurements[inp.dataset.key] = parseFloat(inp.value)||0; });
+  card.querySelectorAll(".meas-field").forEach(inp=>{ const v = parseMeasureValue(inp.value); if(v!==null) measurements[inp.dataset.key] = v; });
   card.querySelectorAll(".meas-choice").forEach(sel=>{ if(sel.value) measurements[sel.dataset.key] = sel.value; });
   const categorySel = card.querySelector(".g-category");
   return { date: todayStr(), measurements, category: categorySel ? categorySel.value : undefined };
@@ -328,15 +328,23 @@ function buildMannequinPreviewHtml(m){
   return `<div>${view(garmentTypeItem.image,true,"أمام")}${view(garmentTypeItem.imageBack,false,"خلف")}
   </div>`;
 }
+// a measurement as typed: Arabic digits and an Arabic / comma decimal separator count (17٫51, ١٧٫٥١, 17,51 → 17.51)
+// — a number field took none of them and dropped the whole measurement, so it never printed
+function parseMeasureValue(raw){
+  const t = String(raw==null?"":raw).trim().replace(/[٠-٩]/g, d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/[۰-۹]/g, d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)).replace(/[٫,،]/g, ".").replace(/[^0-9.\-]/g, "");
+  if(!t) return null;
+  const v = parseFloat(t);
+  return isNaN(v) ? null : Math.round(v*100)/100;
+}
 function renderMeasurementPanelHtml(g, idx){
   const m = g.measurements || {};
   const pairedKeys = new Set(Object.values(PAIRED_SIZE_FIELDS).flat().concat(UNLINKED_SIZE_GROUPS.flatMap(gr=>gr.keys)));
   const numFieldsHtml = MEASUREMENT_FIELDS.filter(f=>!pairedKeys.has(f.key)).map(f=>
-    `<div class="field" style="margin-bottom:6px;"><label style="font-size:11px;">${f.label}</label><input type="number" step="0.01" class="meas-field" data-idx="${idx}" data-key="${f.key}" value="${m[f.key]!==undefined && m[f.key]!==null ? m[f.key] : ""}" placeholder="0"></div>`
+    `<div class="field" style="margin-bottom:6px;"><label style="font-size:11px;">${f.label}</label><input type="text" inputmode="decimal" class="meas-field" data-idx="${idx}" data-key="${f.key}" value="${m[f.key]!==undefined && m[f.key]!==null ? m[f.key] : ""}" placeholder="0"></div>`
   ).join("");
   const sizeInputHtml = key=>{
     const f = MEASUREMENT_FIELDS.find(x=>x.key===key);
-    return `<div class="field" style="margin-bottom:0;"><label style="font-size:10.5px;">${f.label}</label><input type="number" step="0.01" class="meas-field" data-idx="${idx}" data-key="${key}" value="${m[key]!==undefined && m[key]!==null ? m[key] : ""}" placeholder="0"></div>`;
+    return `<div class="field" style="margin-bottom:0;"><label style="font-size:10.5px;">${f.label}</label><input type="text" inputmode="decimal" class="meas-field" data-idx="${idx}" data-key="${key}" value="${m[key]!==undefined && m[key]!==null ? m[key] : ""}" placeholder="0"></div>`;
   };
   const garmentTypeField = MEASUREMENT_CHOICE_FIELDS.find(f=>f.key==="garmentType");
   const buildChoiceFieldHtml = f=>{
