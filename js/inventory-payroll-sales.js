@@ -1724,6 +1724,41 @@ function renderPeriodRollups(reports){
 }
 // daily sales of one month laid out weekday × week of the month, so each Saturday (say) sits next to the
 // month's other Saturdays: week 1 = days 1-7, week 2 = 8-14 … week 5 = 29-31. Works on live data, open months included.
+// a small bar chart drawn as inline SVG (no library, works offline): groups along the x axis laid out right
+// to left like the page, one bar per series in each group, negative values below the zero line, an optional
+// coloured note above each group (a growth %) and a second label line under it; hovering a bar shows its value
+const CHART_COLORS = ["#2f6fb0","#b8863a","#1f9d5c","#c23b3b","#7a4fb0"];
+function svgBarChart({labels, sub, series, above, fmt}){
+  fmt = fmt || (v=> fmtSar(v));
+  const n = labels.length; if(!n) return `<p class="sub">ما فيه بيانات للرسم بعد.</p>`;
+  const k = series.length;
+  const all = series.flatMap(x=>x.values).filter(v=>typeof v==="number");
+  const max = Math.max(0, ...all), min = Math.min(0, ...all), span = (max-min) || 1;
+  const W = (window.innerWidth||800) < 600 ? 360 : 640, left = 6, right = 6, top = 34, plotH = 170, negPad = min<0 ? 14 : 0, bottom = (sub ? 44 : 30) + negPad;
+  const H = top + plotH + bottom, slot = (W-left-right)/n;
+  const barW = Math.min(k>1 ? 22 : 46, (slot-12)/k);
+  const y = v=> top + (max - v)/span*plotH, zero = y(0);
+  const cxOf = i=> W - right - slot*(i+0.5); // right to left, like the page
+  let svg = `<line x1="${left}" x2="${W-right}" y1="${zero}" y2="${zero}" stroke="var(--border)" stroke-width="1.5"/>`;
+  labels.forEach((lab, i)=>{
+    const cx = cxOf(i), x0 = cx - k*barW/2;
+    series.forEach((s, j)=>{
+      const v = s.values[i]; if(typeof v!=="number") return;
+      const x = x0 + (k-1-j)*barW, yy = Math.min(y(v), zero), h = Math.max(1, Math.abs(y(v)-zero));
+      svg += `<rect x="${x.toFixed(1)}" y="${yy.toFixed(1)}" width="${(barW-2).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${v<0?"var(--loss)":(s.color||CHART_COLORS[j%CHART_COLORS.length])}"><title>${esc(lab)}${k>1?" — "+esc(s.name):""}: ${esc(fmt(v))}</title></rect>`;
+      if(k===1 || barW>=20) svg += `<text x="${(x+(barW-2)/2).toFixed(1)}" y="${(v<0 ? yy+h+11 : yy-3).toFixed(1)}" font-size="${k>1?8.5:10}" text-anchor="middle" fill="var(--muted)">${esc(fmt(v))}</text>`;
+    });
+    if(above && above[i]) svg += `<text x="${cx.toFixed(1)}" y="${top-18}" font-size="11" font-weight="700" text-anchor="middle" fill="${above[i].color||"var(--muted)"}">${esc(above[i].text)}</text>`;
+    svg += `<text x="${cx.toFixed(1)}" y="${top+plotH+negPad+15}" font-size="11" text-anchor="middle" fill="currentColor">${esc(lab)}</text>`;
+    if(sub && sub[i]) svg += `<text x="${cx.toFixed(1)}" y="${top+plotH+negPad+29}" font-size="9.5" text-anchor="middle" fill="var(--muted)">${esc(sub[i])}</text>`;
+  });
+  const legend = k>1 ? `<div style="display:flex;flex-wrap:wrap;gap:10px;font-size:11.5px;margin:4px 0;">${series.map((s,j)=>`<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${s.color||CHART_COLORS[j%CHART_COLORS.length]};margin-inline-end:4px;"></span>${esc(s.name)}</span>`).join("")}</div>` : "";
+  return `${legend}<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:760px;height:auto;display:block;direction:ltr;" role="img">${svg}</svg>`;
+}
+function chartMonthName(label){ return ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"][parseInt(label.slice(5,7),10)-1] || label; }
+function chartQuarterName(q){ const m = /Q(\d)/.exec(q||""); return m ? "الربع "+m[1] : quarterDisplay(q); }
+// a growth % as a coloured note over a bar
+function growthNote(g){ return g===null||g===undefined ? null : {text:(g>=0?"+":"")+g.toFixed(0)+"%", color: g>0?"var(--profit)":(g<0?"var(--loss)":"var(--muted)")}; }
 const WEEKDAY_ROWS = [[6,"السبت"],[0,"الأحد"],[1,"الاثنين"],[2,"الثلاثاء"],[3,"الأربعاء"],[4,"الخميس"],[5,"الجمعة"]];
 function dailySalesByDate(month, metric){
   const days = {}; // "YYYY-MM-DD" → {amount, thobes}
@@ -1772,6 +1807,11 @@ function renderWeekdayGrowth(){
   const head = `<tr><th>اليوم</th>${Array.from({length:weeks},(_,i)=>`<th>الأسبوع ${["الأول","الثاني","الثالث","الرابع","الخامس"][i]}</th>`).join("")}<th>متوسط اليوم</th></tr>`;
   const foot = `<tr style="font-weight:800;"><td>إجمالي الأسبوع</td>${weekTotals.map((t,i)=>`<td>${fmtSar(t)} ﷼${i?`<br><span style="font-size:11px;">${fmtGrowth(pctGrowth(t, weekTotals[i-1])).replace("لا توجد بيانات للمقارنة","—")}</span>`:""}</td>`).join("")}<td>الشهر: ${fmtSar(weekTotals.reduce((a,t)=>a+t,0))} ﷼</td></tr>`;
   view.innerHTML = `<div class="table-wrap"><table><thead>${head}</thead><tbody>${rows}</tbody><tfoot>${foot}</tfoot></table></div>`;
+  const wkNames = ["الأسبوع الأول","الأسبوع الثاني","الأسبوع الثالث","الأسبوع الرابع","الأسبوع الخامس"];
+  if($("weekdayGrowthChart")) $("weekdayGrowthChart").innerHTML = svgBarChart({
+    labels: WEEKDAY_ROWS.map(([,name])=>name),
+    series: Array.from({length:weeks}, (_,w)=>({name:wkNames[w], values: WEEKDAY_ROWS.map(([wd])=>{ const v = val(grid[wd][w]); return v ? Math.round(v.amount*100)/100 : null; })})),
+  });
 }
 function renderGrowthReport(){
   renderWeekdayGrowth();
@@ -1783,6 +1823,7 @@ function renderGrowthReport(){
     monthlyEl.innerHTML=`<p class="sub">ما فيه أشهر مقفلة بعد.</p>`; qEl.innerHTML=`<p class="sub">ما فيه أرباع مكتملة بعد.</p>`;
     profitMonthlyEl.innerHTML=`<p class="sub">ما فيه أشهر مقفلة بعد.</p>`; profitQEl.innerHTML=`<p class="sub">ما فيه أرباع مكتملة بعد.</p>`;
     invEl.innerHTML=`<p class="sub">ما فيه أشهر مقفلة بعد — بطاقة المخزون الراكد تحتاج شهر مقفل واحد على الأقل.</p>`;
+    ["monthlyGrowthChart","monthlyProfitGrowthChart","quarterlyGrowthChart","quarterlyProfitGrowthChart"].forEach(id=>{ if($(id)) $(id).innerHTML=""; });
     return;
   }
   const byMonth={}; reports.forEach(r=>byMonth[r.monthLabel]=r);
@@ -1803,6 +1844,17 @@ function renderGrowthReport(){
     </div>`;
   }).join("");
 
+  const last12 = reports.slice(-12);
+  $("monthlyGrowthChart").innerHTML = svgBarChart({
+    labels: last12.map(r=>chartMonthName(r.monthLabel)), sub: last12.map(r=>`${r.garmentCount} ثوب`), // 12 months in a row never repeat a month name
+    series: [{name:"المبيعات", values: last12.map(r=>Math.round(r.invoicedTotal))}],
+    above: last12.map(r=>{ const pv = byMonth[prevMonthLabel(r.monthLabel)]; return pv ? growthNote(pctGrowth(r.invoicedTotal, pv.invoicedTotal)) : null; }),
+  });
+  $("monthlyProfitGrowthChart").innerHTML = svgBarChart({
+    labels: last12.map(r=>chartMonthName(r.monthLabel)),
+    series: [{name:"صافي المحل", color:"var(--profit)", values: last12.map(r=>Math.round(r.profitInvoiced))}],
+    above: last12.map(r=>{ const pv = byMonth[prevMonthLabel(r.monthLabel)]; return pv ? growthNote(pctGrowth(r.profitInvoiced, pv.profitInvoiced)) : null; }),
+  });
   // ===== Card 2: net-profit growth (same figure as closing report) =====
   profitMonthlyEl.innerHTML = reports.slice().reverse().map(r=>{
     const prev = byMonth[prevMonthLabel(r.monthLabel)];
@@ -1852,8 +1904,21 @@ function renderGrowthReport(){
   if(!completeQuarters.length){
     qEl.innerHTML=`<p class="sub">ما فيه أرباع مكتملة (3 أشهر متتالية مقفلة) بعد.</p>`;
     profitQEl.innerHTML=`<p class="sub">ما فيه أرباع مكتملة (3 أشهر متتالية مقفلة) بعد.</p>`;
+    $("quarterlyGrowthChart").innerHTML = $("quarterlyProfitGrowthChart").innerHTML = `<p class="sub">ما فيه أرباع مكتملة (3 أشهر متتالية مقفلة) بعد.</p>`;
     return;
   }
+  const qPrev = q=>{ const pq = qMap[prevQuarterLabel(q.quarter)]; return pq && pq.monthsCount===3 ? pq : null; };
+  const lastQ = completeQuarters.slice(-8);
+  $("quarterlyGrowthChart").innerHTML = svgBarChart({
+    labels: lastQ.map(q=>chartQuarterName(q.quarter)), sub: lastQ.map(q=>`${q.quarter.slice(0,4)} · ${q.garmentCount} ثوب`),
+    series: [{name:"المبيعات", values: lastQ.map(q=>Math.round(q.invoicedTotal))}],
+    above: lastQ.map(q=>{ const pq = qPrev(q); return pq ? growthNote(pctGrowth(q.invoicedTotal, pq.invoicedTotal)) : null; }),
+  });
+  $("quarterlyProfitGrowthChart").innerHTML = svgBarChart({
+    labels: lastQ.map(q=>chartQuarterName(q.quarter)), sub: lastQ.map(q=>q.quarter.slice(0,4)),
+    series: [{name:"صافي المحل", color:"var(--profit)", values: lastQ.map(q=>Math.round(q.profitInvoiced))}],
+    above: lastQ.map(q=>{ const pq = qPrev(q); return pq ? growthNote(pctGrowth(q.profitInvoiced, pq.profitInvoiced)) : null; }),
+  });
   qEl.innerHTML = completeQuarters.slice().reverse().map(q=>{
     const prev = qMap[prevQuarterLabel(q.quarter)];
     const yoy = qMap[sameQuarterLastYear(q.quarter)];
