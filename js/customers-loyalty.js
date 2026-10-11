@@ -669,9 +669,10 @@ function earnLoyaltyPoints(mobile, saleAmount){
   const cust = findCustomerByMobile(mobile);
   if(!cust) return 0;
   const tier = customerTier(mobile);
-  // every full «كل كم ريال» earns «كم نقطة» (0.5 per 10 riyals → 260 earns 13)
+  // «كم نقطة» for every «كل كم ريال», in proportion and rounded down to a whole point
+  // (5 points per 100 riyals → 260 earns 13, 250 earns 12)
   const per = state.settings.loyaltyEarnPoints>0 ? state.settings.loyaltyEarnPoints : 1;
-  const points = Math.round(Math.floor(Math.max(0, saleAmount) / (state.settings.loyaltyEarnRate||10)) * per * tierMultiplier(tier) * 100)/100;
+  const points = Math.floor(Math.max(0, saleAmount) * per / (state.settings.loyaltyEarnRate||10) * tierMultiplier(tier) + 1e-9);
   cust.loyaltyPoints = Math.round(((cust.loyaltyPoints||0) + points)*100)/100;
   return points;
 }

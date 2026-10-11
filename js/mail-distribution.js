@@ -531,13 +531,12 @@ async function saveInvoice(){
       invData.payments.push({id:Date.now()+"-direct", date: isNewInvoice ? date : todayStr(), cash:0, network:0, receipt:"", discount:directDiscountVal, auto:true, note:"خصم مباشر", recordedBy:currentUser.username});
     }
   }
-  // loyalty points on what the customer actually pays: the offer already lowered the thobe's price, and
-  // every discount on the invoice (tier, points redeemed, direct) is taken off first — a discount earns
-  // nothing (it used to earn on the full price). A promo-code invoice earns none, as before.
+  // loyalty points only on a full-price invoice: any discount (direct, tier, points redeemed, promo code)
+  // or any offer (a thobe discounted, a gift) and the invoice earns none — it used to earn on the full price
   if(isNewInvoice && !isCustomerVip(custMobile)){
     const saleTotal = garments.filter(g=>g.status!=="ملغي").reduce((a,g)=>a+garmentSalePrice(g),0);
-    const discounts = invData.payments.reduce((a,p)=>a+(p.discount||0),0);
-    invData.loyaltyPointsEarned = appliedPromoCode ? 0 : earnLoyaltyPoints(custMobile, saleTotal - discounts);
+    const discounted = invData.payments.some(p=>(p.discount||0)>0.001) || !!appliedPromoCode || appliedOffers.length>0;
+    invData.loyaltyPointsEarned = discounted ? 0 : earnLoyaltyPoints(custMobile, saleTotal);
     if(invData.loyaltyPointsEarned>0) state.loyaltyLedger.push({id:Date.now()+"-e", date, mobile:custMobile, type:"earn", points:invData.loyaltyPointsEarned, invoiceNumber:number});
   }
   if(isNewInvoice && state.settings.einvoiceEnabled){

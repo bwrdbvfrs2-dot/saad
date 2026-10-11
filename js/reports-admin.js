@@ -1913,6 +1913,8 @@ $("setWaPromo").addEventListener("input", ()=>{
   $("legDeliverCancelBtn").addEventListener("click", closeLegacyDeliverModal);
   $("searchVouchersBtn").addEventListener("click", renderVouchersLog);
   $("voucherSearch").addEventListener("input", renderVouchersLog);
+  $("voucherLookupNo").addEventListener("input", renderVoucherLookup);
+  $("voucherLookupType").addEventListener("change", renderVoucherLookup);
   $("voucherFilterType").addEventListener("change", renderVouchersLog);
   $("returnPeriodWrap").innerHTML = periodPickerHtml("return"); bindPeriodPicker("return");
   $("searchReturnsBtn").addEventListener("click", renderReturns);
