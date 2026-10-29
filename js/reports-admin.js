@@ -1052,23 +1052,37 @@ const REPORT_SECTION_DEFS = [
 ];
 const EDITABLE_ROLES = ["مدير","محاسب","كاشير"];
 const SETTINGS_TABS = ["settingsShop","settingsFinance","settingsUsers","settingsProducts","settingsMarketing"];
+// one role at a time (buttons on top), each menu group a box with its count and «all / none», and a
+// search box — it was every role × every screen in one long column
+let permEditorRole = null, permEditorQuery = "";
 function renderPermissionsEditor(){
   const el = $("permissionsEditor");
   if(!el || !currentUser || currentUser.role!=="مدير") return;
-  el.innerHTML = EDITABLE_ROLES.map(role=>{
-    const perm = state.permissions[role] || {tabs:[],reportSections:[]};
-    const groupsHtml = NAV_GROUPS.map(group=>`
-      <div style="margin-bottom:10px;">
-        <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:4px;">${group.title}</div>
-        ${group.items.map(it=>{
-          const checked = perm.tabs.includes(it.tab);
-          const isSettingsForAdmin = role==="مدير" && SETTINGS_TABS.includes(it.tab);
-          return `<div class="embro-toggle" style="margin:6px 0;"><input type="checkbox" class="perm-tab" data-role="${role}" data-tab="${it.tab}" ${checked?"checked":""} ${isSettingsForAdmin?"disabled":""}><label style="margin:0;font-size:14px;"><i data-lucide="${navIcon(it.tab)}" style="width:14px;height:14px;vertical-align:middle;"></i> ${it.label}${isSettingsForAdmin?` <span style="color:var(--muted);font-size:11px;">(ثابت للمدير دائماً)</span>`:""}</label></div>`;
-        }).join("")}
-      </div>`).join("");
-    return `<div class="garment-card"><span class="tag">${role}</span>${groupsHtml}</div>`;
-  }).join("");
+  if(!EDITABLE_ROLES.includes(permEditorRole)) permEditorRole = EDITABLE_ROLES[0];
+  const role = permEditorRole, perm = state.permissions[role] || {tabs:[],reportSections:[]};
+  const locked = tab=> role==="مدير" && SETTINGS_TABS.includes(tab);
+  const q = permEditorQuery.trim();
+  const roleBtns = EDITABLE_ROLES.map(r=>{ const n = (state.permissions[r]||{tabs:[]}).tabs.length;
+    return `<button class="btn btn-sm ${r===role?"btn-gold":"btn-ghost"}" onclick="permEditorRole='${r}'; renderPermissionsEditor();">${r} <span style="opacity:.75;font-size:11px;">(${n})</span></button>`; }).join(" ");
+  const groupsHtml = NAV_GROUPS.map((group,gi)=>{
+    const items = group.items.filter(it=> !q || it.label.includes(q));
+    if(!items.length) return "";
+    const on = group.items.filter(it=> perm.tabs.includes(it.tab)).length;
+    return `<div class="garment-card" style="margin:0;padding:10px 12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:6px;">
+        <b style="font-size:13px;">${group.title} <span class="sub" style="font-size:11px;font-weight:400;">${on}/${group.items.length}</span></b>
+        <span style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;" onclick="setPermGroup(${gi}, true)">الكل</button> <button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;" onclick="setPermGroup(${gi}, false)">لا شي</button></span>
+      </div>
+      ${items.map(it=>{ const checked = perm.tabs.includes(it.tab), lk = locked(it.tab);
+        return `<label style="display:flex;align-items:center;gap:6px;margin:4px 0;font-size:13px;cursor:${lk?"default":"pointer"};"><input type="checkbox" class="perm-tab" data-role="${role}" data-tab="${it.tab}" ${checked?"checked":""} ${lk?"disabled":""} style="width:16px;height:16px;flex:0 0 auto;margin:0;padding:0;"><i data-lucide="${navIcon(it.tab)}" style="width:14px;height:14px;flex:0 0 auto;"></i> <span style="flex:1;">${it.label}</span>${lk?` <span style="color:var(--muted);font-size:10.5px;">(ثابت للمدير)</span>`:""}</label>`; }).join("")}
+    </div>`; }).join("");
+  el.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px;">${roleBtns}
+      <input type="text" id="permEditorSearch" placeholder="ابحث عن شاشة…" value="${esc(permEditorQuery)}" style="flex:1;min-width:140px;max-width:260px;margin-inline-start:auto;"></div>
+    <p class="sub" style="margin:0 0 8px;">الصلاحيات المعروضة لدور <b>${role}</b> — اختر الشاشات اللي تظهر له.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;">${groupsHtml || `<p class="sub">ما فيه شاشة بهذا الاسم.</p>`}</div>`;
   refreshLucideIcons();
+  const search = $("permEditorSearch");
+  search.addEventListener("input", ()=>{ permEditorQuery = search.value; const pos = search.selectionStart; renderPermissionsEditor(); const s2=$("permEditorSearch"); s2.focus(); s2.setSelectionRange(pos,pos); });
   document.querySelectorAll(".perm-tab").forEach(cb=> cb.addEventListener("change", ()=>{
     const role=cb.dataset.role, tab=cb.dataset.tab;
     const perm = state.permissions[role];
@@ -1078,6 +1092,18 @@ function renderPermissionsEditor(){
     logAudit("permission_changed", {role, tab, granted:cb.checked});
     showToast("تم تحديث الصلاحيات");
   }));
+}
+// a whole menu group on or off for the role being edited (the manager's settings screens stay on)
+function setPermGroup(gi, on){
+  const role = permEditorRole, perm = state.permissions[role], group = NAV_GROUPS[gi];
+  if(!perm || !group) return;
+  group.items.forEach(it=>{
+    if(on){ if(!perm.tabs.includes(it.tab)) perm.tabs.push(it.tab); }
+    else if(!(role==="مدير" && SETTINGS_TABS.includes(it.tab))) perm.tabs = perm.tabs.filter(t=>t!==it.tab);
+  });
+  saveState(); renderPermissionsEditor(); applyRolePermissions();
+  logAudit("permission_changed", {role, group:group.title, granted:on});
+  showToast(on ? `تم تفعيل كل «${group.title}» لـ${role}` : `تم إلغاء كل «${group.title}» لـ${role}`);
 }
 async function saveUserEdit(i){
   const username=document.querySelector(`.edit-username[data-idx="${i}"]`).value.trim();
