@@ -415,6 +415,21 @@ function startListeningToCatalog(){
       let changedHere = false;
       snap.docs.forEach(d=>{
         const k = d.id, items = d.data().items;
+        if(k===SETTINGS_IMAGES_DOC && Array.isArray(items)){
+          const json = stableJson(items);
+          if(catalogSaved[k] && catalogSaved[k].json===json) return;
+          catalogSaved[k] = {json, items};
+          if(!first && state && state.settings && pendingSaves===0){ items.forEach(it=> setPath(state.settings, it.path.split("."), it.value)); changedHere = true; }
+          return;
+        }
+        if(isArchiveDocId(k) && Array.isArray(items)){
+          const json = stableJson(items);
+          if(archiveSaved[k] && archiveSaved[k].json===json) return;
+          archiveSaved[k] = {json, items};
+          rebuildArchiveIndex();
+          if(!first && state && pendingSaves===0){ state = mergeCatalogInto(state); changedHere = true; }
+          return;
+        }
         if(!catalogKeys().includes(k) || !Array.isArray(items)) return;
         const json = stableJson(items);
         if(catalogSaved[k] && catalogSaved[k].json===json) return;
@@ -432,11 +447,44 @@ function startListeningToCatalog(){
   });
 }
 function stopListeningToCatalog(){ if(catalogUnsubscribe){ catalogUnsubscribe(); catalogUnsubscribe = null; } }
+// ---- more of shop/state kept in catalog/ so the one document stays under Firestore's 1 MiB ----
+// · catalog/settingsImages: the shop logo, the takhalees icon and the cutting-card photos
+// · catalog/archive-YYYY-MM: the finished invoices of a closed month (all delivered or cancelled,
+//   nothing left to pay), moved there by the manager. They are merged back into state.invoices on load,
+//   so every screen and report sees them as before; only the document they are saved in changes.
+const SETTINGS_IMAGES_DOC = "settingsImages";
+const SETTINGS_IMAGE_PATHS = [["shopLogo"],["takhaleesIcon"],["cuttingCardImages","front"],["cuttingCardImages","back"]];
+const archiveSaved = {};   // docId -> {json, items}: the version stored in catalog/{docId}
+let archiveIndex = {};     // invoiceId -> docId, for every archived invoice
+function isArchiveDocId(k){ return /^archive-\d{4}-\d{2}(-\d+)?$/.test(k); }
+function getPath(o, path){ return path.reduce((a,k)=> a==null ? undefined : a[k], o); }
+function setPath(o, path, v){ let t = o; path.slice(0,-1).forEach(k=>{ if(!t[k] || typeof t[k]!=="object") t[k] = {}; t = t[k]; }); t[path[path.length-1]] = v; }
+function settingsImagesOf(settings){ return SETTINGS_IMAGE_PATHS.map(path=>({path:path.join("."), value: getPath(settings||{}, path) || ""})); }
+function rebuildArchiveIndex(){ archiveIndex = {}; Object.keys(archiveSaved).forEach(d=> (archiveSaved[d].items||[]).forEach(inv=>{ archiveIndex[inv.id] = d; })); }
 // the catalog version wins over a copy still sitting inside shop/state (from before the move, or
 // written back by a device still running an older version of the app)
 function mergeCatalogInto(data){
   catalogKeys().forEach(k=>{ if(catalogSaved[k]) data[k] = JSON.parse(JSON.stringify(catalogSaved[k].items)); });
+  if(catalogSaved[SETTINGS_IMAGES_DOC] && data.settings){
+    catalogSaved[SETTINGS_IMAGES_DOC].items.forEach(it=> setPath(data.settings, it.path.split("."), it.value));
+  }
+  const archived = Object.keys(archiveSaved).sort().flatMap(d=> JSON.parse(JSON.stringify(archiveSaved[d].items||[])));
+  if(archived.length && Array.isArray(data.invoices)){
+    const ids = new Set(archived.map(i=>i.id));
+    // archived (older) first, then the live ones — an old copy of an archived invoice (a backup) is dropped
+    data.invoices = archived.concat(data.invoices.filter(i=> !ids.has(i.id)));
+  }
   return data;
+}
+// what goes into shop/state itself (the size meter, the daily backup)
+function mainDocOf(src){
+  const o = {...src};
+  if(!catalogDenied){
+    catalogKeys().forEach(k=>{ if(catalogSaved[k]) delete o[k]; });
+    if(catalogSaved[SETTINGS_IMAGES_DOC] && o.settings){ o.settings = JSON.parse(JSON.stringify(o.settings)); SETTINGS_IMAGE_PATHS.forEach(path=>{ if(getPath(o.settings, path)) setPath(o.settings, path, ""); }); }
+    if(Array.isArray(o.invoices)) o.invoices = o.invoices.filter(i=> !archiveIndex[i.id]);
+  }
+  return o;
 }
 // ---- no internet: a banner on top, and a save fails at once with a clear message instead of hanging on
 // a transaction that can't reach the server (the screen keeps what was typed; drafts keep the invoices) ----
@@ -554,6 +602,15 @@ async function commitStatePayload(payload){
   // libraries that differ from their catalog/ document are written there in the same transaction;
   // every library that lives in catalog/ (or moves there now) is left out of shop/state
   const catalogWrites = catalogKeys().filter(k=> Array.isArray(payload[k]) && (!catalogSaved[k] || catalogSaved[k].json!==stableJson(payload[k])));
+  // the settings pictures: moved out the first time anyone saves, rewritten when one changes
+  const imgItems = payload.settings ? settingsImagesOf(payload.settings) : null;
+  const imgJson = imgItems ? stableJson(imgItems) : null;
+  const imgWrite = !!imgItems && (imgItems.some(it=>it.value) || !!catalogSaved[SETTINGS_IMAGES_DOC]) && (!catalogSaved[SETTINGS_IMAGES_DOC] || catalogSaved[SETTINGS_IMAGES_DOC].json!==imgJson);
+  // each archive document holds what state.invoices has for it (an archived invoice can still get a return)
+  const archiveDocs = [...new Set(Object.values(archiveIndex))];
+  const archiveItems = {}; archiveDocs.forEach(d=>{ archiveItems[d] = (payload.invoices||[]).filter(i=> archiveIndex[i.id]===d); });
+  const archiveWrites = archiveDocs.filter(d=> !archiveSaved[d] || archiveSaved[d].json!==stableJson(archiveItems[d]));
+  const sideWrites = catalogWrites.length + (imgWrite?1:0) + archiveWrites.length;
   const runSave = (withLog, withCatalog) => db.runTransaction(async tx=>{
       const cur = await tx.get(STATE_DOC);
       const curRev = (cur.exists && cur.data()._rev) || 0;
@@ -569,8 +626,16 @@ async function commitStatePayload(payload){
       }
       const mainDoc = {...payload};
       if(withCatalog){
+        const side = items=> ({items, updatedAt: firebase.firestore.FieldValue.serverTimestamp(), by: fbAuth.currentUser ? fbAuth.currentUser.uid : null});
         catalogKeys().forEach(k=>{ if(catalogSaved[k] || catalogWrites.includes(k)) delete mainDoc[k]; });
-        catalogWrites.forEach(k=> tx.set(CATALOG_COL.doc(k), {items: payload[k], updatedAt: firebase.firestore.FieldValue.serverTimestamp(), by: fbAuth.currentUser ? fbAuth.currentUser.uid : null}));
+        catalogWrites.forEach(k=> tx.set(CATALOG_COL.doc(k), side(payload[k])));
+        if(imgWrite) tx.set(CATALOG_COL.doc(SETTINGS_IMAGES_DOC), side(imgItems));
+        if((imgWrite || catalogSaved[SETTINGS_IMAGES_DOC]) && mainDoc.settings){
+          mainDoc.settings = JSON.parse(JSON.stringify(mainDoc.settings));
+          SETTINGS_IMAGE_PATHS.forEach(path=>{ if(getPath(mainDoc.settings, path)) setPath(mainDoc.settings, path, ""); });
+        }
+        archiveWrites.forEach(d=> tx.set(CATALOG_COL.doc(d), side(archiveItems[d])));
+        if(archiveDocs.length && Array.isArray(mainDoc.invoices)) mainDoc.invoices = mainDoc.invoices.filter(i=> !archiveIndex[i.id]);
       }
       tx.set(STATE_DOC, mainDoc);
       if(withLog) tx.set(WRITE_LOG_COL.doc(String(payload._rev)), {
@@ -587,7 +652,7 @@ async function commitStatePayload(payload){
       if(!catalogDenied){
         try{ await runSave(withLog, true); return true; }
         catch(e){
-          if(!(e && e.code==="permission-denied") || !catalogWrites.length) throw e;
+          if(!(e && e.code==="permission-denied") || !sideWrites) throw e;
           // the catalog/ rules may not be published yet: retry once keeping the libraries in shop/state
           await runSave(withLog, false); catalogDenied = true; return false;
         }
@@ -600,7 +665,11 @@ async function commitStatePayload(payload){
       if(!(e && e.code==="permission-denied")) throw e;
       catalogWritten = await attempt(false);
     }
-    if(catalogWritten) catalogWrites.forEach(k=>{ catalogSaved[k] = {json: stableJson(payload[k]), items: JSON.parse(JSON.stringify(payload[k]))}; });
+    if(catalogWritten){
+      catalogWrites.forEach(k=>{ catalogSaved[k] = {json: stableJson(payload[k]), items: JSON.parse(JSON.stringify(payload[k]))}; });
+      if(imgWrite) catalogSaved[SETTINGS_IMAGES_DOC] = {json: imgJson, items: JSON.parse(JSON.stringify(imgItems))};
+      archiveWrites.forEach(d=>{ archiveSaved[d] = {json: stableJson(archiveItems[d]), items: JSON.parse(JSON.stringify(archiveItems[d]))}; });
+    }
     ownCommittedRevs.set(baseRev, payload._rev);
     latestOwnRev = Math.max(latestOwnRev, payload._rev);
     return true;
@@ -611,7 +680,7 @@ async function commitStatePayload(payload){
       console.warn("save rejected — another device saved first; reloading latest data", e);
       try{
         const snap = await STATE_DOC.get({source:"server"});
-        if(snap.exists){ state = snap.data(); normalizeState(); }
+        if(snap.exists){ state = mergeCatalogInto(snap.data()); normalizeState(); }
       }catch(fetchErr){ console.error("reloading latest state after a save conflict failed", fetchErr); }
       if(currentUser) renderAll();
       alert("ما انحفظ آخر إجراء — مستخدم ثاني حفظ تعديلات بنفس اللحظة.\nتم تحديث البيانات لآخر نسخة، أعد الخطوة الأخيرة مرة ثانية.");
@@ -718,7 +787,8 @@ async function maybeBackupStateToday(){
     const ref = BACKUPS_COL.doc(today);
     const snap = await ref.get();
     if(snap.exists) return; // already have today's snapshot
-    await ref.set({snapshot: JSON.parse(JSON.stringify(state)), backedUpAt: firebase.firestore.FieldValue.serverTimestamp(), by: fbAuth.currentUser ? fbAuth.currentUser.uid : null});
+    // shop/state only — a full copy with the pictures and the archive outgrew a document's 1 MiB and failed
+    await ref.set({snapshot: JSON.parse(JSON.stringify(mainDocOf(state))), backedUpAt: firebase.firestore.FieldValue.serverTimestamp(), by: fbAuth.currentUser ? fbAuth.currentUser.uid : null});
     // removing old backups is the manager's (the rules allow no one else to delete one)
     if(currentUser && currentUser.role==="مدير") await pruneOldBackups();
   }catch(e){ console.error("automatic backup failed", e); } // never block normal app use over this
@@ -790,7 +860,7 @@ async function restoreBackup(dateId){
     // continue from the live revision, not the backup's old one, so the restore goes through the
     // same conflict-checked save as everything else
     restoredState._rev = state._rev;
-    state = restoredState;
+    state = mergeCatalogInto(restoredState); // a backup holds shop/state only — the pictures and archives come from catalog/
     normalizeState();
     if(!await saveState()) return;
     showToast("تم الاسترجاع بنجاح"); renderAll();
@@ -1188,7 +1258,7 @@ function closeNavDrawer(){ $("navDrawerOverlay").classList.add("hidden"); }
 const STATE_DOC_LIMIT_BYTES = 1048576;
 function stateSizeBytes(obj){ try{ return new TextEncoder().encode(JSON.stringify(obj||state)).length; }catch(e){ return 0; } }
 // what goes into shop/state itself: the type libraries (with their pictures) live in catalog/ once it's in use
-function mainDocCopy(){ const o = {...state}; if(!catalogDenied) catalogKeys().forEach(k=>{ if(catalogSaved[k]) delete o[k]; }); return o; }
+function mainDocCopy(){ return mainDocOf(state); }
 function renderStateSizeMeter(){
   const el = $("stateSizeMeter"); if(!el || !currentUser || currentUser.role!=="مدير") return;
   const doc = mainDocCopy(), used = stateSizeBytes(doc), pct = used/STATE_DOC_LIMIT_BYTES*100;
@@ -1198,7 +1268,41 @@ function renderStateSizeMeter(){
   el.innerHTML = `<p style="margin:0 0 6px;">مستخدم <b style="color:${color};">${(used/1024).toFixed(0)} كيلوبايت</b> من ${(STATE_DOC_LIMIT_BYTES/1024).toFixed(0)} (${pct.toFixed(0)}%)</p>
     <div style="height:10px;background:var(--surface3);border-radius:6px;overflow:hidden;"><div style="height:100%;width:${Math.min(100,pct).toFixed(1)}%;background:${color};"></div></div>
     <p class="sub" style="margin:6px 0 2px;">أكبر الأجزاء: ${parts.map(([k,b])=>`${LABELS[k]||k} ${(b/1024).toFixed(0)} ك.ب`).join("، ")}</p>
-    <p class="sub" style="margin:2px 0;">${pct>=70 ? `<b style="color:${color};">قربت البيانات من الحد — لما توصل 100% يوقف الحفظ. تواصل مع الدعم الفني عشان ننقل الفواتير القديمة لمكان منفصل.</b>` : "كل بيانات المحل محفوظة بسجل واحد حده 1 ميجابايت تقريباً — تنبيه يطلع لك إذا وصلت 70%."}</p>`;
+    <p class="sub" style="margin:2px 0;">${pct>=70 ? `<b style="color:${color};">قربت البيانات من الحد — لما توصل 100% يوقف الحفظ. انقل الفواتير المنتهية للأرشيف من الزر تحت.</b>` : "كل بيانات المحل محفوظة بسجل واحد حده 1 ميجابايت تقريباً — تنبيه يطلع لك إذا وصلت 70%."}</p>
+    <p class="sub" style="margin:8px 0 4px;">الأرشيف: <b>${Object.keys(archiveIndex).length}</b> فاتورة محفوظة بسجلات منفصلة — تظهر بكل الشاشات والتقارير عادي. جاهز للأرشفة الحين: <b>${archivableInvoices().length}</b> فاتورة (أشهر مقفلة، كل ثيابها مسلّمة أو ملغية، وما عليها مبلغ).</p>
+    <button class="btn btn-ghost btn-sm" onclick="archiveFinishedInvoices()" ${archivableInvoices().length?"":"disabled"}>نقل الفواتير المنتهية للأرشيف</button>`;
+}
+// invoices that can move to the archive: their month is closed and they are finished — every thobe
+// delivered or cancelled, nothing left to pay, no customer debt riding on them
+function archivableInvoices(){
+  return state.invoices.filter(inv=> !archiveIndex[inv.id] && isMonthClosed(inv.originMonth)
+    && inv.garments.every(g=> g.status==="تسليم" || g.status==="ملغي")
+    && invoiceRemaining(inv) <= 0.01
+    && !inv.garments.some(g=> g.creditDelivered && (g.creditAmount||0)-(g.creditPaid||0) > 0.01));
+}
+async function archiveFinishedInvoices(){
+  if(!currentUser || currentUser.role!=="مدير"){ showToast("الأرشفة للمدير فقط"); return; }
+  if(catalogDenied){ showToast("الأرشفة تحتاج قواعد Firestore المحدّثة (مجموعة catalog) — انشرها أول"); return; }
+  const list = archivableInvoices();
+  if(!list.length){ showToast("ما فيه فواتير منتهية بالأشهر المقفلة تنقل للأرشيف"); return; }
+  const months = [...new Set(list.map(i=>i.originMonth))].sort();
+  if(!await showConfirm(`نقل ${list.length} فاتورة منتهية (${months.map(monthDisplay).join("، ")}) للأرشيف؟ تبقى ظاهرة بكل الشاشات والتقارير والبحث مثل ما هي — بس تنحفظ بسجل منفصل عشان تفضى مساحة.`)) return;
+  const prevIndex = {...archiveIndex};
+  // one document per month, split if a month is too big for one (Firestore's 1 MiB)
+  months.forEach(m=>{
+    const invs = list.filter(i=>i.originMonth===m);
+    const base = "archive-"+m; let part = 0, doc = base, size = stateSizeBytes(state.invoices.filter(i=>archiveIndex[i.id]===doc));
+    invs.forEach(inv=>{
+      const sz = stateSizeBytes(inv);
+      if(size + sz > 800*1024){ part++; doc = base+"-"+part; size = stateSizeBytes(state.invoices.filter(i=>archiveIndex[i.id]===doc)); }
+      archiveIndex[inv.id] = doc; size += sz;
+    });
+  });
+  if(await saveState()){
+    logAudit("invoices_archived", {count:list.length, months});
+    showToast(`انتقلت ${list.length} فاتورة للأرشيف`);
+  } else { archiveIndex = prevIndex; }
+  renderStateSizeMeter();
 }
 // once a day, a manager is told when the data is getting near the limit
 function warnStateSizeIfNeeded(){
@@ -1207,7 +1311,7 @@ function warnStateSizeIfNeeded(){
   if(pct < 70) return;
   const key = "stateSizeWarned:"+todayStr();
   try{ if(localStorage.getItem(key)) return; localStorage.setItem(key,"1"); }catch(e){}
-  showToast(`تنبيه: بيانات المحل وصلت ${pct.toFixed(0)}% من الحد المسموح — شوف «حجم بيانات المحل» بالإعدادات`);
+  showToast(`تنبيه: بيانات المحل وصلت ${pct.toFixed(0)}% من الحد المسموح — انقل الفواتير المنتهية للأرشيف من «حجم بيانات المحل» بالإعدادات`);
 }
 function isMonthClosed(m){ return state.closingReports.some(r=>r.monthLabel===m); }
 
