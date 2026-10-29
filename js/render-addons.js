@@ -83,6 +83,15 @@ function renderAll(){
   $("statsEmptyHint").style.display = curInvoices.length ? "none" : "";
 
   renderFixedItems();
+  renderWhenVisible("tab-invoicesList", ()=> renderInvoiceLog(curInvoices), "renderInvoiceLog");
+  renderClosedReports(); renderWhenVisible("tab-growth", renderGrowthReport, "renderGrowthReport"); renderWhenVisible("tab-report-search", renderSearch, "renderSearch"); renderReturnResponsibleSelect(); renderTailorReportSelector(); renderBroadcastList(); renderWhenVisible("tab-sensitiveFinancials", renderSensitiveGate, "renderSensitiveGate"); renderWhenVisible("tab-report-customers", renderCustomers, "renderCustomers"); renderWhenVisible("tab-distribution", renderPendingList, "renderPendingList"); updateFixedShareNote(); renderLegacyItems(); renderBalancesTab(); renderDebtsTab(); renderWhenVisible("tab-customerDebts", renderCustomerDebts, "renderCustomerDebts"); renderInventoryTab(); renderInventoryValuation(); renderSalesInvoicesList(); refreshSaleLineOptions(); renderAddonsList(); refreshAddonForm(); renderScanTab(); renderPayrollTab(); renderEntitlementPreview(); renderAlterationSettings(); renderAlterationsLog(); renderQcTab(); updateManualCardLabels(); renderCustomShopFields(); renderFabricOrigins(); if($("setPrintOriginOnLabel")) $("setPrintOriginOnLabel").checked = state.settings.printOriginOnLabel; renderOffers(); renderOptionLists(); renderCustomMeasurementFields(); renderOverdueDashboard(); renderOverdueDashboard("dashboardOverdue", true); renderDashboardKPIs(); renderDashboardWorkDistribution(); renderShiftClosingsLog(); renderQuickMenuBar(); renderWhenVisible("tab-settingsUsers", renderQuickMenuEditor, "renderQuickMenuEditor"); renderReturnsLog(); renderPromoCodesAdmin(); renderAppliedPromoBanner(); renderVouchersTab(); renderTopExpensesReport(); renderVatLedger(); renderProductionTracking(); renderSeasonsList(); renderCustomerNameDatalist("custNameDatalist"); renderCuttingImageEditor(); applyShopBranding(); renderMailTab(); if(currentUser && currentUser.role==="مدير"){ renderUsers(); renderWhenVisible("tab-settingsUsers", renderPermissionsEditor, "renderPermissionsEditor"); }
+  applyRolePermissions();
+  refreshLucideIcons();
+}
+
+// the invoice log of the current month (its own function so it can wait until its tab is opened)
+function renderInvoiceLog(curInvoices){
+  curInvoices = curInvoices || state.invoices.filter(i=>i.originMonth===state.settings.currentMonth);
   const body=$("invoicesBody"); body.innerHTML="";
   $("emptyState").style.display = curInvoices.length?"none":"block";
   const isAdmin = currentUser && currentUser.role==="مدير";
@@ -109,11 +118,24 @@ function renderAll(){
     const tr2=document.createElement("tr"); tr2.innerHTML=`<td colspan="${showProfit?8:7}" style="padding-top:0;padding-bottom:14px;">${badges}</td>`; body.appendChild(tr2);
   });
 
-  renderClosedReports(); renderGrowthReport(); renderSearch(); renderReturnResponsibleSelect(); renderTailorReportSelector(); renderBroadcastList(); renderSensitiveGate(); renderCustomers(); renderPendingList(); updateFixedShareNote(); renderLegacyItems(); renderBalancesTab(); renderDebtsTab(); renderCustomerDebts(); renderInventoryTab(); renderInventoryValuation(); renderSalesInvoicesList(); refreshSaleLineOptions(); renderAddonsList(); refreshAddonForm(); renderScanTab(); renderPayrollTab(); renderEntitlementPreview(); renderAlterationSettings(); renderAlterationsLog(); renderQcTab(); updateManualCardLabels(); renderCustomShopFields(); renderFabricOrigins(); if($("setPrintOriginOnLabel")) $("setPrintOriginOnLabel").checked = state.settings.printOriginOnLabel; renderOffers(); renderOptionLists(); renderCustomMeasurementFields(); renderOverdueDashboard(); renderOverdueDashboard("dashboardOverdue", true); renderDashboardKPIs(); renderDashboardWorkDistribution(); renderShiftClosingsLog(); renderQuickMenuBar(); renderQuickMenuEditor(); renderReturnsLog(); renderPromoCodesAdmin(); renderAppliedPromoBanner(); renderVouchersTab(); renderTopExpensesReport(); renderVatLedger(); renderProductionTracking(); renderSeasonsList(); renderCustomerNameDatalist("custNameDatalist"); renderCuttingImageEditor(); applyShopBranding(); renderMailTab(); if(currentUser && currentUser.role==="مدير"){ renderUsers(); renderPermissionsEditor(); }
-  applyRolePermissions();
   refreshLucideIcons();
 }
-
+// a screen nobody is looking at isn't redrawn on every renderAll (on an older shop computer one full
+// pass took 1.5 s, and it runs after every save): it is marked and drawn when its tab is opened
+const lazyRenders = new Map(); // panel id -> Map(key -> fn), the latest call per screen
+function renderWhenVisible(panelId, fn, key){
+  const el = $(panelId);
+  if(!el || el.classList.contains("active")){ fn(); const m = lazyRenders.get(panelId); if(m) m.delete(key||"main"); return; }
+  if(!lazyRenders.has(panelId)) lazyRenders.set(panelId, new Map());
+  lazyRenders.get(panelId).set(key||"main", fn);
+}
+function flushLazyRenders(tabName){
+  const id = "tab-"+tabName, m = lazyRenders.get(id);
+  if(!m || !m.size) return;
+  lazyRenders.delete(id);
+  m.forEach(fn=>{ try{ fn(); }catch(e){ console.error("deferred render failed", e); } });
+  refreshLucideIcons();
+}
 function renderFixedItems(){
   $("fixedItemsList").innerHTML = state.settings.fixedItems.map((it,i)=>`
     <div class="item-row" style="flex-wrap:wrap;gap:6px;">
