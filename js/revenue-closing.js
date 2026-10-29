@@ -355,7 +355,11 @@ function invoiceProfitColumnData(inv){
   const activeGarments = inv.garments.filter(g=>g.status!=="ملغي");
   if(!activeGarments.length) return null;
   const cutGarments = activeGarments.filter(g=>g.cutDate);
-  if(!cutGarments.length) return null; // deposit is still just a trust before cutting — show nothing
+  // what it comes to once everything is delivered: the price after discounts less the full direct cost
+  const expected = activeGarments.reduce((a,g)=>a+garmentSalePrice(g),0) - invoiceDiscountTotal(inv)
+    - activeGarments.reduce((a,g)=>a+garmentDirectCostOnly(g),0) - freeGiftsCost(inv);
+  // before cutting the deposit is still a trust — no profit yet, only what it is expected to be
+  if(!cutGarments.length) return {mode:"none", value:null, expected};
   const totalDirectCost = cutGarments.reduce((a,g)=>a+garmentDirectCostOnly(g),0) + freeGiftsCost(inv);
   const allDelivered = activeGarments.every(g=>g.status==="تسليم");
   if(allDelivered){
@@ -364,9 +368,6 @@ function invoiceProfitColumnData(inv){
     return {mode:"expected", value: totalPrice - totalDirectCost};
   }
   const recognizedRevenue = invoiceRecognizedRevenueToDate(inv);
-  // and what it comes to once everything is delivered: the price after discounts less the full direct cost
-  const expected = activeGarments.reduce((a,g)=>a+garmentSalePrice(g),0) - invoiceDiscountTotal(inv)
-    - activeGarments.reduce((a,g)=>a+garmentDirectCostOnly(g),0) - freeGiftsCost(inv);
   return {mode:"actual", value: recognizedRevenue - totalDirectCost, expected};
 }
 function OVERDUE_READY_DAYS(){ return 7; }

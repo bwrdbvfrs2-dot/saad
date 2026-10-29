@@ -95,6 +95,7 @@ function renderAll(){
     const profitData = invoiceProfitColumnData(inv);
     const tr=document.createElement("tr"); tr.className="invoice-row";
     const profitCell = !profitData ? `<span class="sub">—</span>`
+      : profitData.mode==="none" ? `<span class="sub">—</span><br><span class="sub" style="font-size:10px;">لسا ما انقص — المتوقع بعد التسليم: <b class="${profitData.expected>=0?'profit-pos':'profit-neg'}">${fmtSar(profitData.expected)} ﷼</b></span>`
       : `<span class="${profitData.value>=0?'profit-pos':'profit-neg'}">${fmtSar(profitData.value)} ﷼</span><br><span class="sub" style="font-size:10px;">${profitData.mode==="expected"?"الربح المتوقع (بعد التسليم)":"الربح والخسارة (قبل التسليم)"}</span>`
         // before delivery the figure follows the payments, so a price edit doesn't move it — the expected one does
         + (profitData.mode!=="expected" && profitData.expected!==undefined ? `<br><span class="sub" style="font-size:10px;">المتوقع بعد التسليم: <b class="${profitData.expected>=0?'profit-pos':'profit-neg'}">${fmtSar(profitData.expected)} ﷼</b></span>` : "");
