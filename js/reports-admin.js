@@ -388,8 +388,13 @@ function buildDailyReportHtml(day, r, username){
     r.deliveredThisMonth.map(({inv,g})=>`<tr><td>${esc(inv.number)}</td><td>${esc(g.fabricType)}</td><td>${sar(garmentNetSalePrice(g, inv))}</td><td>${esc(deliveryReceiptOf(inv,g))}</td></tr>`)));
   parts.push(dailySection("تسليمات — متعثرة من أشهر سابقة", ["رقم الفاتورة","الشهر الأصلي","نوع القماش","السعر","رقم الإيصال"],
     r.deliveredOverdue.map(({inv,g})=>`<tr><td>${esc(inv.number)}</td><td>${monthDisplay(inv.originMonth)}</td><td>${esc(g.fabricType)}</td><td>${sar(garmentNetSalePrice(g, inv))}</td><td>${esc(deliveryReceiptOf(inv,g))}</td></tr>`)));
-  if(!username) parts.push(dailySection("تسليمات الجرد الافتتاحي", ["اسم العميل","الجوال","الوصف","المتبقي وقت التسليم"],
-    r.legacyDelivered.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.mobile)}</td><td>${esc(x.desc)}</td><td>${x.remaining?sar(x.remaining):"—"}</td></tr>`)));
+  // what was collected for each piece that day, cash and network apart, with the voucher / slip
+  const legacyPaidThatDay = x=>{ const ps = (state.legacyPayments||[]).filter(l=>l.itemId===x.id && l.date===day);
+    const c = ps.reduce((a,l)=>a+legacyCashOf(l),0), n = ps.reduce((a,l)=>a+legacyNetworkOf(l),0);
+    const nos = ps.map(l=>[ (l.cashReceiptNo||l.voucherNo) ? `قبض ${l.cashReceiptNo||l.voucherNo}` : "", l.networkReceiptNo ? `شبكة ${l.networkReceiptNo}` : "" ].filter(Boolean).join(" / ")).filter(Boolean).join("، ");
+    return {c, n, nos}; };
+  if(!username) parts.push(dailySection("تسليمات الجرد الافتتاحي", ["اسم العميل","الجوال","الوصف","كاش","شبكة","السند / الإيصال","المتبقي"],
+    r.legacyDelivered.map(x=>{ const d = legacyPaidThatDay(x); return `<tr><td>${esc(x.name)}</td><td>${esc(x.mobile)}</td><td>${esc(x.desc)}</td><td>${d.c?sar(d.c):"—"}</td><td>${d.n?sar(d.n):"—"}</td><td>${esc(d.nos||"—")}</td><td>${x.remaining?sar(x.remaining):"—"}</td></tr>`; })));
   // every amount received, tailoring payments and ready-made sales together, each with what it was for
   const payRows = r.paymentRows.map(({inv,p})=>`<tr data-receipt="${esc((p.cashReceiptNo||"")+" "+(p.networkReceiptNo||p.receipt||""))}"><td>${esc(inv.number)}</td><td>${paymentKindLabel(inv,p)}</td><td>${sar(p.cash)}</td><td>${p.cashReceiptNo||"—"}</td><td>${sar(p.network)}</td><td>${p.networkReceiptNo||p.receipt||"—"}</td><td>${p.discount?sar(p.discount):"—"}</td></tr>`)
     .concat(r.salesToday.map(x=>{ const pay = x.payment||{}; return `<tr data-receipt="${esc(pay.receipt||"")}"><td>م-${esc(x.number)}</td><td>مبيعات</td><td>${sar(pay.cash)}</td><td>—</td><td>${sar(pay.network)}</td><td>${esc(pay.receipt||"—")}</td><td>${x.discountTotal?sar(x.discountTotal):"—"}</td></tr>`; }));
@@ -1778,7 +1783,7 @@ $("directDiscountInput").addEventListener("input", ()=>{
   // a direct discount comes on top of the full sale price, never on top of a price already lowered
   updateLiveTotals();   // caps the discount to the user's limit first
   // a saved invoice keeps the prices it was sold at — only a new one goes back to the list price
-  if(!editingId && (parseFloat($("directDiscountInput").value)||0) > 0) resetGarmentPricesToBase();
+  if(!editingId && !isManagerUser(currentUser) && (parseFloat($("directDiscountInput").value)||0) > 0) resetGarmentPricesToBase();
   updatePriceFieldsLockState();
   updateLiveTotals();
 });
@@ -1911,6 +1916,7 @@ $("setWaPromo").addEventListener("input", ()=>{
   $("cuttingImgViewBack").addEventListener("click", ()=>{ cuttingImgCurrentView="back"; cuttingImgArmedField=null; renderCuttingImageEditor(); });
   $("cuttingImgCanvas").addEventListener("click", handleCuttingImageClick);
   $("legDeliverCancelBtn").addEventListener("click", closeLegacyDeliverModal);
+  $("legDeliverNetworkInput").addEventListener("input", ()=>{ $("legDeliverNetworkWrap").style.display = (parseFloat($("legDeliverNetworkInput").value)||0)>0 ? "" : "none"; });
   $("searchVouchersBtn").addEventListener("click", renderVouchersLog);
   $("voucherSearch").addEventListener("input", renderVouchersLog);
   $("voucherLookupNo").addEventListener("input", renderVoucherLookup);

@@ -1481,7 +1481,10 @@
   <button class="btn btn-gold btn-sm" id="addExpenseBtn">حفظ المصروف</button>
   <div class="stitch"></div>
   <h3 style="margin:0 0 10px;font-size:14px;">سجل المصروفات</h3>
-  <div class="table-wrap"><table><thead><tr><th>رقم السند</th><th>التاريخ</th><th>التصنيف</th><th>البند الفرعي</th><th>المبلغ</th><th>دفع لمن</th><th>المحل</th><th>مصدر الدفع</th></tr></thead><tbody id="expensesBody"></tbody></table></div>
+  <div class="table-wrap"><table><thead><tr><th>رقم السند</th><th>التاريخ</th><th>التصنيف</th><th>البند الفرعي</th><th>المبلغ</th><th>دفع لمن</th><th>المحل</th><th>مصدر الدفع</th><th></th></tr></thead><tbody id="expensesBody"></tbody></table></div>
+  <div class="stitch"></div>
+  <h3 style="margin:0 0 10px;font-size:14px;">سجل المصروفات المحذوفة</h3>
+  <div id="deletedExpensesView"></div>
 </div>
 </div>
 
@@ -1802,7 +1805,14 @@
     <h3 style="margin:0 0 4px;text-align:center;">تسليم قطعة من الجرد الافتتاحي</h3>
     <p id="legDeliverItemLabel" class="sub" style="text-align:center;margin:0 0 14px;"></p>
     <div class="field"><label>الكمية المسلَّمة الآن</label><input type="number" id="legDeliverQtyInput" min="1"></div>
-    <div class="field"><label>المبلغ المستلم الآن (ريال)</label><input type="number" id="legDeliverAmountInput" min="0"></div>
+    <div class="row-2">
+      <div class="field"><label>كاش (ريال)</label><input type="number" id="legDeliverAmountInput" min="0" step="0.01"></div>
+      <div class="field"><label>شبكة (ريال)</label><input type="number" id="legDeliverNetworkInput" min="0" step="0.01" value="0"></div>
+    </div>
+    <div class="row-2" id="legDeliverNetworkWrap" style="display:none;">
+      <div class="field"><label>نوع البطاقة</label><select id="legDeliverCardType" class="card-type-select"></select></div>
+      <div class="field"><label>رقم إيصال الشبكة (إلزامي)</label><input type="text" id="legDeliverReceipt"></div>
+    </div>
     <div class="actions-row" style="margin-top:6px;justify-content:center;">
       <button class="btn btn-gold btn-sm" id="legDeliverConfirmBtn">تأكيد التسليم</button>
       <button class="btn btn-ghost btn-sm" id="legDeliverCancelBtn">إلغاء</button>

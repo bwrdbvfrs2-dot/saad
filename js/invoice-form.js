@@ -269,7 +269,7 @@ function computeShiftExpected(username, date){
   state.vouchers.forEach(v=>{ if(v.date===date && ownBox(v.boxId)) otherMoves.push({label:`سند ${v.type==="receipt"?"قبض":"صرف"} ${v.voucherNo}`, amount: v.type==="receipt" ? v.amount : -v.amount}); });
   state.invoiceReturns.forEach(r=>{ if(r.date===date && r.refundAmount && ownBox(r.boxId)) otherMoves.push({label:`استرداد مرتجع فاتورة ${r.invoiceNumber}`, amount:-r.refundAmount}); });
   (state.salesReturns||[]).forEach(r=>{ if(r.date===date && r.refundAmount && ownBox(r.boxId)) otherMoves.push({label:`استرداد مرتجع مبيعات ${r.saleInvoiceNumber}`, amount:-r.refundAmount}); });
-  (state.legacyPayments||[]).forEach(l=>{ if(l.date===date && l.recordedBy===username) otherMoves.push({label:"تحصيل قطعة قديمة (سجل سابق)", amount:l.amount}); });
+  (state.legacyPayments||[]).forEach(l=>{ if(l.date===date && l.recordedBy===username && legacyCashOf(l)) otherMoves.push({label:"تحصيل قطعة قديمة (سجل سابق)", amount:legacyCashOf(l)}); });
   (state.repairs||[]).forEach(r=> (r.refunds||[]).forEach(f=>{ if(f.date===date && f.owner===username) otherMoves.push({label:`استرداد صيانة ملغاة ص-${r.number}`, amount:-((f.cash||0)+(f.network||0))}); }));
   state.purchases.forEach(p=>{ if(p.date===date && p.payStatus==="paid" && ownBox(p.sourceBoxId)) otherMoves.push({label:`فاتورة شراء ${p.invoiceNo}`, amount:-p.total}); });
   state.purchaseReturns.forEach(r=>{ if(r.date===date && r.payStatus==="paid" && ownBox(r.boxId)) otherMoves.push({label:"مرتجع مشتريات (مبلغ مسترد)", amount:r.value}); });
@@ -417,7 +417,11 @@ function allVoucherEntries(){
     (r.payments||[]).forEach(p=> pay(p, `دفعة صيانة ص-${r.number}${r.customerName?" — "+r.customerName:""}`));
     (r.refunds||[]).forEach(f=> push("صرف", f.voucherNo, {date:f.date, amount:(f.cash||0)+(f.network||0), title:`استرداد صيانة ملغاة ص-${r.number}`, by:f.owner, box:mainBox(f.owner, f.cash?"cash":"network")}));
   });
-  (state.legacyPayments||[]).forEach(l=> push("قبض", l.voucherNo, {date:l.date, amount:l.amount, title:"تحصيل قطعة قديمة", by:l.recordedBy, box:mainBox(l.recordedBy,"cash")}));
+  (state.legacyPayments||[]).forEach(l=>{
+    const item = (state.legacyItems||[]).find(x=>x.id===l.itemId), title = `تحصيل قطعة من الجرد الافتتاحي${item?" — "+item.name:""}`;
+    if(legacyCashOf(l)) push("قبض", l.cashReceiptNo||l.voucherNo, {date:l.date, amount:legacyCashOf(l), title, by:l.recordedBy, box:mainBox(l.recordedBy,"cash")});
+    if(legacyNetworkOf(l)) push("شبكة", l.networkReceiptNo, {date:l.date, amount:legacyNetworkOf(l), title: title+(l.cardType==="visa"?" — فيزا":" — مدى"), by:l.recordedBy, box:mainBox(l.recordedBy,"network")});
+  });
   (state.vouchers||[]).forEach(v=> push(v.type==="receipt"?"قبض":"صرف", v.voucherNo, {date:v.date, amount:v.amount, title:`سند ${v.type==="receipt"?"قبض":"صرف"} يدوي — ${v.type==="receipt"?"استلمنا من":"صرفنا لـ"} ${v.party||"—"}`, note:v.reason, by:v.recordedBy, box:boxName(v.boxId), voucherId:v.id}));
   (state.transferRequests||[]).forEach(t=> push("قبض", t.voucherNumber, {date:t.resolvedAt, amount:t.amount, title:`تحويل مستلم من ${t.fromOwner||""} إلى ${t.toOwner||""}`, note:t.purpose, by:t.toOwner, box:mainBox(t.toOwner, transferBoxType(t))}));
   (state.expenses||[]).forEach(e=>{ const cat = state.expenseCategories.find(c=>c.id===e.categoryId);
@@ -831,8 +835,11 @@ function updateLiveTotals(){
   let directDiscount = directDiscountInp ? (parseFloat(directDiscountInp.value)||0) : 0;
   const directDiscountVip = isCustomerVip(($("custMobile")?.value||"").trim());
   const remainingForDirectDiscount = Math.max(0, prices - loyaltyDiscount - promoDiscount);
-  const maxDirectDiscount = directDiscountVip ? remainingForDirectDiscount : Math.min(remainingForDirectDiscount, userMaxDiscountAmount(currentUser, prices));
-  if($("directDiscountLabel")) $("directDiscountLabel").textContent = directDiscountVip
+  const directDiscountOpen = directDiscountVip || isManagerUser(currentUser);
+  const maxDirectDiscount = directDiscountOpen ? remainingForDirectDiscount : Math.min(remainingForDirectDiscount, userMaxDiscountAmount(currentUser, prices));
+  if($("directDiscountLabel")) $("directDiscountLabel").textContent = isManagerUser(currentUser)
+    ? "خصم مباشر (ريال) — مدير: خصم مفتوح حتى لو فيه عرض أو كود خصم"
+    : directDiscountVip
     ? "خصم مباشر (ريال) — عميل VIP: أي موظف يقدر يخصم بدون حد (حتى 100%)"
     : userDiscountEnabled(currentUser) ? `خصم مباشر (ريال) — حدّك الأقصى ${maxDirectDiscount.toFixed(0)} ريال` : "خصم مباشر (ريال) — ما عندك صلاحية خصم (إلا لعميل VIP)";
   if(directDiscount > maxDirectDiscount){ directDiscount = maxDirectDiscount; if(directDiscountInp) directDiscountInp.value = maxDirectDiscount.toFixed(0); }

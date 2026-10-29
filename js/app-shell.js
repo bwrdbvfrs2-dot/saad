@@ -372,7 +372,7 @@ function assignVoucherNumbers(){
   (state.salesInvoices||[]).forEach(x=> cashIn(x.payment, x.payment && (x.payment.date||x.date)));
   (state.openingDebtPayments||[]).forEach(p=> cashIn(p));
   (state.repairs||[]).forEach(r=>{ (r.payments||[]).forEach(p=> cashIn(p)); (r.refunds||[]).forEach(f=>{ if((f.cash||0)+(f.network||0)>0) out(f); }); });
-  (state.legacyPayments||[]).forEach(l=>{ if((l.amount||0)>0 && !l.voucherNo) ins.push({date:l.date||"", set:n=>{ l.voucherNo = n; }}); });
+  (state.legacyPayments||[]).forEach(l=>{ if(legacyCashOf(l)>0 && !l.voucherNo && !l.cashReceiptNo) ins.push({date:l.date||"", set:n=>{ l.voucherNo = n; }}); });
   (state.expenses||[]).forEach(e=> out(e));
   (state.invoiceReturns||[]).forEach(r=>{ if((r.refundAmount||0)>0) out(r); });
   (state.salesReturns||[]).forEach(r=>{ if((r.refundAmount||0)>0) out(r); });
@@ -485,6 +485,7 @@ const WRITE_LOG_ITEMS = {
   purchases:{one:"فاتورة مشتريات", many:"فواتير مشتريات", name:x=>"#"+(x.invoiceNo||"")},
   purchaseReturns:{one:"مرتجع مشتريات", many:"مرتجعات مشتريات", name:x=>(x.value||0)+" ﷼"},
   expenses:{one:"مصروف", many:"مصاريف", name:x=>(x.amount||0)+" ﷼"},
+  deletedExpensesLog:{one:"مصروف محذوف", many:"مصاريف محذوفة", name:x=>(x.amount||0)+" ﷼"},
   vouchers:{one:"سند", many:"سندات", name:x=>x.voucherNo||""},
   invoiceReturns:{one:"مرتجع فاتورة", many:"مرتجعات فواتير", name:x=>"#"+(x.invoiceNumber||"")},
   salesReturns:{one:"مرتجع مبيعات", many:"مرتجعات مبيعات", name:x=>"#"+(x.saleInvoiceNumber||"")},

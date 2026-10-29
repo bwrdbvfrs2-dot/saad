@@ -11,6 +11,17 @@ function checkOpeningBalanceGrants(){
     if(r.status==="approved" && r.requestedBy===currentUser.username) openingBalanceSessionGrants.add(r.cardId);
   });
 }
+// every manual change to the store reaches the manager's mail (who, what, from → to); the stock that
+// invoices and sales move on their own doesn't — that would bury the real changes
+function notifyInventoryChange(what, cardName){
+  if(!currentUser) return;
+  const same = /: (.+) ← (.+)$/.exec(what); if(same && same[1]===same[2]) return; // the field was touched, not changed
+  const recipients = state.users.filter(u=>u.role==="مدير" && u.username!==currentUser.username);
+  if(!recipients.length) return;
+  const seq = nextDecisionNo(), message = `تعديل بالمخزون من ${currentUser.username}: ${what}`;
+  recipients.forEach(u=> state.decisions.push({id:newId(), seq, type:"inventory_change", recipientUsername:u.username, amount:0, reason:cardName||"", message, decidedBy:currentUser.username, date:todayStr()}));
+}
+const invVal = v=> (v===undefined || v===null || v==="") ? "—" : (typeof v==="number" ? fmtSar(v) : String(v));
 function requestOpeningBalanceEdit(cardId){
   const card = findItemCard(cardId);
   if(!card) return;
@@ -85,6 +96,7 @@ function renderTailoringOnlyCard(){
     const t = state.settings.tailoringOnly;
     const old = t[field][inp.dataset.cat];
     t[field][inp.dataset.cat] = parseFloat(inp.value)||0;
+    notifyInventoryChange(`أجرة تفصيل (بدون قماش) — ${field==="prices"?"سعر":"الحد الأدنى"} ${inp.dataset.cat}: ${invVal(old)} ← ${invVal(t[field][inp.dataset.cat])}`, "أجرة تفصيل");
     if(inp.dataset.cat==="رجال"){
       autoCalcCategoryPricing(t, field, true);
       el.querySelectorAll(cls).forEach(sib=>{ if(sib!==inp) sib.value = t[field][sib.dataset.cat]||""; });
@@ -188,6 +200,7 @@ function renderItemCards(){
       if(!ok){ inp.value = oldVal||""; return; }
     }
     card.openingBalance = newVal;
+    notifyInventoryChange(`«${card.name}» — رصيد أول المدة: ${invVal(oldVal)} ← ${invVal(newVal)}`, card.name);
     if(!isFirstEntry){
       if(!state.openingBalanceAdjustments) state.openingBalanceAdjustments=[];
       state.openingBalanceAdjustments.push({id:newId(), date:todayStr(), cardId:card.id, cardName:card.name, oldValue:oldVal, newValue:newVal, username:currentUser.username});
@@ -202,11 +215,15 @@ function renderItemCards(){
     showToast("تم تحديث رصيد أول المدة");
   }));
   document.querySelectorAll(".card-cost").forEach(inp=> inp.addEventListener("change", ()=>{
-    findItemCard(inp.dataset.card).currentCost = parseFloat(inp.value)||0; saveState(); renderAll();
+    const c = findItemCard(inp.dataset.card), old = c.currentCost;
+    c.currentCost = parseFloat(inp.value)||0;
+    notifyInventoryChange(`«${c.name}» — التكلفة: ${invVal(old)} ← ${invVal(c.currentCost)}`, c.name);
+    saveState(); renderAll();
   }));
   document.querySelectorAll(".card-minstock").forEach(inp=> inp.addEventListener("change", ()=>{
-    const c = findItemCard(inp.dataset.card);
+    const c = findItemCard(inp.dataset.card), old = c.minStock;
     c.minStock = parseFloat(inp.value)||0;
+    notifyInventoryChange(`«${c.name}» — الحد الأدنى للمخزون: ${invVal(old)} ← ${invVal(c.minStock)}`, c.name);
     c.lowStockAlertedDate = null; // reset so a new threshold can re-trigger an alert
     saveState(); renderAll();
   }));
@@ -214,6 +231,7 @@ function renderItemCards(){
     const c = findItemCard(inp.dataset.card);
     const oldPrice = c.prices[inp.dataset.cat];
     c.prices[inp.dataset.cat] = parseFloat(inp.value)||0;
+    notifyInventoryChange(`«${c.name}» — سعر البيع ${inp.dataset.cat}: ${invVal(oldPrice)} ← ${invVal(c.prices[inp.dataset.cat])}`, c.name);
     if(inp.dataset.cat==="رجال"){
       autoCalcCategoryPricing(c, "prices");
       // patch sibling price fields in place instead of a full renderAll() — a re-render mid-entry steals focus
@@ -224,8 +242,9 @@ function renderItemCards(){
     logAudit("price_changed", {cardId:c.id, cardName:c.name, category:inp.dataset.cat, oldPrice, newPrice:c.prices[inp.dataset.cat]});
   }));
   document.querySelectorAll(".card-qty").forEach(inp=> inp.addEventListener("change", ()=>{
-    const c = findItemCard(inp.dataset.card);
+    const c = findItemCard(inp.dataset.card), old = c.qty[inp.dataset.cat];
     c.qty[inp.dataset.cat] = parseFloat(inp.value)||0;
+    notifyInventoryChange(`«${c.name}» — الكمية لثوب ${inp.dataset.cat}: ${invVal(old)} ← ${invVal(c.qty[inp.dataset.cat])}`, c.name);
     if(inp.dataset.cat==="رجال"){
       autoCalcCategoryPricing(c, "qty", false);
       document.querySelectorAll(`.card-qty[data-card="${c.id}"]`).forEach(sib=>{ if(sib!==inp) sib.value = c.qty[sib.dataset.cat]||""; });
@@ -240,29 +259,36 @@ function renderItemCards(){
     const std = widthFabricQty(c.width);
     c.qty = c.qty||{};
     BODY_CATEGORIES.forEach(cat=>{ if(std[cat]>0) c.qty[cat] = std[cat]; });
+    notifyInventoryChange(`«${c.name}» — العرض: ${oldWidth} ← ${c.width}`, c.name);
     if(await saveStateWithRollback(snapshot)){
       logAudit("fabric_width_changed", {cardId:c.id, cardName:c.name, from:oldWidth, to:c.width, qty:c.qty});
       showToast(`صار ${c.name} ${c.width} — الكميات: ${BODY_CATEGORIES.map(cat=>`${cat} ${c.qty[cat]||0}`).join("، ")}`);
     }
   }));
   document.querySelectorAll(".card-saleprice").forEach(inp=> inp.addEventListener("change", ()=>{
-    findItemCard(inp.dataset.card).salePrice = parseFloat(inp.value)||0; saveState();
+    const c = findItemCard(inp.dataset.card), old = c.salePrice; c.salePrice = parseFloat(inp.value)||0;
+    notifyInventoryChange(`«${c.name}» — سعر البيع: ${invVal(old)} ← ${invVal(c.salePrice)}`, c.name); saveState();
   }));
   document.querySelectorAll(".card-origin").forEach(sel=> sel.addEventListener("change", ()=>{
-    findItemCard(sel.dataset.card).origin = sel.value; saveState(); renderAll();
+    const c = findItemCard(sel.dataset.card), old = c.origin; c.origin = sel.value;
+    notifyInventoryChange(`«${c.name}» — الصناعة: ${invVal(old)} ← ${invVal(c.origin)}`, c.name); saveState(); renderAll();
   }));
   document.querySelectorAll(".card-season").forEach(sel=> sel.addEventListener("change", ()=>{
-    findItemCard(sel.dataset.card).season = sel.value; saveState(); renderAll();
+    const c = findItemCard(sel.dataset.card), old = c.season; c.season = sel.value;
+    notifyInventoryChange(`«${c.name}» — الموسم: ${invVal(old)} ← ${invVal(c.season)}`, c.name); saveState(); renderAll();
   }));
   document.querySelectorAll(".card-minprice-cat").forEach(inp=> inp.addEventListener("change", ()=>{
     const c = findItemCard(inp.dataset.card);
     if(!c.minPrices) c.minPrices = {};
+    const old = c.minPrices[inp.dataset.cat];
     c.minPrices[inp.dataset.cat] = parseFloat(inp.value)||0;
+    notifyInventoryChange(`«${c.name}» — الحد الأدنى للسعر ${inp.dataset.cat}: ${invVal(old)} ← ${invVal(c.minPrices[inp.dataset.cat])}`, c.name);
     if(inp.dataset.cat==="رجال") autoCalcCategoryPricing(c, "minPrices");
     saveState(); renderAll();
   }));
   document.querySelectorAll(".card-fabric-saleprice").forEach(inp=> inp.addEventListener("change", ()=>{
-    findItemCard(inp.dataset.card).salePrice = parseFloat(inp.value)||0; saveState();
+    const c = findItemCard(inp.dataset.card), old = c.salePrice; c.salePrice = parseFloat(inp.value)||0;
+    notifyInventoryChange(`«${c.name}» — سعر بيع القماش: ${invVal(old)} ← ${invVal(c.salePrice)}`, c.name); saveState();
   }));
   document.querySelectorAll(".ic-header").forEach(h=> h.addEventListener("click", ()=> toggleItemCardExpand(h.dataset.card)));
   refreshLucideIcons();
@@ -357,7 +383,7 @@ function printQuickLabel(){
   closeQuickLabelModal();
   printItemCardLabel(c.id, copies);
 }
-function toggleItemCardActive(id){ const c=findItemCard(id); if(c){ c.active=!c.active; saveState(); renderAll(); } }
+function toggleItemCardActive(id){ const c=findItemCard(id); if(c){ c.active=!c.active; notifyInventoryChange(`«${c.name}» — ${c.active?"تفعيل الصنف":"إيقاف الصنف"}`, c.name); saveState(); renderAll(); } }
 async function writeOffItemCard(id){
   const card = findItemCard(id);
   if(!card) return;
@@ -369,6 +395,7 @@ async function writeOffItemCard(id){
   card.stockQty = (card.stockQty||0) - avail; // brings cardAvailableQty(card) to exactly 0
   card.active = false;
   state.stockWriteOffs.push({id:newId(), itemCardId:id, date:todayStr(), qty:avail, recordedBy:currentUser.username});
+  notifyInventoryChange(`«${card.name}» — إتلاف ${fmtSar(avail)} ${unitTxt} وإيقاف الصنف`, card.name);
   if(await saveStateWithRollback(snapshot)){
     logAudit("item_written_off", {cardName:card.name, qty:avail});
     showToast("تم إتلاف الصنف وتصفير رصيده");
@@ -394,6 +421,7 @@ async function deleteItemCard(id){
   if(!await confirmWithPassword(`حذف الصنف "${card.name}" نهائياً؟${opening?` رصيد أول المدة (${opening}) ينحذف معه.`:""} ما انستخدم بأي فاتورة أو حركة، فما راح يتأثر شي ثاني.\nأدخل كلمة مرورك للتأكيد.`)) return;
   const snapshot = JSON.parse(JSON.stringify(state));
   state.itemCards = state.itemCards.filter(c=>c.id!==id);
+  notifyInventoryChange(`حذف الصنف «${card.name}»${opening?` (رصيد أول المدة ${opening})`:""}`, card.name);
   state.openingBalanceEditRequests = (state.openingBalanceEditRequests||[]).filter(r=>r.cardId!==id);
   if(await saveStateWithRollback(snapshot)){
     logAudit("item_card_deleted", {cardName:card.name, code:card.code, openingBalance:opening});
@@ -544,6 +572,7 @@ function addManualItemCard(){
     salePrice: (type==="product"||type==="fabric") ? 0 : undefined };
   if(type!=="fabric") delete card.width;
   state.itemCards.push(card);
+  notifyInventoryChange(`إضافة صنف «${name}» — الكمية ${invVal(qty)}، التكلفة ${invVal(cost)}`, name);
   $("manualCardName").value=""; $("manualCardQty").value=""; $("manualCardCost").value=""; $("manualCardOrigin").value=""; $("manualCardSeason").value="";
   saveState(); renderAll();
   showToast("تم إضافة الصنف");
@@ -666,6 +695,7 @@ async function confirmItemImport(){
       salePrice: r.type==="product" ? r.salePrice : (r.type==="fabric" ? 0 : undefined),
       createdAt, createdBy:currentUser.username, importBatchId:batchId});
   });
+  notifyInventoryChange(`استيراد ${rows.length} صنف من ملف «${itemImportPending.fileName}»: ${rows.slice(0,10).map(r=>r.name).join("، ")}${rows.length>10?"…":""}`, "");
   if(await saveStateWithRollback(snapshot)){
     logAudit("items_imported", {batchId, fileName:itemImportPending.fileName, count:rows.length, items:rows.slice(0,100).map(r=>`${r.name} (${r.qty})`)});
     cancelItemImport(); renderAll();
@@ -712,7 +742,9 @@ async function addPurchase(){
     sup.balance += total;
   }
   card.stockQty = (card.stockQty||0) + qty;
+  const oldCost = card.currentCost;
   card.currentCost = unitPrice;
+  notifyInventoryChange(`فاتورة شراء — «${card.name}» كمية ${invVal(qty)} بسعر ${invVal(unitPrice)} (الإجمالي ${invVal(total)}${Math.abs((oldCost||0)-unitPrice)>0.001?`، التكلفة ${invVal(oldCost)} ← ${invVal(unitPrice)}`:""})`, card.name);
   // fabric bought through purchases (the normal way) draws the fabric guideline balance down —
   // before, only a "شراء قماش" expense did, so this balance only ever grew
   if(type==="fabric") state.advisory.fabric -= qty*unitPrice;
@@ -890,6 +922,7 @@ async function addPurchaseReturn(){
   card.stockQty = (card.stockQty||0) - qty;
   if(box) box.balance += value; else sup.balance -= value;
   if(card.type==="fabric") state.advisory.fabric += value;
+  notifyInventoryChange(`مرتجع مشتريات — «${card.name}» كمية ${invVal(qty)} بقيمة ${invVal(value)}`, card.name);
   state.purchaseReturns.push({id:newId(), date:todayStr(), itemCardId:cardId, quantity:qty, value, supplierId, payStatus, boxId: box ? box.id : null, recordedBy:currentUser.username,
     linkedPurchaseId: linkedPurchaseId||null, purchaseInvoiceNo: linkedPurchase?linkedPurchase.invoiceNo:null, supplierInvoiceNo: linkedPurchase?linkedPurchase.supplierInvoiceNo:null});
   if(!await saveStateWithRollback(snapshot)) return;
@@ -1680,8 +1713,48 @@ function renderBalancesTab(){
   expTbody.innerHTML = visibleExpenses.length ? visibleExpenses.map(e=>{
     const cat = state.expenseCategories.find(c=>c.id===e.categoryId);
     const box = findCashBox(e.sourceBoxId);
-    return `<tr><td>${e.voucherNo?`صرف ${e.voucherNo}`:"—"}</td><td>${e.date}</td><td>${cat?esc(cat.label):"—"}</td><td>${esc(e.subItemLabel||"—")}</td><td>${e.amount.toFixed(0)} ﷼</td><td>${esc(e.paidTo||"—")}</td><td>${esc(e.storeName||"—")}</td><td>${box?esc(box.name):"—"}</td></tr>`;
-  }).join("") : `<tr><td colspan="8">${emptyStateHtml("receipt","ما فيه مصروفات مسجّلة بعد.")}</td></tr>`;
+    return `<tr><td>${e.voucherNo?`صرف ${e.voucherNo}`:"—"}</td><td>${e.date}</td><td>${cat?esc(cat.label):"—"}</td><td>${esc(e.subItemLabel||"—")}</td><td>${e.amount.toFixed(0)} ﷼</td><td>${esc(e.paidTo||"—")}</td><td>${esc(e.storeName||"—")}</td><td>${box?esc(box.name):"—"}</td><td>${canDeleteExpense(e) ? `<button class="icon-btn" title="حذف المصروف (مسجّل بالخطأ)" aria-label="حذف المصروف" onclick="deleteExpense('${e.id}')"><i data-lucide="trash-2"></i></button>` : ""}</td></tr>`;
+  }).join("") : `<tr><td colspan="9">${emptyStateHtml("receipt","ما فيه مصروفات مسجّلة بعد.")}</td></tr>`;
+  // deleted expenses: the manager and the accountant see all of them, anyone else the ones they deleted
+  const delEl = $("deletedExpensesView");
+  if(delEl){
+    const seeAll = currentUser.role==="مدير" || currentUser.role==="محاسب";
+    const dels = (state.deletedExpensesLog||[]).filter(d=> seeAll || d.deletedBy===currentUser.username).slice().reverse();
+    delEl.innerHTML = dels.length ? `<div class="table-wrap"><table><thead><tr><th>رقم السند</th><th>تاريخ المصروف</th><th>التصنيف</th><th>المبلغ</th><th>دفع لمن</th><th>سجّله</th><th>حذفه</th><th>وقت الحذف</th><th>السبب</th></tr></thead><tbody>${
+      dels.map(d=>{ const cat = state.expenseCategories.find(c=>c.id===d.categoryId); const box = findCashBox(d.sourceBoxId);
+        return `<tr><td>${d.voucherNo?`صرف ${d.voucherNo}`:"—"}</td><td>${esc(d.date||"—")}</td><td>${cat?esc(cat.label):"—"}${d.subItemLabel?` / ${esc(d.subItemLabel)}`:""}</td><td>${fmtSar(d.amount||0)} ﷼${box?`<br><span class="sub" style="font-size:10.5px;">رجع لـ${esc(box.name)}</span>`:""}</td><td>${esc(d.paidTo||"—")}</td><td>${esc(d.recordedBy||"—")}</td><td>${esc(d.deletedBy||"—")}</td><td style="white-space:nowrap;">${d.deletedAt?new Date(d.deletedAt).toLocaleString("ar-SA-u-ca-gregory-nu-latn",{timeZone:"Asia/Riyadh",dateStyle:"short",timeStyle:"short"}):"—"}</td><td>${esc(d.deleteReason||"—")}</td></tr>`; }).join("")
+    }</tbody></table></div>` : `<p class="sub">ما فيه مصروفات محذوفة.</p>`;
+  }
+  refreshLucideIcons();
+}
+// an expense entered by mistake: whoever recorded it can delete it — nobody else's, and not once its
+// month is closed. The money goes back to the box it was paid from, the voucher number stays spent, and
+// the deleted record is kept (with who / when / why) and reaches the manager's mail
+function canDeleteExpense(e){
+  return !!currentUser && e.recordedBy===currentUser.username && !isMonthClosed((e.date||"").slice(0,7));
+}
+async function deleteExpense(id){
+  const e = state.expenses.find(x=>x.id===id); if(!e) return;
+  if(e.recordedBy!==currentUser.username){ showToast("تقدر تحذف المصروف اللي سجلته أنت بس"); return; }
+  if(isMonthClosed((e.date||"").slice(0,7))){ showToast("شهر هذا المصروف مقفول — ما يمكن حذفه"); return; }
+  const cat = state.expenseCategories.find(c=>c.id===e.categoryId), box = findCashBox(e.sourceBoxId);
+  const label = `${fmtSar(e.amount)} ريال${cat?" — "+cat.label:""}${e.subItemLabel?" / "+e.subItemLabel:""}${e.paidTo?" — "+e.paidTo:""}${e.voucherNo?` (سند صرف ${e.voucherNo})`:""}`;
+  if(!await showConfirm(`حذف المصروف ${label}؟ المبلغ يرجع لـ${box?box.name:"الصندوق"}.`)) return;
+  const reason = (prompt("سبب الحذف (مثلاً: انسجل مرتين، مبلغ غلط):")||"").trim();
+  if(!reason){ showToast("لازم تكتب سبب الحذف"); return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
+  if(box) box.balance += e.amount||0;
+  if(cat && cat.advisoryKey) state.advisory[cat.advisoryKey] += e.amount||0;
+  state.expenses = state.expenses.filter(x=>x.id!==id);
+  if(!state.deletedExpensesLog) state.deletedExpensesLog = [];
+  state.deletedExpensesLog.push({...e, deletedBy:currentUser.username, deletedAt:serverNowIso(), deleteReason:reason});
+  const seq = nextDecisionNo();
+  state.users.filter(u=>u.role==="مدير" && u.username!==currentUser.username).forEach(u=> state.decisions.push({id:newId(), seq, type:"expense_deleted", recipientUsername:u.username, amount:e.amount||0, reason,
+    message:`${currentUser.username} حذف مصروف ${label} — السبب: ${reason}`, decidedBy:currentUser.username, date:todayStr()}));
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("expense_deleted", {amount:e.amount, voucherNo:e.voucherNo||null, category:cat?cat.label:null, date:e.date, reason});
+    showToast(`انحذف المصروف ورجع ${fmtSar(e.amount)} ريال للصندوق`);
+  }
 }
 function renderClosedReports(){
   const el=$("archiveList");
