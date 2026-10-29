@@ -740,11 +740,11 @@ async function startListeningToState(catalogReady){
     const gen = ++stateListenerGen;
     if(stateUnsubscribe){ stateUnsubscribe(); stateUnsubscribe = null; } // never two listeners at once
     stateUnsubscribe = STATE_DOC.onSnapshot(async snap=>{
-      if(gen!==stateListenerGen) return;
+      if(gen!==stateListenerGen){ if(firstLoad){ firstLoad=false; resolve(); } return; }
       // both downloads run side by side, but the shop data is applied only once the catalog is in —
       // without it the type libraries would look missing and be re-seeded with the defaults
       if(firstLoad && catalogReady) await catalogReady;
-      if(gen!==stateListenerGen) return;
+      if(gen!==stateListenerGen){ if(firstLoad){ firstLoad=false; resolve(); } return; }
       if(snap.exists){
         if(!firstLoad && pendingSaves>0){ deferredSnapshot = snap; return; } // applied once our saves land
         const wasFirst = firstLoad;
@@ -884,10 +884,28 @@ async function repairLoginLink(username, email){
   logAudit("login_account_relinked", {username, reason:"password change save had not landed"});
   return rec;
 }
+// one login at a time, and the button says what it's doing: with no sign of life on a slow connection
+// it got pressed again, and two logins running together tripped over each other
+let loginInProgress = false;
+function setLoginBusy(busy, msg){
+  const b = $("loginBtn"); if(!b) return;
+  b.disabled = busy; b.textContent = busy ? (msg||"جاري الدخول…") : "دخول";
+  b.style.opacity = busy ? "0.75" : "";
+}
 async function tryLogin(){
-  const u=$("loginUser").value.trim(), p=$("loginPass").value;
+  if(loginInProgress) return;
+  loginInProgress = true;
+  try{ await tryLoginOnce(); }
+  finally{ loginInProgress = false; setLoginBusy(false); }
+}
+async function tryLoginOnce(){
+  let u=$("loginUser").value.trim(), p=$("loginPass").value;
+  // a password the browser filled in by itself can read as empty until the first click has landed —
+  // so the first press said «enter your password» and only the second one worked. Read again first.
+  if(!u || !p){ await new Promise(r=>setTimeout(r, 200)); u=$("loginUser").value.trim(); p=$("loginPass").value; }
   if(!u || !p){ $("loginErr").textContent="أدخل اسم المستخدم وكلمة المرور"; return; }
   $("loginErr").textContent = "";
+  setLoginBusy(true, "جاري التحقق…");
   let email;
   try{
     const doc = await USERNAMES_COL.doc(u).get();
@@ -901,6 +919,7 @@ async function tryLogin(){
     $("loginErr").textContent = wrongCreds ? "اسم المستخدم أو كلمة المرور غير صحيحة" : authErrorMessage(e);
     return;
   }
+  setLoginBusy(true, "جاري تحميل بيانات المحل…");
   await afterSignedIn();
   let found = state.users.find(x=>x.authUid===fbAuth.currentUser.uid);
   // a password change whose shop-data save never landed leaves the username pointing at the new login
