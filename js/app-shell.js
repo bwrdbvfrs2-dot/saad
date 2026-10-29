@@ -500,6 +500,17 @@ if(typeof window!=="undefined"){
   window.addEventListener("load", updateOfflineBanner);
 }
 const OFFLINE_SAVE_MSG = "ما انحفظ — ما فيه اتصال بالإنترنت. اللي كتبته باقي بالشاشة، احفظ أول ما يرجع النت";
+// a save uploads the whole shop document — on a slow connection that's seconds with no sign of life,
+// so the top bar says «جاري الحفظ…» while any save is running and «✓ انحفظ» when they're done
+let lastSaveOk = true, saveIndicatorTimer = null;
+function updateSaveIndicator(){
+  const el = typeof document!=="undefined" && document.getElementById("saveIndicator"); if(!el) return;
+  clearTimeout(saveIndicatorTimer);
+  if(pendingSaves>0){ el.style.display=""; el.style.color="var(--gold-soft)"; el.textContent = "⏳ جاري الحفظ…"; return; }
+  if(!lastSaveOk){ el.style.display=""; el.style.color="var(--loss)"; el.textContent = "✗ ما انحفظ"; saveIndicatorTimer = setTimeout(()=>{ el.style.display="none"; }, 6000); return; }
+  el.style.display=""; el.style.color="var(--profit)"; el.textContent = "✓ انحفظ";
+  saveIndicatorTimer = setTimeout(()=>{ el.style.display="none"; }, 2500);
+}
 function saveState(){
   if(!fbAuth.currentUser) return Promise.resolve(false); // signed out — a write would only be refused
   if(isOffline()){ updateOfflineBanner(); if(typeof showToast==="function") showToast(OFFLINE_SAVE_MSG); return Promise.resolve(false); }
@@ -508,9 +519,9 @@ function saveState(){
   assignVoucherNumbers();
   if(typeof computeAdvisory==="function") state.advisory = computeAdvisory().totals;
   const payload = JSON.parse(JSON.stringify(state));
-  pendingSaves++;
-  const run = saveQueue.then(()=> commitStatePayload(payload)).finally(()=>{
-    pendingSaves--;
+  pendingSaves++; updateSaveIndicator();
+  const run = saveQueue.then(()=> commitStatePayload(payload)).then(ok=>{ lastSaveOk = ok; return ok; }).finally(()=>{
+    pendingSaves--; updateSaveIndicator();
     if(pendingSaves===0 && deferredSnapshot){ const snap = deferredSnapshot; deferredSnapshot = null; applyServerSnapshot(snap, false); }
   });
   saveQueue = run.catch(()=>{});
