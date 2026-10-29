@@ -130,7 +130,12 @@ function collectBoxMovements(){
   };
   state.invoices.forEach(inv=> (inv.payments||[]).forEach(p=> pay(p, `دفعة فاتورة ${inv.number}`, p.date)));
   state.salesInvoices.forEach(s=>{ if(s.payment) pay(s.payment, `فاتورة مبيعات ${s.number}`, s.payment.date||s.date); });
-  (state.legacyPayments||[]).forEach(l=> add(l.recordedBy ? mainId(l.recordedBy,"cash") : null, l.amount, (l.recordedBy ? "تحصيل قطعة قديمة" : "تحصيل قطعة قديمة (سجل قديم بدون مستخدم)")+vno(l,"قبض"), l.date));
+  (state.legacyPayments||[]).forEach(l=>{
+    if(!l.recordedBy){ out.push({boxId:null, amount:l.amount, label:"تحصيل قطعة قديمة (سجل قديم بدون مستخدم)", date:l.date}); return; }
+    const c = legacyCashOf(l), n = legacyNetworkOf(l);
+    if(c) add(mainId(l.recordedBy,"cash"), c, "تحصيل قطعة قديمة"+((l.cashReceiptNo||l.voucherNo)?` — سند قبض ${l.cashReceiptNo||l.voucherNo}`:""), l.date);
+    if(n) add(mainId(l.recordedBy,"network"), networkNetOf(l), "تحصيل قطعة قديمة — شبكة"+(l.networkReceiptNo?` ${l.networkReceiptNo}`:""), l.date);
+  });
   (state.openingDebtPayments||[]).forEach(p=> pay(p, `تحصيل دين سابق — عميل ${p.customerCode}`, p.date));
   (state.repairs||[]).forEach(r=>{
     (r.payments||[]).forEach(p=> pay(p, `دفعة صيانة ص-${r.number}`, p.date));
@@ -273,6 +278,7 @@ function allCardPayments(){
   state.salesInvoices.forEach(s=>{ if(s.payment && s.payment.network) out.push({...s.payment, date: s.payment.date||s.date, recordedBy: s.payment.recordedBy||s.recordedBy}); });
   (state.openingDebtPayments||[]).forEach(p=>{ if(p.network) out.push(p); });
   (state.repairs||[]).forEach(r=> (r.payments||[]).forEach(p=>{ if(p.network) out.push(p); }));
+  (state.legacyPayments||[]).forEach(l=>{ if(legacyNetworkOf(l)) out.push(l); });
   return out;
 }
 function networkFeesForMonth(monthLabel){

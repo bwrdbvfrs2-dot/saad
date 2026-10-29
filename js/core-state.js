@@ -309,6 +309,9 @@ const $ = id => document.getElementById(id);
 function monthDisplay(label){const names=["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
   const [y,m]=label.split("-"); return names[parseInt(m)-1]+" "+y;}
 function nextMonthLabel(label){let [y,m]=label.split("-").map(Number); m++; if(m>12){m=1;y++;} return y+"-"+String(m).padStart(2,"0");}
+// an opening-inventory collection: newer ones carry cash / network, older ones were one amount, all cash
+function legacyCashOf(l){ return l.cash!==undefined ? (l.cash||0) : (l.amount||0); }
+function legacyNetworkOf(l){ return l.cash!==undefined ? (l.network||0) : 0; }
 function todayStr(){const d=serverDate();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 function esc(s){ if(s===undefined||s===null) return ""; return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 // whole riyals show with no decimals; fractional amounts (e.g. from a fractional qty × unit price) show

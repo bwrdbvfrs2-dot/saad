@@ -692,7 +692,10 @@ function openLegacyDeliverModal(id){
   $("legDeliverItemLabel").textContent = `${item.name} — ${item.desc} (متبقي ${remainingCount} من ${item.count})`;
   $("legDeliverQtyInput").value = remainingCount;
   $("legDeliverQtyInput").max = remainingCount;
-  $("legDeliverAmountInput").value = item.remaining>0 ? item.remaining : 0;
+  $("legDeliverAmountInput").value = item.remaining>0 ? +item.remaining.toFixed(2) : 0;
+  $("legDeliverNetworkInput").value = 0; $("legDeliverReceipt").value = "";
+  $("legDeliverCardType").innerHTML = cardTypeOptionsHtml();
+  $("legDeliverNetworkWrap").style.display = "none";
   $("legacyDeliverModalOverlay").classList.remove("hidden");
 }
 function closeLegacyDeliverModal(){ $("legacyDeliverModalOverlay").classList.add("hidden"); legacyDeliverTargetId=null; }
@@ -701,7 +704,12 @@ async function confirmLegacyDeliver(){
   if(!item) return;
   const remainingCount = item.count - (item.deliveredCount||0);
   const qty = parseInt($("legDeliverQtyInput").value)||0;
-  const amountReceived = parseFloat($("legDeliverAmountInput").value)||0;
+  // the amount is split cash / network like every other payment — it was one amount, always put in the cash box
+  const cashReceived = Math.max(0, parseFloat($("legDeliverAmountInput").value)||0);
+  const networkReceived = Math.max(0, parseFloat($("legDeliverNetworkInput").value)||0);
+  const networkReceiptNo = $("legDeliverReceipt").value.trim();
+  const amountReceived = Math.round((cashReceived + networkReceived)*100)/100;
+  if(networkReceived>0 && !networkReceiptNo){ showToast("أدخل رقم إيصال الشبكة"); return; }
   if(qty<=0 || qty>remainingCount){ showToast(`أدخل كمية صحيحة (1 إلى ${remainingCount})`); return; }
   if(amountReceived>item.remaining+0.01){ showToast(`المبلغ أكبر من المتبقي (${fmtSar(item.remaining)} ريال)`); return; }
   const newRemaining = Math.max(0, item.remaining - amountReceived);
@@ -716,12 +724,15 @@ async function confirmLegacyDeliver(){
   item.deliveredCount = (item.deliveredCount||0) + qty;
   item.lastDeliveryDate = todayStr();
   if(amountReceived>0.01){
-    state.legacyPayments.push({id:newId(), itemId:item.id, amount:amountReceived, date:todayStr(), recordedBy:currentUser.username});
-    applyPaymentToBalances({cash:amountReceived, network:0}); // this screen has no cash/network split in its UI — treated as cash, same as the amount was previously tracked in reports but never actually credited to any box
+    const payment = {id:newId(), itemId:item.id, amount:amountReceived, cash:cashReceived, network:networkReceived,
+      networkReceiptNo: networkReceived>0 ? networkReceiptNo : "", cardType: networkReceived>0 ? readCardType("legDeliverCardType") : undefined,
+      cashReceiptNo: cashReceived>0 ? nextVoucherNo() : null, date:todayStr(), recordedBy:currentUser.username};
+    state.legacyPayments.push(payment);
+    applyPaymentToBalances(payment); // cash to the cash box, network (less the card fee) to the network box
   }
   if(item.deliveredCount>=item.count){ item.status="تم التسليم"; item.deliveredDate=todayStr(); }
   if(!await saveStateWithRollback(snapshot)) return;
-  logAudit("legacy_item_delivered", {itemName:item.name, qty, amountReceived});
+  logAudit("legacy_item_delivered", {itemName:item.name, qty, amountReceived, cash:cashReceived, network:networkReceived});
   closeLegacyDeliverModal();
   showToast(item.status==="تم التسليم" ? "تم تسليم كامل القطع" : `تم تسليم ${qty} — متبقي ${item.count-item.deliveredCount}`);
 }
