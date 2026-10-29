@@ -1225,7 +1225,9 @@ async function addUser(){
   // and every one of their writes afterward would be rejected by the rules' "users must be
   // unchanged for non-admins" check (they'd never be able to save anything, ever).
   normalizeState();
-  saveState(); renderAll();
+  // the message waits for the save — it said «added» while the save was still on its way
+  const saved = await saveState(); renderAll();
+  if(!saved){ showToast("ما انحفظ المستخدم الجديد — تأكد من الاتصال وحاول مرة ثانية"); return; }
   logAudit("user_added", {newUsername:username, role});
   $("newUserName").value=""; $("newUserPass").value=""; showToast("تم إضافة المستخدم");
 }
