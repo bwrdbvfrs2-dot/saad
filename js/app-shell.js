@@ -695,6 +695,7 @@ async function afterSignedIn(){
   // the daily backup uploads a full copy of the shop data — it runs in the background a few seconds
   // after the app opens instead of holding up the login screen (the first login of each day was slow)
   setTimeout(maybeBackupStateToday, 5000);
+  setTimeout(warnStateSizeIfNeeded, 3000);
 }
 
 // ---------------- daily backups (disaster recovery — keeps the last 14 days) ----------------
@@ -1172,5 +1173,31 @@ function renderNavDrawer(){
 }
 function openNavDrawer(){ navDrawerActiveGroup=null; renderNavDrawer(); $("navDrawerOverlay").classList.remove("hidden"); }
 function closeNavDrawer(){ $("navDrawerOverlay").classList.add("hidden"); }
+// all the shop's data lives in one Firestore document, and Firestore refuses a document over 1 MiB —
+// past that every save fails. The manager sees how full it is, what takes the room, and a warning early
+const STATE_DOC_LIMIT_BYTES = 1048576;
+function stateSizeBytes(obj){ try{ return new TextEncoder().encode(JSON.stringify(obj||state)).length; }catch(e){ return 0; } }
+// what goes into shop/state itself: the type libraries (with their pictures) live in catalog/ once it's in use
+function mainDocCopy(){ const o = {...state}; if(!catalogDenied) catalogKeys().forEach(k=>{ if(catalogSaved[k]) delete o[k]; }); return o; }
+function renderStateSizeMeter(){
+  const el = $("stateSizeMeter"); if(!el || !currentUser || currentUser.role!=="مدير") return;
+  const doc = mainDocCopy(), used = stateSizeBytes(doc), pct = used/STATE_DOC_LIMIT_BYTES*100;
+  const color = pct>=85 ? "var(--loss)" : pct>=70 ? "var(--warn)" : "var(--profit)";
+  const parts = Object.keys(doc).map(k=>[k, stateSizeBytes(doc[k])]).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const LABELS = {invoices:"فواتير التفصيل", customers:"العملاء والمقاسات", salesInvoices:"فواتير المبيعات", purchases:"المشتريات (مع صورها)", auditLog:"سجل التدقيق", itemCards:"الأصناف", settings:"الإعدادات (مع الشعار والصور)", payrollLedger:"الرواتب", expenses:"المصروفات", decisions:"الإشعارات", mailRequests:"طلبات البريد", deletedInvoicesLog:"الفواتير المحذوفة", garmentTypes:"أنواع الثياب (مع صورها)", collarTypes:"أنواع الياقة (مع صورها)", cufflinkTypes:"أنواع الكبك (مع صورها)"};
+  el.innerHTML = `<p style="margin:0 0 6px;">مستخدم <b style="color:${color};">${(used/1024).toFixed(0)} كيلوبايت</b> من ${(STATE_DOC_LIMIT_BYTES/1024).toFixed(0)} (${pct.toFixed(0)}%)</p>
+    <div style="height:10px;background:var(--surface3);border-radius:6px;overflow:hidden;"><div style="height:100%;width:${Math.min(100,pct).toFixed(1)}%;background:${color};"></div></div>
+    <p class="sub" style="margin:6px 0 2px;">أكبر الأجزاء: ${parts.map(([k,b])=>`${LABELS[k]||k} ${(b/1024).toFixed(0)} ك.ب`).join("، ")}</p>
+    <p class="sub" style="margin:2px 0;">${pct>=70 ? `<b style="color:${color};">قربت البيانات من الحد — لما توصل 100% يوقف الحفظ. تواصل مع الدعم الفني عشان ننقل الفواتير القديمة لمكان منفصل.</b>` : "كل بيانات المحل محفوظة بسجل واحد حده 1 ميجابايت تقريباً — تنبيه يطلع لك إذا وصلت 70%."}</p>`;
+}
+// once a day, a manager is told when the data is getting near the limit
+function warnStateSizeIfNeeded(){
+  if(!currentUser || currentUser.role!=="مدير") return;
+  const pct = stateSizeBytes(mainDocCopy())/STATE_DOC_LIMIT_BYTES*100;
+  if(pct < 70) return;
+  const key = "stateSizeWarned:"+todayStr();
+  try{ if(localStorage.getItem(key)) return; localStorage.setItem(key,"1"); }catch(e){}
+  showToast(`تنبيه: بيانات المحل وصلت ${pct.toFixed(0)}% من الحد المسموح — شوف «حجم بيانات المحل» بالإعدادات`);
+}
 function isMonthClosed(m){ return state.closingReports.some(r=>r.monthLabel===m); }
 
