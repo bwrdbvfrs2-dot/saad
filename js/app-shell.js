@@ -485,6 +485,7 @@ const WRITE_LOG_ITEMS = {
   purchases:{one:"فاتورة مشتريات", many:"فواتير مشتريات", name:x=>"#"+(x.invoiceNo||"")},
   purchaseReturns:{one:"مرتجع مشتريات", many:"مرتجعات مشتريات", name:x=>(x.value||0)+" ﷼"},
   expenses:{one:"مصروف", many:"مصاريف", name:x=>(x.amount||0)+" ﷼"},
+  deletedExpensesLog:{one:"مصروف محذوف", many:"مصاريف محذوفة", name:x=>(x.amount||0)+" ﷼"},
   vouchers:{one:"سند", many:"سندات", name:x=>x.voucherNo||""},
   invoiceReturns:{one:"مرتجع فاتورة", many:"مرتجعات فواتير", name:x=>"#"+(x.invoiceNumber||"")},
   salesReturns:{one:"مرتجع مبيعات", many:"مرتجعات مبيعات", name:x=>"#"+(x.saleInvoiceNumber||"")},

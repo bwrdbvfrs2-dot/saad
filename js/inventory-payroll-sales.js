@@ -1713,8 +1713,38 @@ function renderBalancesTab(){
   expTbody.innerHTML = visibleExpenses.length ? visibleExpenses.map(e=>{
     const cat = state.expenseCategories.find(c=>c.id===e.categoryId);
     const box = findCashBox(e.sourceBoxId);
-    return `<tr><td>${e.voucherNo?`صرف ${e.voucherNo}`:"—"}</td><td>${e.date}</td><td>${cat?esc(cat.label):"—"}</td><td>${esc(e.subItemLabel||"—")}</td><td>${e.amount.toFixed(0)} ﷼</td><td>${esc(e.paidTo||"—")}</td><td>${esc(e.storeName||"—")}</td><td>${box?esc(box.name):"—"}</td></tr>`;
-  }).join("") : `<tr><td colspan="8">${emptyStateHtml("receipt","ما فيه مصروفات مسجّلة بعد.")}</td></tr>`;
+    return `<tr><td>${e.voucherNo?`صرف ${e.voucherNo}`:"—"}</td><td>${e.date}</td><td>${cat?esc(cat.label):"—"}</td><td>${esc(e.subItemLabel||"—")}</td><td>${e.amount.toFixed(0)} ﷼</td><td>${esc(e.paidTo||"—")}</td><td>${esc(e.storeName||"—")}</td><td>${box?esc(box.name):"—"}</td><td>${canDeleteExpense(e) ? `<button class="icon-btn" title="حذف المصروف (مسجّل بالخطأ)" aria-label="حذف المصروف" onclick="deleteExpense('${e.id}')"><i data-lucide="trash-2"></i></button>` : ""}</td></tr>`;
+  }).join("") : `<tr><td colspan="9">${emptyStateHtml("receipt","ما فيه مصروفات مسجّلة بعد.")}</td></tr>`;
+  refreshLucideIcons();
+}
+// an expense entered by mistake: whoever recorded it can delete it — nobody else's, and not once its
+// month is closed. The money goes back to the box it was paid from, the voucher number stays spent, and
+// the deleted record is kept (with who / when / why) and reaches the manager's mail
+function canDeleteExpense(e){
+  return !!currentUser && e.recordedBy===currentUser.username && !isMonthClosed((e.date||"").slice(0,7));
+}
+async function deleteExpense(id){
+  const e = state.expenses.find(x=>x.id===id); if(!e) return;
+  if(e.recordedBy!==currentUser.username){ showToast("تقدر تحذف المصروف اللي سجلته أنت بس"); return; }
+  if(isMonthClosed((e.date||"").slice(0,7))){ showToast("شهر هذا المصروف مقفول — ما يمكن حذفه"); return; }
+  const cat = state.expenseCategories.find(c=>c.id===e.categoryId), box = findCashBox(e.sourceBoxId);
+  const label = `${fmtSar(e.amount)} ريال${cat?" — "+cat.label:""}${e.subItemLabel?" / "+e.subItemLabel:""}${e.paidTo?" — "+e.paidTo:""}${e.voucherNo?` (سند صرف ${e.voucherNo})`:""}`;
+  if(!await showConfirm(`حذف المصروف ${label}؟ المبلغ يرجع لـ${box?box.name:"الصندوق"}.`)) return;
+  const reason = (prompt("سبب الحذف (مثلاً: انسجل مرتين، مبلغ غلط):")||"").trim();
+  if(!reason){ showToast("لازم تكتب سبب الحذف"); return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
+  if(box) box.balance += e.amount||0;
+  if(cat && cat.advisoryKey) state.advisory[cat.advisoryKey] += e.amount||0;
+  state.expenses = state.expenses.filter(x=>x.id!==id);
+  if(!state.deletedExpensesLog) state.deletedExpensesLog = [];
+  state.deletedExpensesLog.push({...e, deletedBy:currentUser.username, deletedAt:serverNowIso(), deleteReason:reason});
+  const seq = nextDecisionNo();
+  state.users.filter(u=>u.role==="مدير" && u.username!==currentUser.username).forEach(u=> state.decisions.push({id:newId(), seq, type:"expense_deleted", recipientUsername:u.username, amount:e.amount||0, reason,
+    message:`${currentUser.username} حذف مصروف ${label} — السبب: ${reason}`, decidedBy:currentUser.username, date:todayStr()}));
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("expense_deleted", {amount:e.amount, voucherNo:e.voucherNo||null, category:cat?cat.label:null, date:e.date, reason});
+    showToast(`انحذف المصروف ورجع ${fmtSar(e.amount)} ريال للصندوق`);
+  }
 }
 function renderClosedReports(){
   const el=$("archiveList");
