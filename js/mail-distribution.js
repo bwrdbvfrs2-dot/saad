@@ -742,13 +742,17 @@ function renderPendingList(){
   const rows = allPendingGarments();
   const tbody = $("pendingBody"); tbody.innerHTML="";
   if(rows.length===0){ tbody.innerHTML=`<tr><td colspan="6">${emptyStateHtml("check-circle-2","ما فيه ثياب متعثرة")}</td></tr>`; return; }
+  // built as one string and set once — appending to innerHTML re-parsed the whole table on every row
+  // (23 s at login with 600 invoices)
+  const html = [];
   rows.forEach(({inv,g,idx})=>{
     const st = STATUSES.find(s=>s.v===g.status);
     const waBtn = inv.customerMobile ? `<a href="${waLink(inv.customerMobile, buildReminderMessage(inv,g))}" target="_blank" class="btn btn-ghost btn-sm" style="white-space:nowrap;" title="تذكير واتساب">تذكير</a>` : "";
-    tbody.innerHTML += `<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(g.fabricType)}</td>
+    html.push(`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(g.fabricType)}</td>
       <td><span class="badge ${st.cls}">${st.label}</span></td><td>${monthDisplay(inv.originMonth)}</td>
-      <td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm jump-to-invoice-btn" data-number="${inv.number.replace(/"/g,"&quot;")}">فتح</button> <button class="btn btn-ghost btn-sm" onclick="printCuttingCard('${inv.id}', ${idx})" title="طباعة كرت القصاص">كرت القصاص</button> ${waBtn}</td></tr>`;
+      <td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm jump-to-invoice-btn" data-number="${inv.number.replace(/"/g,"&quot;")}">فتح</button> <button class="btn btn-ghost btn-sm" onclick="printCuttingCard('${inv.id}', ${idx})" title="طباعة كرت القصاص">كرت القصاص</button> ${waBtn}</td></tr>`);
   });
+  tbody.innerHTML = html.join("");
   document.querySelectorAll(".jump-to-invoice-btn").forEach(btn=> btn.addEventListener("click", ()=> jumpToInvoice(btn.dataset.number)));
 }
 function jumpToInvoice(number){

@@ -662,6 +662,7 @@ function expireOldPointsForCustomer(mobile){
   return changed;
 }
 function checkAllLoyaltyPointsExpiry(){
+  if(!currentUser) return; // logged out: the account can't save any more — a try here only raised an error
   let anyChanged = false;
   state.customers.forEach(cust=>{ if(expireOldPointsForCustomer(cust.mobile)) anyChanged = true; });
   if(anyChanged){ saveState(); renderAll(); }

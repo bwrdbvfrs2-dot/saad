@@ -154,6 +154,7 @@ function renderCustomers(){
   const tbody=$("customersBody"); tbody.innerHTML="";
   if(customers.length===0){ tbody.innerHTML=`<tr><td colspan="7">${emptyStateHtml("users","لا نتائج")}</td></tr>`; refreshLucideIcons(); return; }
   const isAdmin = currentUser && currentUser.role==="مدير";
+  const html = []; // one string, set once (appending row by row re-parsed the whole table each time)
   customers.forEach(c=>{
     const waBtn = filter==="dormant" ? `<a href="${waLink(c.mobile, state.settings.waPromoMessage)}" target="_blank" class="icon-btn" title="إرسال عرض واتساب"><i data-lucide="message-circle"></i></a>` : "";
     const cust = findCustomerByMobile(c.mobile);
@@ -167,8 +168,9 @@ function renderCustomers(){
       const pts = cust ? (cust.loyaltyPoints||0) : 0;
       loyaltyCell = `${tierLabel(tier)}<br><span class="sub">${pts} نقطة</span>${isAdmin?`<br><label style="display:flex;align-items:center;gap:4px;font-size:11px;"><input type="checkbox" class="cust-vip-toggle" data-mobile="${c.mobile}"> اجعله VIP</label>`:""}`;
     }
-    tbody.innerHTML += `<tr><td>${esc(displayCode)}</td><td>${esc(c.name)} ${c.mobile?`<a href="${waLink(c.mobile)}" target="_blank" class="icon-btn" title="فتح واتساب"><i data-lucide="message-circle"></i></a>`:""}</td><td>${esc(c.mobile)}</td><td>${c.lastDate||"—"}</td><td>${c.count}</td><td>${loyaltyCell}</td><td><button class="btn btn-ghost btn-sm" onclick="showCustomerReport('${c.mobile}','${esc(c.name).replace(/'/g,"\\'")}')">تقرير العميل</button> ${waBtn}</td></tr>`;
+    html.push(`<tr><td>${esc(displayCode)}</td><td>${esc(c.name)} ${c.mobile?`<a href="${waLink(c.mobile)}" target="_blank" class="icon-btn" title="فتح واتساب"><i data-lucide="message-circle"></i></a>`:""}</td><td>${esc(c.mobile)}</td><td>${c.lastDate||"—"}</td><td>${c.count}</td><td>${loyaltyCell}</td><td><button class="btn btn-ghost btn-sm" onclick="showCustomerReport('${c.mobile}','${esc(c.name).replace(/'/g,"\\'")}')">تقرير العميل</button> ${waBtn}</td></tr>`);
   });
+  tbody.innerHTML = html.join("");
   document.querySelectorAll(".cust-vip-toggle").forEach(cb=> cb.addEventListener("change", ()=>{
     const mobile = cb.dataset.mobile;
     let cust = findCustomerByMobile(mobile);
@@ -1419,6 +1421,7 @@ function performTabSwitch(name){
   if(name==="report-myDaily") renderMyDaily();
   if(name==="report-daily") renderDailyPreview();
   if(name==="report-expenseSubItems") refreshExpenseSubFilters();
+  if(name==="settingsUsers") renderStateSizeMeter(); // measured when opened, not on every re-render
   if(name==="mail") renderMailTab(); // opening the mail clears its unread count
   if(name==="invoice" && !editingId){
     // refresh dropdowns (e.g. newly-added measurement options) without discarding data already entered
