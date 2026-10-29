@@ -34,7 +34,7 @@ function renderMailTab(){
   const seen = mailSeenSeq();
   const unread = myNotifications.filter(d=> isUnreadNotification(d, seen));
   const mailOpen = $("tab-mail") && $("tab-mail").classList.contains("active");
-  $("myNotificationsList").innerHTML = myNotifications.length ? myNotifications.map(d=>`<div class="item-row" style="flex-direction:column;align-items:stretch;${unread.includes(d)?"border:1px solid var(--gold);border-radius:6px;":""}"><b>قرار رقم ${d.seq}${unread.includes(d)?` <span class="badge b-pending">جديد</span>`:""}</b><span class="sub">${esc(d.message)} — ${d.date}</span></div>`).join("") : `<p class="sub">ما فيه إشعارات لك.</p>`;
+  $("myNotificationsList").innerHTML = myNotifications.length ? myNotifications.map(d=>`<div class="item-row" style="flex-direction:column;align-items:stretch;${unread.includes(d)?"border:1px solid var(--gold);border-radius:6px;":""}"><b>${d.type==="inventory_change"?"إشعار مخزون":d.type==="low_stock"?"تنبيه مخزون":"قرار"} رقم ${d.seq}${unread.includes(d)?` <span class="badge b-pending">جديد</span>`:""}</b><span class="sub">${esc(d.message)} — ${d.date}</span></div>`).join("") : `<p class="sub">ما فيه إشعارات لك.</p>`;
   const maxSeq = myNotifications.reduce((a,d)=> Math.max(a, d.seq||0), seen||0);
   const unreadCount = mailOpen ? 0 : unread.length;
   if(mailOpen && (seen===null || maxSeq > seen)) markMailSeen(maxSeq);
