@@ -95,7 +95,9 @@ function renderAll(){
     const profitData = invoiceProfitColumnData(inv);
     const tr=document.createElement("tr"); tr.className="invoice-row";
     const profitCell = !profitData ? `<span class="sub">—</span>`
-      : `<span class="${profitData.value>=0?'profit-pos':'profit-neg'}">${fmtSar(profitData.value)} ﷼</span><br><span class="sub" style="font-size:10px;">${profitData.mode==="expected"?"الربح المتوقع (بعد التسليم)":"الربح والخسارة (قبل التسليم)"}</span>`;
+      : `<span class="${profitData.value>=0?'profit-pos':'profit-neg'}">${fmtSar(profitData.value)} ﷼</span><br><span class="sub" style="font-size:10px;">${profitData.mode==="expected"?"الربح المتوقع (بعد التسليم)":"الربح والخسارة (قبل التسليم)"}</span>`
+        // before delivery the figure follows the payments, so a price edit doesn't move it — the expected one does
+        + (profitData.mode!=="expected" && profitData.expected!==undefined ? `<br><span class="sub" style="font-size:10px;">المتوقع بعد التسليم: <b class="${profitData.expected>=0?'profit-pos':'profit-neg'}">${fmtSar(profitData.expected)} ﷼</b></span>` : "");
     const byLine = `<br><span class="sub" style="font-size:10px;">سجّلها: ${esc(inv.createdBy||"—")}${inv.lastEditedBy?` — آخر تعديل: ${esc(inv.lastEditedBy)}${inv.lastEditedAt?" "+inv.lastEditedAt.slice(0,10):""}`:""}</span>`;
     tr.innerHTML = `<td><b>${esc(inv.number)}</b></td><td>${esc(inv.customerName||"—")}${byLine}</td><td>${inv.date}</td>
       <td>${fmtSar(s)} ﷼${disc>0.004?`<br><span class="sub" style="font-size:10px;">قبل الخصم ${fmtSar(gross)} — خصم ${fmtSar(disc)}</span>`:""}</td><td>${fmtSar(paid)} ﷼</td><td>${fmtSar(rem)} ﷼</td>

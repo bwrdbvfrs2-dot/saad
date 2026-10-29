@@ -364,7 +364,10 @@ function invoiceProfitColumnData(inv){
     return {mode:"expected", value: totalPrice - totalDirectCost};
   }
   const recognizedRevenue = invoiceRecognizedRevenueToDate(inv);
-  return {mode:"actual", value: recognizedRevenue - totalDirectCost};
+  // and what it comes to once everything is delivered: the price after discounts less the full direct cost
+  const expected = activeGarments.reduce((a,g)=>a+garmentSalePrice(g),0) - invoiceDiscountTotal(inv)
+    - activeGarments.reduce((a,g)=>a+garmentDirectCostOnly(g),0) - freeGiftsCost(inv);
+  return {mode:"actual", value: recognizedRevenue - totalDirectCost, expected};
 }
 function OVERDUE_READY_DAYS(){ return 7; }
 function totalReadyGarmentsCount(){

@@ -332,7 +332,8 @@ async function saveInvoice(){
   if(!cards.length){ showToast("أضف ثوب واحد على الأقل"); return; }
   for(const [gi,card] of cards.entries()){
     const priceVal = card.querySelector(".g-price").value;
-    if(!priceVal || parseFloat(priceVal)<=0){ showToast("أدخل سعر البيع لكل ثوب"); return; }
+    // the manager may put a thobe at 0 (a gift, a remake); everyone else needs a price
+    if(priceVal==="" || isNaN(parseFloat(priceVal)) || parseFloat(priceVal)<0 || (parseFloat(priceVal)===0 && !isManagerUser(currentUser))){ showToast("أدخل سعر البيع لكل ثوب"); return; }
     const hasEmbro = card.querySelector(".g-hasEmbro").checked;
     if(hasEmbro){
       const embroVal = card.querySelector(".g-embroPrice").value;
@@ -346,7 +347,7 @@ async function saveInvoice(){
       : tailoringOnly ? (((state.settings.tailoringOnly||{}).minPrices||{})[garmentCategory] || 0) : 0;
     // with a promo code or an offer bundle the thobe is sold at its full sale price — the deal is the
     // only discount; a price lowered by hand is put back and the save stops so the new total is seen
-    if(isNewInvoice && hasActiveDiscountOffer() && !isCustomerVip(custMobile)){
+    if(isNewInvoice && hasActiveDiscountOffer() && !isCustomerVip(custMobile) && !isManagerUser(currentUser)){
       const basePrice = garmentBaseSalePrice(itemCardIdRaw, garmentCategory);
       if(basePrice>0 && (parseFloat(priceVal)||0) < basePrice - 0.001){
         card.querySelector(".g-price").value = basePrice;
@@ -356,7 +357,7 @@ async function saveInvoice(){
       }
     }
     // a VIP customer can be given any price by anyone — no minimum, no per-user discount limit
-    if((itemCard || tailoringOnly) && effectiveMinPrice>0 && !isCustomerVip(custMobile)){
+    if((itemCard || tailoringOnly) && effectiveMinPrice>0 && !isCustomerVip(custMobile) && !isManagerUser(currentUser)){
       const enteredPrice = parseFloat(priceVal)||0;
       if(enteredPrice < effectiveMinPrice){
         const shortfall = effectiveMinPrice - enteredPrice;
@@ -519,7 +520,7 @@ async function saveInvoice(){
     const vip = isCustomerVip(custMobile);
     const saleTotal = garments.filter(g=>g.status!=="ملغي").reduce((a,g)=>a+garmentSalePrice(g),0);
     let directDiscountVal = parseFloat($("directDiscountInput")?.value)||0;
-    if(directDiscountVal>0.01 && !vip){
+    if(directDiscountVal>0.01 && !vip && !isManagerUser(currentUser)){
       // re-check the per-user discount cap here too — the live UI clamps it on input, but that
       // must not be the only guard against a cashier saving more discount than they're allowed
       const alreadyDiscounted = invData.payments.reduce((a,p)=>a+(p.discount||0),0);
@@ -527,6 +528,8 @@ async function saveInvoice(){
       const remainingAllowance = Math.max(0, maxAllowed - alreadyDiscounted);
       if(directDiscountVal > remainingAllowance) directDiscountVal = remainingAllowance;
     }
+    // never more than what is left to pay after the other discounts (an open manager discount included)
+    if(directDiscountVal>0.01){ const left = saleTotal - invData.payments.reduce((a,p)=>a+(p.discount||0),0); directDiscountVal = Math.max(0, Math.min(directDiscountVal, Math.round(left*100)/100)); }
     if(directDiscountVal>0.01){
       invData.payments.push({id:Date.now()+"-direct", date: isNewInvoice ? date : todayStr(), cash:0, network:0, receipt:"", discount:directDiscountVal, auto:true, note:"خصم مباشر", recordedBy:currentUser.username});
     }
@@ -538,6 +541,26 @@ async function saveInvoice(){
     const discounted = invData.payments.some(p=>(p.discount||0)>0.001) || !!appliedPromoCode || appliedOffers.length>0;
     invData.loyaltyPointsEarned = discounted ? 0 : earnLoyaltyPoints(custMobile, saleTotal);
     if(invData.loyaltyPointsEarned>0) state.loyaltyLedger.push({id:Date.now()+"-e", date, mobile:custMobile, type:"earn", points:invData.loyaltyPointsEarned, invoiceNumber:number});
+  }
+  // the total can't end up below what was already settled: lowering a price (down to 0) takes the automatic
+  // discounts down first, newest first; money actually paid beyond the new total is a refund → the return screen
+  {
+    const total = invData.garments.filter(g=>g.status!=="ملغي").reduce((a,g)=>a+garmentSalePrice(g),0);
+    const paid = invData.payments.reduce((a,p)=>a+(p.cash||0)+(p.network||0),0);
+    if(paid - total > 0.01){
+      state = stateSnapshotBeforeSave; renderAll();
+      showToast(`إجمالي الفاتورة بعد التعديل (${fmtSar(total)} ريال) أقل من المدفوع (${fmtSar(paid)} ريال) — الفرق يُرجَع للعميل من شاشة المرتجعات، مو بالتعديل`);
+      return;
+    }
+    let excess = Math.round((paid + invData.payments.reduce((a,p)=>a+(p.discount||0),0) - total)*100)/100;
+    if(excess > 0.01){
+      invData.payments.slice().reverse().forEach(p=>{
+        if(excess<=0.001 || !(p.discount>0)) return;
+        const cut = Math.min(p.discount, excess); p.discount = Math.round((p.discount-cut)*100)/100; excess = Math.round((excess-cut)*100)/100;
+      });
+      invData.payments = invData.payments.filter(p=> (p.cash||0)+(p.network||0)>0 || (p.discount||0)>0.001);
+      showToast("نزّلت الخصم على قد الإجمالي الجديد عشان ما يصير المتبقي بالسالب");
+    }
   }
   if(isNewInvoice && state.settings.einvoiceEnabled){
     invData.einvoice = await generateEinvoiceForNewInvoice(invData);

@@ -776,7 +776,7 @@ function hasActiveDiscountOffer(){
   return !!state.offers.find(o=>o.id===selectedOfferIds[0]);
 }
 function updatePriceFieldsLockState(){
-  const locked = hasActiveDiscountOffer();
+  const locked = hasActiveDiscountOffer() && !isManagerUser(currentUser);
   Array.from($("garmentsHolder").children).forEach(card=>{
     const priceInp = card.querySelector(".g-price");
     const catSel = card.querySelector(".g-category");
@@ -990,6 +990,8 @@ function invoiceRemaining(inv){
   return (state.invoiceReturns||[]).some(r=>r.invoiceId===inv.id) ? Math.max(0, remaining) : remaining;
 }
 function userDiscountEnabled(user){ return !!(user && user.discountEnabled); }
+// the manager prices freely: any discount (on top of an offer or a code too), no minimum price, a price of 0
+function isManagerUser(user){ return !!user && user.role==="مدير"; }
 function userMaxDiscountAmount(user, baseAmount){
   if(!user || !user.discountEnabled) return 0;
   return user.discountType==="percent" ? baseAmount*(user.discountValue||0)/100 : (user.discountValue||0);
