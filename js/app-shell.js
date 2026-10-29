@@ -734,12 +734,16 @@ async function applyServerSnapshot(snap, isFirstLoad){
 // a listener stopped at logout can still deliver one last error (signing out revokes its access) —
 // each listener carries its own number so a stale one never shows an error or applies data
 let stateListenerGen = 0;
-async function startListeningToState(){
+async function startListeningToState(catalogReady){
   return new Promise((resolve)=>{
     let firstLoad = true;
     const gen = ++stateListenerGen;
     if(stateUnsubscribe){ stateUnsubscribe(); stateUnsubscribe = null; } // never two listeners at once
     stateUnsubscribe = STATE_DOC.onSnapshot(async snap=>{
+      if(gen!==stateListenerGen) return;
+      // both downloads run side by side, but the shop data is applied only once the catalog is in —
+      // without it the type libraries would look missing and be re-seeded with the defaults
+      if(firstLoad && catalogReady) await catalogReady;
       if(gen!==stateListenerGen) return;
       if(snap.exists){
         if(!firstLoad && pendingSaves>0){ deferredSnapshot = snap; return; } // applied once our saves land
@@ -762,8 +766,10 @@ function stopListeningToState(){
 // runs once, right after a real sign-in succeeds (fresh login or first-time setup) — everything
 // that used to run unconditionally at boot but actually needs real shop data loaded first
 async function afterSignedIn(){
-  await startListeningToCatalog();
-  await startListeningToState();
+  // the catalog (type pictures, settings pictures, archive) and the shop data download together
+  const catalogReady = startListeningToCatalog();
+  await startListeningToState(catalogReady);
+  await catalogReady;
   applyThemeMode();
   applyShopBranding();
   checkAgedUndeliveredLoyalty();

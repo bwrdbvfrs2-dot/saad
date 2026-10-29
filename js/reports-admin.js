@@ -1411,6 +1411,7 @@ function performTabSwitch(name){
   if(name==="invoice" && editingId) resetForm(); // safety net: any external navigation to "فاتورة تفصيل جديدة" always starts fully fresh — editInvoice() re-populates its own fields right after this call, so it is unaffected
   document.querySelectorAll(".tab-btn").forEach(b=>b.classList.toggle("active", b.dataset.tab===name));
   document.querySelectorAll(".tab-panel").forEach(p=>p.classList.toggle("active", p.id==="tab-"+name));
+  flushLazyRenders(name); // a screen that changed while hidden is drawn now
   window.scrollTo({top:0,behavior:"instant"});
   renderNavDrawer();
   renderSidebar();
