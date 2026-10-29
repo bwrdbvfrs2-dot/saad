@@ -1715,6 +1715,16 @@ function renderBalancesTab(){
     const box = findCashBox(e.sourceBoxId);
     return `<tr><td>${e.voucherNo?`صرف ${e.voucherNo}`:"—"}</td><td>${e.date}</td><td>${cat?esc(cat.label):"—"}</td><td>${esc(e.subItemLabel||"—")}</td><td>${e.amount.toFixed(0)} ﷼</td><td>${esc(e.paidTo||"—")}</td><td>${esc(e.storeName||"—")}</td><td>${box?esc(box.name):"—"}</td><td>${canDeleteExpense(e) ? `<button class="icon-btn" title="حذف المصروف (مسجّل بالخطأ)" aria-label="حذف المصروف" onclick="deleteExpense('${e.id}')"><i data-lucide="trash-2"></i></button>` : ""}</td></tr>`;
   }).join("") : `<tr><td colspan="9">${emptyStateHtml("receipt","ما فيه مصروفات مسجّلة بعد.")}</td></tr>`;
+  // deleted expenses: the manager and the accountant see all of them, anyone else the ones they deleted
+  const delEl = $("deletedExpensesView");
+  if(delEl){
+    const seeAll = currentUser.role==="مدير" || currentUser.role==="محاسب";
+    const dels = (state.deletedExpensesLog||[]).filter(d=> seeAll || d.deletedBy===currentUser.username).slice().reverse();
+    delEl.innerHTML = dels.length ? `<div class="table-wrap"><table><thead><tr><th>رقم السند</th><th>تاريخ المصروف</th><th>التصنيف</th><th>المبلغ</th><th>دفع لمن</th><th>سجّله</th><th>حذفه</th><th>وقت الحذف</th><th>السبب</th></tr></thead><tbody>${
+      dels.map(d=>{ const cat = state.expenseCategories.find(c=>c.id===d.categoryId); const box = findCashBox(d.sourceBoxId);
+        return `<tr><td>${d.voucherNo?`صرف ${d.voucherNo}`:"—"}</td><td>${esc(d.date||"—")}</td><td>${cat?esc(cat.label):"—"}${d.subItemLabel?` / ${esc(d.subItemLabel)}`:""}</td><td>${fmtSar(d.amount||0)} ﷼${box?`<br><span class="sub" style="font-size:10.5px;">رجع لـ${esc(box.name)}</span>`:""}</td><td>${esc(d.paidTo||"—")}</td><td>${esc(d.recordedBy||"—")}</td><td>${esc(d.deletedBy||"—")}</td><td style="white-space:nowrap;">${d.deletedAt?new Date(d.deletedAt).toLocaleString("ar-SA-u-ca-gregory-nu-latn",{timeZone:"Asia/Riyadh",dateStyle:"short",timeStyle:"short"}):"—"}</td><td>${esc(d.deleteReason||"—")}</td></tr>`; }).join("")
+    }</tbody></table></div>` : `<p class="sub">ما فيه مصروفات محذوفة.</p>`;
+  }
   refreshLucideIcons();
 }
 // an expense entered by mistake: whoever recorded it can delete it — nobody else's, and not once its
