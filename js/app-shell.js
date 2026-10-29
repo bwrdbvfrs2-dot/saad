@@ -410,6 +410,7 @@ let catalogUnsubscribe = null;
 function startListeningToCatalog(){
   return new Promise(resolve=>{
     let first = true;
+    if(catalogUnsubscribe){ catalogUnsubscribe(); catalogUnsubscribe = null; } // never two listeners at once
     catalogUnsubscribe = CATALOG_COL.onSnapshot(snap=>{
       let changedHere = false;
       snap.docs.forEach(d=>{
@@ -452,6 +453,7 @@ if(typeof window!=="undefined"){
 }
 const OFFLINE_SAVE_MSG = "ما انحفظ — ما فيه اتصال بالإنترنت. اللي كتبته باقي بالشاشة، احفظ أول ما يرجع النت";
 function saveState(){
+  if(!fbAuth.currentUser) return Promise.resolve(false); // signed out — a write would only be refused
   if(isOffline()){ updateOfflineBanner(); if(typeof showToast==="function") showToast(OFFLINE_SAVE_MSG); return Promise.resolve(false); }
   // captured now, so a later in-memory change can't leak into this save; queued so this device's
   // own back-to-back saves never race (and reject) each other
@@ -660,10 +662,16 @@ async function applyServerSnapshot(snap, isFirstLoad){
   if(typeLibrariesReseeded || addonSnapshotsBackfilled) await saveState();
   if(!isFirstLoad && currentUser) renderAll();
 }
+// a listener stopped at logout can still deliver one last error (signing out revokes its access) —
+// each listener carries its own number so a stale one never shows an error or applies data
+let stateListenerGen = 0;
 async function startListeningToState(){
   return new Promise((resolve)=>{
     let firstLoad = true;
+    const gen = ++stateListenerGen;
+    if(stateUnsubscribe){ stateUnsubscribe(); stateUnsubscribe = null; } // never two listeners at once
     stateUnsubscribe = STATE_DOC.onSnapshot(async snap=>{
+      if(gen!==stateListenerGen) return;
       if(snap.exists){
         if(!firstLoad && pendingSaves>0){ deferredSnapshot = snap; return; } // applied once our saves land
         const wasFirst = firstLoad;
@@ -672,12 +680,14 @@ async function startListeningToState(){
       if(firstLoad){ firstLoad=false; resolve(); }
     }, err=>{
       console.error("Firestore listen error", err);
-      showToast("تعذّر الاتصال بقاعدة البيانات السحابية");
+      // after logout (or a newer listener) this is just the old connection closing — nothing to tell anyone
+      if(gen===stateListenerGen && currentUser) showToast("تعذّر الاتصال بقاعدة البيانات السحابية — تحقق من الإنترنت");
       if(firstLoad){ firstLoad=false; resolve(); }
     });
   });
 }
 function stopListeningToState(){
+  stateListenerGen++; // whatever the old listener still delivers is ignored
   if(stateUnsubscribe){ stateUnsubscribe(); stateUnsubscribe=null; }
 }
 // runs once, right after a real sign-in succeeds (fresh login or first-time setup) — everything
