@@ -249,9 +249,11 @@ function renderIntegrityCheck(){
 function renderTopExpensesReport(){
   const el = $("topExpensesView");
   if(!el) return;
-  const monthLabel = state.settings.currentMonth;
+  const mInp = $("topExpensesMonth");
+  if(mInp && !mInp.value) mInp.value = state.settings.currentMonth;
+  const monthLabel = (mInp && mInp.value) || state.settings.currentMonth;
   const monthExpenses = state.expenses.filter(e=>(e.date||"").slice(0,7)===monthLabel);
-  if(!monthExpenses.length){ el.innerHTML = `<p class="sub">ما فيه مصاريف مسجّلة.</p>`; return; }
+  if(!monthExpenses.length){ el.innerHTML = `<p class="sub">ما فيه مصاريف مسجّلة في ${monthDisplay(monthLabel)}.</p>`; return; }
   const byCategory = {};
   monthExpenses.forEach(e=>{
     const cat = state.expenseCategories.find(c=>c.id===e.categoryId);
@@ -269,7 +271,11 @@ function renderTopExpensesReport(){
         <div style="display:flex;justify-content:space-between;font-weight:700;"><span>${esc(r.label)}</span><span>${r.total.toFixed(0)} ﷼ (${pct.toFixed(1)}%)</span></div>
         <div style="background:var(--surface2);border-radius:6px;height:8px;margin-top:6px;overflow:hidden;"><div style="background:var(--gold-soft);height:100%;width:${pct.toFixed(1)}%;"></div></div>
       </div>`;
-    }).join("");
+    }).join("") + `<button class="btn btn-ghost btn-sm" id="printTopExpensesBtn" style="margin-top:6px;">طباعة</button>`;
+  const printable = `<h2>أعلى المصاريف — ${monthDisplay(monthLabel)}</h2><table><thead><tr><th>التصنيف</th><th>المبلغ</th><th>النسبة</th></tr></thead><tbody>` +
+    rows.map(r=>`<tr><td>${esc(r.label)}</td><td>${fmtSar(r.total)} ﷼</td><td>${(grandTotal>0?r.total/grandTotal*100:0).toFixed(1)}%</td></tr>`).join("") +
+    `</tbody><tfoot><tr style="font-weight:700;"><td>الإجمالي</td><td>${fmtSar(grandTotal)} ﷼</td><td>100%</td></tr></tfoot></table>`;
+  $("printTopExpensesBtn").addEventListener("click", ()=> printHtml(printable));
 }
 // every card payment's bank fee, by the day it was taken — an expense («عمولة الشبكة») of that month
 function allCardPayments(){

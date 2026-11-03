@@ -315,7 +315,10 @@ function runShiftAudit(){
     html += `<div id="investigationTool" style="display:none;margin-top:10px;"></div>`;
   }
   html += `<button class="btn btn-gold btn-sm" id="saveShiftClosingBtn" style="margin-top:10px;">حفظ سجل الإقفال</button>`;
+  html += ` <button class="btn btn-ghost btn-sm" id="printShiftAuditBtn" style="margin-top:10px;">طباعة التقرير</button>`;
   $("shiftAuditResult").innerHTML = html;
+  $("printShiftAuditBtn").addEventListener("click", ()=> printHtml(shiftClosingPrintHtml({username:currentUser.username, date, actualCash, networkActual, transfersActual, pettyExpenses,
+    systemCash:expected.sysCash, systemNetwork:expected.sysNetwork, systemTransfers:expected.sysTransfers, systemTotal:expected.total, physicalTotal, diff}, expected)));
   if($("startInvestigationBtn")) $("startInvestigationBtn").addEventListener("click", showInvestigationTool);
   $("saveShiftClosingBtn").addEventListener("click", saveShiftClosing);
 }
@@ -356,12 +359,42 @@ async function saveShiftClosing(){
   logAudit("shift_closing_saved", {date:a.date, systemTotal:a.expected.total, physicalTotal:a.physicalTotal, diff:a.diff});
   showToast("تم حفظ سجل الإقفال");
 }
+function shiftClosingPrintHtml(c, expected){
+  const sar = n=> `${fmtSar(n||0)} ﷼`;
+  const row = (k,v)=> `<tr><td>${k}</td><td>${v}</td></tr>`;
+  const ok = Math.abs(c.diff||0)<0.5;
+  const result = ok ? "متوافق — لا يوجد فرق" : `${c.diff>0?"زيادة":"عجز"} بمبلغ ${sar(Math.abs(c.diff))}`;
+  let extra = "";
+  if(expected){
+    const out = expected.sysTransfersOut - expected.sysTransfersReturned, exp = expected.recordedCashExpenses + expected.recordedNetworkExpenses;
+    extra = (out>0.001?row("تحويلات مرسلة", "− "+sar(out)):"") + (exp>0.001?row("مصروفات مسجّلة", "− "+sar(exp)):"") +
+      (Math.abs(expected.sysOtherNet)>0.001?row("حركات صندوق أخرى", (expected.sysOtherNet>0?"+ ":"− ")+sar(Math.abs(expected.sysOtherNet))):"");
+  } else {
+    // a saved closing keeps only the totals: show whatever else moved the expected figure as one net line
+    const other = (c.systemTotal||0) - (c.systemCash||0) - (c.systemNetwork||0) - (c.systemTransfers||0);
+    if(Math.abs(other)>0.001) extra = row("مصروفات وتحويلات وحركات أخرى (صافي)", (other>0?"+ ":"− ")+sar(Math.abs(other)));
+  }
+  return `<h2>تقرير إقفال الوردية — ${esc(c.username)} — ${c.date}</h2><p>${esc(state.settings.shopName||"")}</p>
+    <table><thead><tr><th>البند</th><th>المبلغ</th></tr></thead><tbody>
+      <tr><td colspan="2"><b>المتوقع من النظام</b></td></tr>
+      ${row("كاش", sar(c.systemCash))}${row("شبكة", sar(c.systemNetwork))}${row("تحويلات مستلمة", sar(c.systemTransfers))}${extra}
+      ${row("<b>إجمالي المتوقع</b>", `<b>${sar(c.systemTotal)}</b>`)}
+      <tr><td colspan="2"><b>الفعلي من الدرج</b></td></tr>
+      ${row("الكاش الفعلي", sar(c.actualCash))}${row("الشبكة", sar(c.networkActual))}${row("التحويلات البنكية", sar(c.transfersActual))}${row("مصروفات نثرية", sar(c.pettyExpenses))}
+      ${row("<b>إجمالي الفعلي</b>", `<b>${sar(c.physicalTotal)}</b>`)}
+      ${row("<b>النتيجة</b>", `<b>${result}</b>`)}
+    </tbody></table>
+    <p style="margin-top:30px;">توقيع الموظف: ____________ &nbsp;&nbsp;&nbsp; توقيع المدير: ____________</p>`;
+}
+function printShiftClosing(id){
+  const c = state.shiftClosings.find(x=>x.id===id); if(c) printHtml(shiftClosingPrintHtml(c));
+}
 function renderShiftClosingsLog(){
   const el = $("shiftClosingsLog");
   if(!el) return;
   const mine = state.shiftClosings.filter(c=> currentUser.role==="مدير" || c.username===currentUser.username).slice(-20).reverse();
-  el.innerHTML = mine.length ? `<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>المستخدم</th><th>المتوقع</th><th>الفعلي</th><th>الفرق</th></tr></thead><tbody>` +
-    mine.map(c=>`<tr><td>${c.date}</td><td>${c.username}</td><td>${c.systemTotal.toFixed(0)} ﷼</td><td>${c.physicalTotal.toFixed(0)} ﷼</td><td style="color:${Math.abs(c.diff)<0.5?'var(--profit)':'var(--loss)'}">${c.diff>=0?"+":""}${c.diff.toFixed(0)} ﷼</td></tr>`).join("") +
+  el.innerHTML = mine.length ? `<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>المستخدم</th><th>المتوقع</th><th>الفعلي</th><th>الفرق</th><th></th></tr></thead><tbody>` +
+    mine.map(c=>`<tr><td>${c.date}</td><td>${c.username}</td><td>${c.systemTotal.toFixed(0)} ﷼</td><td>${c.physicalTotal.toFixed(0)} ﷼</td><td style="color:${Math.abs(c.diff)<0.5?'var(--profit)':'var(--loss)'}">${c.diff>=0?"+":""}${c.diff.toFixed(0)} ﷼</td><td>${c.id?`<button class="btn btn-ghost btn-sm" onclick="printShiftClosing('${c.id}')">طباعة</button>`:""}</td></tr>`).join("") +
     `</tbody></table></div>` : `<p class="sub">ما فيه سجلات إقفال بعد.</p>`;
 }
 // receipts share the cash-payment counter, so a سند قبض number points at one document only

@@ -1624,8 +1624,57 @@ function cardTakingsOf(username, day){
   const list = (typeof allCardPayments==="function" ? allCardPayments() : []).filter(p=> p.recordedBy===username && p.date===day);
   return {gross: list.reduce((a,p)=>a+(p.network||0),0), fee: list.reduce((a,p)=>a+networkFeeOf(p),0), count:list.length};
 }
+// ---- box statement: every recorded movement of one box (from collectBoxMovements, the same source as
+// the integrity check), with the balance carried forward from before the period and a running balance
+function boxStatementBoxes(){
+  return currentUser.role==="مدير" ? state.cashBoxes : userBoxes(currentUser.username);
+}
+function renderBoxStatementSelect(){
+  const sel = $("boxStmtBox"); if(!sel) return;
+  const cur = sel.value;
+  const isAdmin = currentUser.role==="مدير";
+  sel.innerHTML = boxStatementBoxes().map(b=>`<option value="${b.id}" ${b.id===cur?"selected":""}>${isAdmin?esc(b.owner)+" — ":""}${esc(b.name)} (${typeLabel(b.type)})</option>`).join("");
+}
+function buildBoxStatement(boxId, from, to){
+  const box = findCashBox(boxId); if(!box) return null;
+  const moves = collectBoxMovements().filter(m=>m.boxId===boxId).map(m=>({...m, day:(m.date||"").slice(0,10)}))
+    .sort((a,b)=> a.day.localeCompare(b.day));
+  let opening = box.openingBalance||0;
+  const rows = [];
+  moves.forEach(m=>{
+    if(from && m.day < from){ opening += m.amount; return; }
+    if(to && m.day > to) return;
+    rows.push(m);
+  });
+  let run = opening, totalIn = 0, totalOut = 0;
+  rows.forEach(r=>{ run += r.amount; r.balance = run; if(r.amount>=0) totalIn += r.amount; else totalOut += -r.amount; });
+  const rebuiltNow = (box.openingBalance||0) + moves.reduce((a,m)=>a+m.amount,0);
+  return {box, from, to, opening, rows, totalIn, totalOut, closing: run, actualNow: boxTotal(box), driftNow: boxTotal(box) - rebuiltNow};
+}
+function boxStatementHtml(st){
+  const b = st.box;
+  const period = st.from||st.to ? `من ${st.from||"البداية"} إلى ${st.to||"اليوم"}` : "كل الفترات";
+  let html = `<h2>كشف حساب صندوق — ${esc(b.owner)} — ${esc(b.name)} (${typeLabel(b.type)})</h2><p>الفترة: ${period}</p>`;
+  html += `<table><thead><tr><th>التاريخ</th><th>البيان</th><th>داخل</th><th>خارج</th><th>الرصيد</th></tr></thead><tbody>`;
+  html += `<tr style="font-weight:700;"><td>${st.from||"—"}</td><td>${st.from?"رصيد ما قبل الفترة":"الرصيد الافتتاحي"}</td><td></td><td></td><td>${fmtSar(st.opening)} ﷼</td></tr>`;
+  st.rows.forEach(r=> html += `<tr><td>${r.day||"—"}</td><td>${esc(r.label)}</td><td>${r.amount>=0?fmtSar(r.amount):""}</td><td>${r.amount<0?fmtSar(-r.amount):""}</td><td>${fmtSar(r.balance)} ﷼</td></tr>`);
+  if(!st.rows.length) html += `<tr><td colspan="5" style="text-align:center;">ما فيه حركات بهذي الفترة</td></tr>`;
+  html += `</tbody><tfoot><tr style="font-weight:700;"><td colspan="2">الإجمالي (${st.rows.length} حركة)</td><td>${fmtSar(st.totalIn)}</td><td>${fmtSar(st.totalOut)}</td><td>${fmtSar(st.closing)} ﷼</td></tr></tfoot></table>`;
+  if(Math.abs(st.driftNow)>0.01) html += `<p class="sub" style="color:var(--warn);">ملاحظة: رصيد الصندوق الحالي بالنظام ${fmtSar(st.actualNow)} ﷼ — يختلف بـ ${fmtSar(st.driftNow)} ﷼ عن مجموع الحركات المسجّلة (راجع «فحص سلامة الحسابات»).</p>`;
+  return html;
+}
+function showBoxStatement(){
+  const boxId = $("boxStmtBox").value;
+  if(!boxId || !boxStatementBoxes().some(b=>b.id===boxId)){ showToast("اختر الصندوق"); return; }
+  const from = $("boxStmtFrom").value, to = $("boxStmtTo").value;
+  if(from && to && from>to){ showToast("تاريخ البداية بعد تاريخ النهاية"); return; }
+  const html = boxStatementHtml(buildBoxStatement(boxId, from, to));
+  $("boxStmtView").innerHTML = `<div class="table-wrap">${html}</div><button class="btn btn-ghost btn-sm" id="printBoxStmtBtn" style="margin-top:10px;">طباعة الكشف</button>`;
+  $("printBoxStmtBtn").addEventListener("click", ()=> printHtml(html));
+}
 function renderBalancesTab(){
   if(!currentUser) return;
+  renderBoxStatementSelect();
   const isAdmin = currentUser.role==="مدير";
   const myBoxes = userBoxes(currentUser.username);
   const el = $("myBoxesList");
@@ -1765,7 +1814,23 @@ function renderClosedReports(){
       <span class="sub">مفوتر: ${r.invoicedTotal.toFixed(0)} ﷼ · تكلفة: ${r.costTotal.toFixed(0)} ﷼ · ربح (مفوتر): ${r.profitInvoiced.toFixed(0)} ﷼</span><br>
       <span class="sub">مقبوض فعلياً: ${r.collectedTotal.toFixed(0)} ﷼ · ربح (مقبوض): ${r.profitCollected.toFixed(0)} ﷼</span><br>
       <span class="sub">تطريز: ${r.embroCount||0} ثوب — ${(r.embroRevenue||0).toFixed(0)} ﷼</span>${r.pendingCustodyCarried>0.01?`<br><span class="sub" style="color:var(--gold-soft);">أمانات معلّقة مرحّلة لهذا الشهر: ${r.pendingCustodyCarried.toFixed(0)} ﷼</span>`:""}
+      <div style="margin-top:6px;"><button class="btn btn-ghost btn-sm" onclick="printClosingReport('${r.monthLabel}')">طباعة</button></div>
     </div>`).join("");
+}
+function printClosingReport(monthLabel){
+  const r = state.closingReports.find(x=>x.monthLabel===monthLabel); if(!r) return;
+  const row = (k,v)=> `<tr><td>${k}</td><td>${v}</td></tr>`;
+  const sar = n=> `${fmtSar(n||0)} ﷼`;
+  const closedAt = r.closedAt ? new Date(r.closedAt).toLocaleString("ar-SA-u-ca-gregory-nu-latn",{timeZone:"Asia/Riyadh", dateStyle:"short", timeStyle:"short"}) : "—";
+  printHtml(`<h2>تقرير إقفال شهر ${monthDisplay(r.monthLabel)}</h2><p>${esc(state.settings.shopName||"")} — تاريخ الإقفال: ${closedAt}</p>
+    <table><tbody>
+      ${row("عدد الفواتير", r.invoiceCount||0)}${row("عدد الثياب", r.garmentCount||0)}
+      ${row("المفوتر", sar(r.invoicedTotal))}${row("التكلفة", sar(r.costTotal))}${row("الربح (مفوتر)", sar(r.profitInvoiced))}
+      ${row("المقبوض فعلياً", sar(r.collectedTotal))}${row("الربح (مقبوض)", sar(r.profitCollected))}
+      ${row("التطريز", `${r.embroCount||0} ثوب — ${sar(r.embroRevenue)}`)}
+      ${r.readyCount!==undefined?row("ثياب جاهزة ما انسلّمت وقت الإقفال", r.readyCount):""}${r.overdueCount!==undefined?row("ثياب متأخرة وقت الإقفال", r.overdueCount):""}
+      ${r.pendingCustodyCarried>0.01?row("أمانات معلّقة مرحّلة", sar(r.pendingCustodyCarried)):""}
+    </tbody></table>`);
 }
 
 // ---------------- growth report ----------------
