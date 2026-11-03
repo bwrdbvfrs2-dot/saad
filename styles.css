@@ -125,7 +125,7 @@ h1,h2,h3{font-family:var(--font-main);letter-spacing:0;}
   .month-pill span:not(b){display:none;}
 }
 /* ===================== KPI cards ===================== */
-.kpi-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;}
+.kpi-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:12px;}
 @media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(3,1fr);}}
 @media(max-width:640px){.kpi-grid{grid-template-columns:repeat(2,1fr);}}
 .kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:15px 16px;position:relative;overflow:hidden;}
@@ -269,12 +269,12 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   .no-print{ display:none !important; }
   html, body { height:auto !important; width:auto !important; margin:0 !important; padding:0 !important; background:#fff !important; }
   #printArea{display:block !important; position:static; color:#000; background:#fff; padding:0; margin:0; overflow-x:hidden !important;}
-  #printArea h1, #printArea h2, #printArea h3{ font-size:11px !important; color:#000 !important; margin-top:14px !important; page-break-after:avoid; break-after:avoid; }
+  #printArea h1, #printArea h2, #printArea h3{ font-size:12px !important; color:#000 !important; margin-top:14px !important; page-break-after:avoid; break-after:avoid; }
   #printArea > *:first-child{ margin-top:0 !important; }
   #printArea table:not(#receiptShareRoot table):not(#labelShareRoot table){width:100%;border-collapse:collapse;table-layout:fixed;page-break-inside:auto;}
   #printArea table:not(#receiptShareRoot table):not(#labelShareRoot table) thead{display:table-header-group;}
   #printArea table:not(#receiptShareRoot table):not(#labelShareRoot table) tr{page-break-inside:avoid;break-inside:avoid;}
-  #printArea table:not(#receiptShareRoot table):not(#labelShareRoot table) th, #printArea table:not(#receiptShareRoot table):not(#labelShareRoot table) td{border:1px solid #999;padding:5px;font-size:9px !important;color:#000 !important;background:#fff !important;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;}
+  #printArea table:not(#receiptShareRoot table):not(#labelShareRoot table) th, #printArea table:not(#receiptShareRoot table):not(#labelShareRoot table) td{border:1px solid #999;padding:5px;font-size:10px !important;color:#000 !important;background:#fff !important;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;}
   #printArea table:not(#receiptShareRoot table):not(#labelShareRoot table) th{background:#eee !important;font-weight:700;}
   #printArea .report-card, #printArea .garment-card, #printArea .remaining-box, #printArea .stat-card{ background:#fff !important; border:1px solid #999 !important; color:#000 !important; box-shadow:none !important; }
   #printArea .report-card *, #printArea .garment-card *, #printArea .remaining-box *, #printArea .stat-card *, #printArea .amt, #printArea .tag, #printArea .sub{ color:#000 !important; background:none !important; }
@@ -326,13 +326,13 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 .daily-report .dr-in{color:var(--profit);}
 .daily-report .dr-out{color:var(--loss);}
 @media print{
-  #printArea .daily-report{font-size:11px;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  #printArea .daily-report{font-size:12px;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   #printArea .daily-report .dr-head{border-bottom:2px solid #000;}
   #printArea .daily-report .dr-date,#printArea .daily-report .dr-lbl,#printArea .daily-report .dr-note{color:#333 !important;}
   #printArea .daily-report .dr-section{page-break-inside:auto;}
-  #printArea .daily-report .dr-title{font-size:12px !important;margin:12px 0 4px !important;background:#e6e6e6 !important;border-right:4px solid #000;color:#000 !important;}
+  #printArea .daily-report .dr-title{font-size:13px !important;margin:12px 0 4px !important;background:#e6e6e6 !important;border-right:4px solid #000;color:#000 !important;}
   #printArea .daily-report .dr-count{background:#000 !important;color:#fff !important;}
-  #printArea .daily-report table.dr-table th,#printArea .daily-report table.dr-table td{border:1px solid #444 !important;font-size:10.5px !important;padding:4px 6px !important;}
+  #printArea .daily-report table.dr-table th,#printArea .daily-report table.dr-table td{border:1px solid #444 !important;font-size:11.5px !important;padding:4px 6px !important;}
   #printArea .daily-report table.dr-table th{background:#d9d9d9 !important;}
   #printArea .daily-report table.dr-table tbody tr:nth-child(even) td{background:#f3f3f3 !important;}
   #printArea .daily-report table.dr-table tfoot td{background:#e6e6e6 !important;font-weight:800;border-top:2px solid #000 !important;}

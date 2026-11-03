@@ -1001,8 +1001,12 @@
 <div class="panel">
 
   <h3 style="margin:0 0 10px;font-size:14px;">تقرير الخياط الشهري</h3>
-  <p class="sub" style="margin-bottom:10px;">كل الفواتير وعدد الثياب اللي فصّلها أي خياط بالشهر الحالي.</p>
-  <div class="field" style="max-width:260px;"><label>اختر الخياط</label><select id="tailorReportSelect"></select></div>
+  <p class="sub" style="margin-bottom:10px;">كل الفواتير وعدد الثياب اللي فصّلها الخياط بالشهر، مع أجرته — لأي شهر، حتى المقفل.</p>
+  <div class="row-3">
+    <div class="field"><label>الخياط</label><select id="tailorReportSelect"></select></div>
+    <div class="field"><label>الشهر</label><input type="month" id="tailorReportMonth"></div>
+    <div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-ghost" id="printTailorReportBtn" style="width:100%;">طباعة التقرير</button></div>
+  </div>
   <div id="tailorReportView" style="margin-top:10px;"></div>
   <div class="stitch"></div>
   <h3 style="margin:0 0 10px;font-size:14px;">تقرير التعديلات الشهري</h3>
@@ -1205,8 +1209,9 @@
 
   <h3 style="margin:0 0 10px;font-size:14px;">التقرير اليومي الشامل</h3>
   <p class="sub" style="margin-bottom:10px;">يوم المحل كامل، كل الموظفين. ملخص مالي سريع (فواتير جديدة + تسليمات + كاش/شبكة) بس. لكل حركة بأي قسم ثاني (مشتريات، مصروفات، رواتب...)، استخدم «السجل الشامل لكل الحركات» بأعلى الصفحة.</p>
-  <div class="row-2">
-    <div class="field"><label>اليوم</label><input type="date" id="dailyDate"></div>
+  <div class="row-3">
+    <div class="field"><label>من (أو اليوم)</label><input type="date" id="dailyDate"></div>
+    <div class="field"><label>إلى (اختياري — لفترة أو شهر)</label><input type="date" id="dailyDateTo"></div>
     <div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-ghost" id="printDailyBtn" style="width:100%;">عرض/طباعة التقرير اليومي</button></div>
   </div>
   <div class="row-2">
@@ -1225,7 +1230,8 @@
   <p class="sub" style="margin-bottom:10px;">اللي سويته أنت في اليوم: الفواتير اللي سجّلتها، الثياب اللي سلّمتها، الدفعات اللي استلمتها، المصروفات والسندات اللي سجّلتها، وحركة صناديقك. يوم المحل كامل في «التقرير اليومي الشامل».</p>
   <div class="row-3">
     <div class="field" id="myDailyUserWrap" style="display:none;"><label>الموظف</label><select id="myDailyUser"></select></div>
-    <div class="field"><label>اليوم</label><input type="date" id="myDailyDate"></div>
+    <div class="field"><label>من (أو اليوم)</label><input type="date" id="myDailyDate"></div>
+    <div class="field"><label>إلى (اختياري)</label><input type="date" id="myDailyDateTo"></div>
     <div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-ghost" id="printMyDailyBtn" style="width:100%;">طباعة التقرير</button></div>
   </div>
   <div class="row-2">
@@ -1253,8 +1259,11 @@
 <div class="tab-panel" id="tab-report-topExpenses">
 <div class="panel">
 
-  <h3 style="margin:0 0 10px;font-size:14px;">أعلى المصاريف (الشهر الحالي)</h3>
-  <p class="sub">كل مصاريف الشهر الحالي (المرتبطة برصيد إرشادي وغير المرتبطة) مجمّعة حسب التصنيف، بحسب تاريخ المصروف نفسه.</p>
+  <h3 style="margin:0 0 10px;font-size:14px;">أعلى المصاريف</h3>
+  <p class="sub">كل مصاريف الشهر المختار (المرتبطة برصيد إرشادي وغير المرتبطة) مجمّعة حسب التصنيف، بحسب تاريخ المصروف نفسه.</p>
+  <div class="row-2">
+    <div class="field"><label>الشهر</label><input type="month" id="topExpensesMonth" onchange="renderTopExpensesReport()"></div>
+  </div>
   <div id="topExpensesView"></div>
 
 </div>
@@ -1263,13 +1272,19 @@
 <div class="tab-panel" id="tab-report-expenseSubItems">
 <div class="panel">
 
-  <h3 style="margin:0 0 10px;font-size:14px;">تقرير المصروفات حسب البند الفرعي</h3>
+  <h3 style="margin:0 0 10px;font-size:14px;">تقرير المصروفات (ملخص حسب البند / تفصيلي)</h3>
   <p class="sub">تجميع كل المصروفات (بأي تصنيف) حسب البند الفرعي المختار لها — يفيد بمعرفة تفصيل أدق للمصاريف، مثل صيانة مكيفات مقابل صيانة مقصات تحت نفس تصنيف الصيانة.</p>
   <div id="expenseSubItemsPeriodWrap"></div>
   <div class="row-3">
     <div class="field"><label>التصنيف</label><select id="expSubCatFilter"><option value="">كل التصنيفات</option></select></div>
     <div class="field"><label>البند الفرعي</label><select id="expSubItemFilter"><option value="">كل البنود</option></select></div>
     <div class="field" style="display:flex;align-items:flex-end;"><label style="display:flex;align-items:center;gap:6px;margin:0;"><input type="checkbox" id="expSubIncludeOther" checked> مع عمولة الشبكة وسندات الصرف</label></div>
+  </div>
+  <div class="row-2">
+    <div class="field"><label>نوع التقرير</label><select id="expSubMode">
+      <option value="summary">ملخص — مجمّع حسب التصنيف والبند</option>
+      <option value="detail">تفصيلي — كل مصروف بسطر</option>
+    </select></div>
   </div>
   <button class="btn btn-ghost btn-sm" id="showExpenseSubItemsBtn">عرض التقرير</button>
   <div id="expenseSubItemsReportView" style="margin-top:12px;"></div>
@@ -1430,6 +1445,15 @@
     <h3 style="margin:0 0 10px;font-size:14px;">كل الصناديق (كل المستخدمين)</h3>
     <div class="table-wrap"><table><thead><tr><th>المستخدم</th><th>الصندوق</th><th>النوع</th><th>الرصيد</th></tr></thead><tbody id="allBoxesBody"></tbody></table></div>
   </div>
+  <div class="stitch"></div>
+  <h3 style="margin:0 0 10px;font-size:14px;">كشف حساب صندوق</h3>
+  <div class="row-3">
+    <div class="field"><label>الصندوق</label><select id="boxStmtBox"></select></div>
+    <div class="field"><label>من تاريخ (اختياري)</label><input type="date" id="boxStmtFrom"></div>
+    <div class="field"><label>إلى تاريخ (اختياري)</label><input type="date" id="boxStmtTo"></div>
+  </div>
+  <button class="btn btn-ghost btn-sm" onclick="showBoxStatement()">عرض الكشف</button>
+  <div id="boxStmtView" style="margin-top:12px;"></div>
 </div>
 
 <div class="panel">

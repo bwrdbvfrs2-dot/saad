@@ -719,10 +719,14 @@ function renderDashboardKPIs(){
   const readyCount = pending.filter(({g})=> g.status==="جاهز").length;
   const inProgressCount = pending.length - readyCount;
   const totalDue = state.invoices.reduce((a,inv)=> a + Math.max(0, invoiceRemaining(inv)), 0) + totalOpeningDebtRemaining();
+  // what today's invoices are worth in full (after their discounts), not only what was paid on them
+  const invoicedToday = todaysInvoices.reduce((a,inv)=> a + invoiceSaleTotal(inv) - invoiceDiscountTotal(inv), 0)
+    + todaysSalesInvoices.reduce((a,x)=> a + saleNetTotal(x), 0);
   const kpi = (cls, icon, lbl, val)=> `<div class="kpi-card ${cls}"><div class="kpi-top"><div class="kpi-icon"><i data-lucide="${icon}"></i></div></div><div class="kpi-lbl">${lbl}</div><div class="kpi-val">${val}</div></div>`;
   el.innerHTML =
-    kpi("c-sales","banknote","مبيعات اليوم", salesToday.toFixed(0)+" ﷼") +
-    kpi("c-count","file-text","فواتير اليوم", todaysInvoices.length) +
+    kpi("c-sales","banknote","مبيعات اليوم (المقبوض)", salesToday.toFixed(0)+" ﷼") +
+    kpi("c-sales","receipt","إجمالي فواتير اليوم", fmtSar(invoicedToday)+" ﷼") +
+    kpi("c-count","file-text","فواتير اليوم", todaysInvoices.length + (todaysSalesInvoices.length?` <span style="font-size:12px;font-weight:600;">+ ${todaysSalesInvoices.length} مبيعات</span>`:"")) +
     kpi("c-progress","loader","قيد التنفيذ", inProgressCount) +
     kpi("c-ready","check-circle-2","جاهز للتسليم", readyCount) +
     kpi("c-overdue","alert-triangle","متأخر", overdueCount) +
@@ -822,7 +826,7 @@ function renderDistributionArea(inv){
   const paid = invoicePaid(inv), discountTotal = invoiceDiscountTotal(inv), total = invoiceSaleTotal(inv), remaining = invoiceRemaining(inv);
   const activeGarmentCount = inv.garments.filter(g=>g.status!=="ملغي").length;
   const paymentsHtml = (inv.payments&&inv.payments.length) ? inv.payments.map(p=>`<div class="payment-row">
-      <span>${(p.cash||0).toFixed(0)} ﷼${p.cashReceiptNo?` (سند ${p.cashReceiptNo})`:""}</span><span>${(p.network||0).toFixed(0)} ﷼${(p.networkReceiptNo||p.receipt)?` (سند ${p.networkReceiptNo||p.receipt})`:""}</span>${p.discount?`<span>خصم: ${p.discount.toFixed(0)} ﷼</span>`:""}
+      <span>${(p.cash||0).toFixed(0)} ﷼${p.cashReceiptNo?` (سند ${p.cashReceiptNo})`:""}</span><span>${(p.network||0).toFixed(0)} ﷼${(p.networkReceiptNo||p.receipt)?` (سند ${p.networkReceiptNo||p.receipt})`:""}</span>${p.discount?`<span>${p.writeOff?"إتلاف دين":"خصم"}: ${p.discount.toFixed(0)} ﷼</span>`:""}
       <span style="color:var(--muted)">${p.date}</span></div>`).join("")
     : `<p class="sub">ما فيه دفعات مسجّلة بعد.</p>`;
   const summaryField = (lbl, val)=> `<div><div class="order-summary-lbl">${lbl}</div><div class="order-summary-val">${val}</div></div>`;
@@ -1037,7 +1041,8 @@ function claimSingleTailorGarment(inv, idx, number, conflicts){
   showToast(parts.join(" — "));
 }
 const STATUS_ORDER = ["جديد","قص","تفصيل","جاهز","تسليم"];
-function nextStatusOf(status){ const i=STATUS_ORDER.indexOf(status); return i>=0 && i<STATUS_ORDER.length-1 ? STATUS_ORDER[i+1] : null; }
+// «معلقة» is a thobe that was ready and not picked up by the month's close — its next step is delivery
+function nextStatusOf(status){ if(status==="معلقة") return "تسليم"; const i=STATUS_ORDER.indexOf(status); return i>=0 && i<STATUS_ORDER.length-1 ? STATUS_ORDER[i+1] : null; }
 function garmentProportionalPaid(g, inv){
   const totalPrice = inv.garments.reduce((a,gg)=>a+(gg.status==="ملغي"?0:garmentSalePrice(gg)),0);
   if(totalPrice<=0) return 0;

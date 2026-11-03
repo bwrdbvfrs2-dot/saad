@@ -413,7 +413,8 @@ async function printCuttingCard(invId, gIdx){
   // margins it silently overflows onto a second page. An explicit, tight, predictable margin
   // removes that variable entirely and guarantees this always fits on one A4 page.
   $("dynamicPageSize").textContent = "@media print{ @page{ size:A4; margin:8mm; } }";
-  $("printArea").innerHTML = buildCuttingCardHtml(inv, gIdx);
+  // printed one size larger than drawn (it read small on paper); the card still fits one A4 page
+  $("printArea").innerHTML = buildCuttingCardHtml(inv, gIdx).replace(/font-size:\s*(\d+(?:\.\d+)?)px/g, (m,n)=>`font-size:${(+n+1)}px`);
   await loadBarcodeLib().catch(e=>{ console.error(e); });
   if(window.JsBarcode){
     const drawBarcode = (id, opts)=>{ try{ window.JsBarcode(id, inv.number, opts); }catch(e){ console.error("barcode render failed for "+id, e); } };
