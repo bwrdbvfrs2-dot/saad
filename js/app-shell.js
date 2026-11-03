@@ -745,13 +745,22 @@ async function applyServerSnapshot(snap, isFirstLoad){
 // a listener stopped at logout can still deliver one last error (signing out revokes its access) —
 // each listener carries its own number so a stale one never shows an error or applies data
 let stateListenerGen = 0;
+// true when the last sign-in never got the shop data from the server (no connection, or it timed out) —
+// the login then says so instead of "no matching account", which is all an empty copy can say
+let stateLoadFailed = false;
 async function startListeningToState(catalogReady){
+  stateLoadFailed = false;
   return new Promise((resolve)=>{
     let firstLoad = true;
     const gen = ++stateListenerGen;
     if(stateUnsubscribe){ stateUnsubscribe(); stateUnsubscribe = null; } // never two listeners at once
+    // a weak connection can keep the first download from ever arriving — give up after a while
+    const giveUp = setTimeout(()=>{ if(firstLoad && gen===stateListenerGen){ firstLoad=false; stateLoadFailed=true; resolve(); } }, 45000);
     stateUnsubscribe = STATE_DOC.onSnapshot(async snap=>{
-      if(gen!==stateListenerGen){ if(firstLoad){ firstLoad=false; resolve(); } return; }
+      if(gen!==stateListenerGen){ if(firstLoad){ firstLoad=false; clearTimeout(giveUp); resolve(); } return; }
+      // with no connection Firestore answers from its (empty) local cache with "no document" — that is
+      // not the shop's data; wait for the server's own answer instead of opening on an empty copy
+      if(firstLoad && !snap.exists && snap.metadata && snap.metadata.fromCache) return;
       // both downloads run side by side, but the shop data is applied only once the catalog is in —
       // without it the type libraries would look missing and be re-seeded with the defaults
       if(firstLoad && catalogReady) await catalogReady;
@@ -761,12 +770,12 @@ async function startListeningToState(catalogReady){
         const wasFirst = firstLoad;
         await applyServerSnapshot(snap, wasFirst);
       }
-      if(firstLoad){ firstLoad=false; resolve(); }
+      if(firstLoad){ firstLoad=false; clearTimeout(giveUp); resolve(); }
     }, err=>{
       console.error("Firestore listen error", err);
       // after logout (or a newer listener) this is just the old connection closing — nothing to tell anyone
       if(gen===stateListenerGen && currentUser) showToast("تعذّر الاتصال بقاعدة البيانات السحابية — تحقق من الإنترنت");
-      if(firstLoad){ firstLoad=false; resolve(); }
+      if(firstLoad){ firstLoad=false; clearTimeout(giveUp); if(gen===stateListenerGen) stateLoadFailed=true; resolve(); }
     });
   });
 }
@@ -932,6 +941,12 @@ async function tryLoginOnce(){
   }
   setLoginBusy(true, "جاري تحميل بيانات المحل…");
   await afterSignedIn();
+  if(stateLoadFailed){
+    stopListeningToState(); stopListeningToCatalog();
+    await fbAuth.signOut().catch(()=>{});
+    $("loginErr").textContent = "تعذّر تحميل بيانات المحل من السيرفر — تأكد من الإنترنت واضغط دخول مرة ثانية";
+    return;
+  }
   let found = state.users.find(x=>x.authUid===fbAuth.currentUser.uid);
   // a password change whose shop-data save never landed leaves the username pointing at the new login
   // account while the user record still holds the old one. The username record (only a manager can
