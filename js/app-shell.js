@@ -407,11 +407,25 @@ const catalogSaved = {}; // key -> {json, items}: the version stored in catalog/
 let catalogDenied = false; // the rules for catalog/ aren't published yet — keep everything in shop/state
 let catalogUnsubscribe = null;
 // resolves once the catalog has loaded (or failed to), so the first shop/state snapshot can use it
+// a stuck connection: Firestore keeps answering from its empty local cache. Dropping and reopening the
+// connection (what a page refresh did) usually gets the server's answer through
+let firstLoadReconnects = [];
+function scheduleFirstLoadReconnects(){
+  if(firstLoadReconnects.length) return;
+  firstLoadReconnects = [8000, 20000, 32000].map(ms=> setTimeout(()=>{
+    db.disableNetwork().then(()=>db.enableNetwork()).catch(e=>console.error("reconnect failed", e));
+  }, ms));
+}
+function cancelFirstLoadReconnects(){ firstLoadReconnects.forEach(clearTimeout); firstLoadReconnects = []; }
 function startListeningToCatalog(){
   return new Promise(resolve=>{
     let first = true;
     if(catalogUnsubscribe){ catalogUnsubscribe(); catalogUnsubscribe = null; } // never two listeners at once
+    const giveUp = setTimeout(()=>{ if(first){ first=false; stateLoadFailed=true; resolve(); } }, 45000);
     catalogUnsubscribe = CATALOG_COL.onSnapshot(snap=>{
+      // an empty answer from the local cache is not the catalog: opening on it would look like the type
+      // libraries were lost and re-seed them over the real ones — wait for the server's answer
+      if(first && snap.metadata && snap.metadata.fromCache){ scheduleFirstLoadReconnects(); return; }
       let changedHere = false;
       snap.docs.forEach(d=>{
         const k = d.id, items = d.data().items;
@@ -438,11 +452,12 @@ function startListeningToCatalog(){
         if(!first && state && pendingSaves===0){ state[k] = JSON.parse(JSON.stringify(items)); changedHere = true; }
       });
       if(changedHere && currentUser) renderAll();
-      if(first){ first = false; resolve(); }
+      if(first){ first = false; clearTimeout(giveUp); resolve(); }
     }, err=>{
       console.error("catalog listen error", err);
       if(err && err.code==="permission-denied") catalogDenied = true;
-      if(first){ first = false; resolve(); }
+      else if(first){ stateLoadFailed = true; stateLoadError = err && err.code; }
+      if(first){ first = false; clearTimeout(giveUp); resolve(); }
     });
   });
 }
@@ -747,9 +762,8 @@ async function applyServerSnapshot(snap, isFirstLoad){
 let stateListenerGen = 0;
 // true when the last sign-in never got the shop data from the server (no connection, or it timed out) —
 // the login then says so instead of "no matching account", which is all an empty copy can say
-let stateLoadFailed = false;
+let stateLoadFailed = false, stateLoadError = "";
 async function startListeningToState(catalogReady){
-  stateLoadFailed = false;
   return new Promise((resolve)=>{
     let firstLoad = true;
     const gen = ++stateListenerGen;
@@ -760,11 +774,14 @@ async function startListeningToState(catalogReady){
       if(gen!==stateListenerGen){ if(firstLoad){ firstLoad=false; clearTimeout(giveUp); resolve(); } return; }
       // with no connection Firestore answers from its (empty) local cache with "no document" — that is
       // not the shop's data; wait for the server's own answer instead of opening on an empty copy
-      if(firstLoad && !snap.exists && snap.metadata && snap.metadata.fromCache) return;
+      if(firstLoad && !snap.exists && snap.metadata && snap.metadata.fromCache){ scheduleFirstLoadReconnects(); return; }
       // both downloads run side by side, but the shop data is applied only once the catalog is in —
       // without it the type libraries would look missing and be re-seeded with the defaults
       if(firstLoad && catalogReady) await catalogReady;
       if(gen!==stateListenerGen){ if(firstLoad){ firstLoad=false; resolve(); } return; }
+      // the catalog never came from the server: don't apply the shop data without it (it would re-seed
+      // the type libraries and save them over the real ones) — the login stops and says so
+      if(firstLoad && stateLoadFailed){ firstLoad=false; clearTimeout(giveUp); resolve(); return; }
       if(snap.exists){
         if(!firstLoad && pendingSaves>0){ deferredSnapshot = snap; return; } // applied once our saves land
         const wasFirst = firstLoad;
@@ -775,7 +792,7 @@ async function startListeningToState(catalogReady){
       console.error("Firestore listen error", err);
       // after logout (or a newer listener) this is just the old connection closing — nothing to tell anyone
       if(gen===stateListenerGen && currentUser) showToast("تعذّر الاتصال بقاعدة البيانات السحابية — تحقق من الإنترنت");
-      if(firstLoad){ firstLoad=false; clearTimeout(giveUp); if(gen===stateListenerGen) stateLoadFailed=true; resolve(); }
+      if(firstLoad){ firstLoad=false; clearTimeout(giveUp); if(gen===stateListenerGen){ stateLoadFailed=true; stateLoadError = err && err.code; } resolve(); }
     });
   });
 }
@@ -786,10 +803,13 @@ function stopListeningToState(){
 // runs once, right after a real sign-in succeeds (fresh login or first-time setup) — everything
 // that used to run unconditionally at boot but actually needs real shop data loaded first
 async function afterSignedIn(){
+  stateLoadFailed = false; stateLoadError = "";
   // the catalog (type pictures, settings pictures, archive) and the shop data download together
   const catalogReady = startListeningToCatalog();
   await startListeningToState(catalogReady);
   await catalogReady;
+  cancelFirstLoadReconnects();
+  if(stateLoadFailed) return; // the caller signs out and says so — nothing below may run on an empty copy
   applyThemeMode();
   applyShopBranding();
   checkAgedUndeliveredLoyalty();
@@ -944,7 +964,7 @@ async function tryLoginOnce(){
   if(stateLoadFailed){
     stopListeningToState(); stopListeningToCatalog();
     await fbAuth.signOut().catch(()=>{});
-    $("loginErr").textContent = "تعذّر تحميل بيانات المحل من السيرفر — تأكد من الإنترنت واضغط دخول مرة ثانية";
+    $("loginErr").textContent = `تعذّر تحميل بيانات المحل من السيرفر — تأكد من الإنترنت، حدّث الصفحة (F5) وادخل مرة ثانية${stateLoadError?` (${stateLoadError})`:""}`;
     return;
   }
   let found = state.users.find(x=>x.authUid===fbAuth.currentUser.uid);
