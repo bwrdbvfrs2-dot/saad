@@ -835,13 +835,16 @@ function expenseReportEntries(includeOther){
   const out = [];
   state.expenses.forEach(e=>{
     const cat = state.expenseCategories.find(c=>c.id===e.categoryId);
-    out.push({cat: cat ? cat.label : "بدون تصنيف", sub: e.subItemLabel || "بدون بند فرعي", amount: e.amount||0, date: e.date, no: e.voucherNo});
+    const box = e.sourceBoxId ? findCashBox(e.sourceBoxId) : null;
+    out.push({cat: cat ? cat.label : "بدون تصنيف", sub: e.subItemLabel || "بدون بند فرعي", amount: e.amount||0, date: e.date, no: e.voucherNo,
+      party: [e.paidTo, e.storeName].filter(Boolean).join(" — "), notes: e.notes||"", by: e.recordedBy||"", box: box ? `${box.owner} — ${box.name}` : "", invNo: e.invoiceNumber||""});
   });
   if(includeOther){
     (typeof allCardPayments==="function" ? allCardPayments() : []).forEach(p=>{
-      const fee = networkFeeOf(p); if(fee>0.001) out.push({cat:"عمولة الشبكة", sub: p.cardType==="visa" ? "فيزا / ماستر" : "مدى", amount: fee, date: p.date});
+      const fee = networkFeeOf(p); if(fee>0.001) out.push({cat:"عمولة الشبكة", sub: p.cardType==="visa" ? "فيزا / ماستر" : "مدى", amount: fee, date: p.date, party:"البنك", notes: p.networkReceiptNo ? `سند شبكة ${p.networkReceiptNo}` : "", by: p.recordedBy||""});
     });
-    (state.vouchers||[]).filter(v=>v.type==="payment").forEach(v=> out.push({cat:"سندات صرف", sub: v.reason || v.party || "بدون بيان", amount: v.amount||0, date: v.date, no: v.voucherNo}));
+    (state.vouchers||[]).filter(v=>v.type==="payment").forEach(v=>{ const box = v.boxId ? findCashBox(v.boxId) : null;
+      out.push({cat:"سندات صرف", sub: v.reason || v.party || "بدون بيان", amount: v.amount||0, date: v.date, no: v.voucherNo, party: v.party||"", notes: v.reason||"", by: v.recordedBy||"", box: box ? `${box.owner} — ${box.name}` : ""}); });
   }
   return out;
 }
@@ -861,6 +864,7 @@ function showExpenseSubItemsReport(){
   refreshExpenseSubFilters();
   const fCat = ($("expSubCatFilter")||{}).value || "", fSub = ($("expSubItemFilter")||{}).value || "";
   const includeOther = $("expSubIncludeOther") ? $("expSubIncludeOther").checked : true;
+  if(($("expSubMode")||{}).value==="detail") return showExpenseDetailReport(fCat, fSub, includeOther);
   const groups = {};
   expenseReportEntries(includeOther).forEach(e=>{
     if(!dateMatchesPeriod("expSub", e.date)) return;
@@ -888,6 +892,29 @@ function showExpenseSubItemsReport(){
   html += `</tbody></table>`;
   html += `<p class="sub" style="margin-top:6px;">لا يدخل في هذا التقرير: الرواتب والسلف، والمشتريات، وسداد الموردين والدائنين، والتحويلات بين الصناديق — لها تقاريرها الخاصة.</p>`;
   $("expenseSubItemsReportView").innerHTML = html + `<button class="btn btn-ghost btn-sm" id="printExpenseSubItemsBtn" style="margin-top:10px;">طباعة التقرير</button>`;
+  $("printExpenseSubItemsBtn").addEventListener("click", ()=>{ printHtml(html); });
+}
+// every expense on its own line, in date order, with who/where/why — then a per-category total
+function showExpenseDetailReport(fCat, fSub, includeOther){
+  const rows = expenseReportEntries(includeOther).filter(e=> dateMatchesPeriod("expSub", e.date) && (!fCat || e.cat===fCat) && (!fSub || e.sub===fSub))
+    .sort((a,b)=> (a.date||"").localeCompare(b.date||"") || (a.no||0)-(b.no||0));
+  const total = rows.reduce((a,e)=>a+e.amount,0);
+  const byCat = {};
+  rows.forEach(e=>{ const c = byCat[e.cat] || (byCat[e.cat] = {count:0, total:0}); c.count++; c.total += e.amount; });
+  const title = `تقرير المصروفات التفصيلي — ${periodLabel("expSub")}${fCat?` — ${esc(fCat)}`:""}${fSub?` / ${esc(fSub)}`:""}`;
+  let html = `<h2>${title}</h2>`;
+  html += `<p>إجمالي المصروفات: <b>${fmtSar(total)} ﷼</b> — عددها: <b>${rows.length}</b></p>`;
+  html += `<table><thead><tr><th>التاريخ</th><th>سند صرف</th><th>التصنيف</th><th>البند</th><th>المستفيد / المحل</th><th>ملاحظات</th><th>الصندوق</th><th>سجّله</th><th>المبلغ</th></tr></thead><tbody>`;
+  rows.forEach(e=> html += `<tr><td style="white-space:nowrap;">${e.date||"—"}</td><td>${e.no||"—"}</td><td>${esc(e.cat)}</td><td>${esc(e.sub)}</td><td>${esc(e.party||"—")}${e.invNo?`<br><span style="font-size:10.5px;">فاتورة ${esc(e.invNo)}</span>`:""}</td><td style="font-size:11.5px;">${esc(e.notes||"—")}</td><td style="font-size:11.5px;">${esc(e.box||"—")}</td><td>${esc(e.by||"—")}</td><td style="white-space:nowrap;">${fmtSar(e.amount)} ﷼</td></tr>`);
+  if(!rows.length) html += `<tr><td colspan="9" style="text-align:center;">لا يوجد</td></tr>`;
+  html += `</tbody>${rows.length?`<tfoot><tr style="font-weight:800;"><td colspan="8">الإجمالي (${rows.length})</td><td style="white-space:nowrap;">${fmtSar(total)} ﷼</td></tr></tfoot>`:""}</table>`;
+  if(rows.length){
+    html += `<h3 style="margin:14px 0 6px;font-size:13px;">المجموع حسب التصنيف</h3><table style="max-width:520px;"><thead><tr><th>التصنيف</th><th>العدد</th><th>المبلغ</th></tr></thead><tbody>` +
+      Object.entries(byCat).sort((a,b)=>b[1].total-a[1].total).map(([c,v])=>`<tr><td>${esc(c)}</td><td>${v.count}</td><td>${fmtSar(v.total)} ﷼</td></tr>`).join("") +
+      `</tbody><tfoot><tr style="font-weight:700;"><td>الإجمالي</td><td>${rows.length}</td><td>${fmtSar(total)} ﷼</td></tr></tfoot></table>`;
+  }
+  html += `<p class="sub" style="margin-top:6px;">لا يدخل في هذا التقرير: الرواتب والسلف، والمشتريات، وسداد الموردين والدائنين، والتحويلات بين الصناديق — لها تقاريرها الخاصة.</p>`;
+  $("expenseSubItemsReportView").innerHTML = `<div class="table-wrap">${html}</div><button class="btn btn-ghost btn-sm" id="printExpenseSubItemsBtn" style="margin-top:10px;">طباعة التقرير</button>`;
   $("printExpenseSubItemsBtn").addEventListener("click", ()=>{ printHtml(html); });
 }
 function printUndelivered(){

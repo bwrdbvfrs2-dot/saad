@@ -1814,15 +1814,90 @@ function renderClosedReports(){
       <span class="sub">مفوتر: ${r.invoicedTotal.toFixed(0)} ﷼ · تكلفة: ${r.costTotal.toFixed(0)} ﷼ · ربح (مفوتر): ${r.profitInvoiced.toFixed(0)} ﷼</span><br>
       <span class="sub">مقبوض فعلياً: ${r.collectedTotal.toFixed(0)} ﷼ · ربح (مقبوض): ${r.profitCollected.toFixed(0)} ﷼</span><br>
       <span class="sub">تطريز: ${r.embroCount||0} ثوب — ${(r.embroRevenue||0).toFixed(0)} ﷼</span>${r.pendingCustodyCarried>0.01?`<br><span class="sub" style="color:var(--gold-soft);">أمانات معلّقة مرحّلة لهذا الشهر: ${r.pendingCustodyCarried.toFixed(0)} ﷼</span>`:""}
-      <div style="margin-top:6px;"><button class="btn btn-ghost btn-sm" onclick="printClosingReport('${r.monthLabel}')">طباعة</button></div>
+      <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" onclick="printClosingReport('${r.monthLabel}')">طباعة الملخص</button>
+        <button class="btn btn-ghost btn-sm" onclick="printClosingDetail('${r.monthLabel}')">التقرير التفصيلي</button>
+      </div>
     </div>`).join("");
 }
-function printClosingReport(monthLabel){
-  const r = state.closingReports.find(x=>x.monthLabel===monthLabel); if(!r) return;
+function printClosingReport(monthLabel){ printHtml(closingSummaryHtml(monthLabel)); }
+// the full picture of a closed month: the frozen summary on top, then every invoice, collection,
+// sale, expense, payroll line, purchase and return dated in it
+function printClosingDetail(monthLabel){
+  const m = monthLabel;
+  const inM = d=> (d||"").slice(0,7)===m;
+  const sar = n=> `${fmtSar(n||0)} ﷼`;
+  const section = (title, head, rows, foot)=> `<h3 style="margin:14px 0 6px;">${title} (${rows.length})</h3>` + (rows.length
+    ? `<table><thead><tr>${head.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody>${foot?`<tfoot><tr style="font-weight:700;">${foot}</tr></tfoot>`:""}</table>`
+    : `<p style="font-size:11px;margin:2px 0;">لا يوجد</p>`);
+  let html = closingSummaryHtml(m);
+  // cost breakdown, worked out from the month's records (garment costs are frozen at the close)
+  const fin = computeMonthlyFinancials(m);
+  html += `<h3 style="margin:14px 0 6px;">تفصيل الإيراد والتكلفة</h3><table><tbody>
+    <tr><td>إيراد الشهر</td><td>${sar(fin.revenue)}</td></tr>
+    ${fin.repairsCount?`<tr><td>منها صيانة خارجية (${fin.repairsCount})</td><td>${sar(fin.repairsRevenue)}</td></tr>`:""}
+    <tr><td>مصاريف عامة</td><td>${sar(fin.generalExpenses)}</td></tr>
+    <tr><td>عمولة الشبكة</td><td>${sar(fin.networkFees)}</td></tr>
+    <tr><td>خسائر تشغيلية (إتلاف/مرتجعات)</td><td>${sar(fin.operationalLosses)}</td></tr>
+    ${fin.giftsCost?`<tr><td>تكلفة الهدايا</td><td>${sar(fin.giftsCost)}</td></tr>`:""}
+    <tr><td>ربح مبيعات الجاهز</td><td>${sar(fin.salesProfit)}</td></tr>
+    <tr><td>إجمالي التكلفة</td><td>${sar(fin.cost)}</td></tr>
+    <tr style="font-weight:700;"><td>صافي الربح</td><td>${sar(fin.profit)}</td></tr>
+  </tbody></table>`;
+  // invoices issued in the month
+  const invs = state.invoices.filter(i=>i.originMonth===m).sort((a,b)=>(a.date||"").localeCompare(b.date||"") || String(a.number).localeCompare(String(b.number),undefined,{numeric:true}));
+  let tT=0,tD=0,tP=0,tR=0;
+  const invRows = invs.map(inv=>{
+    const t=invoiceSaleTotal(inv), d=invoiceDiscountTotal(inv), pd=invoicePaid(inv), rem=Math.max(0, invoiceRemaining(inv));
+    tT+=t; tD+=d; tP+=pd; tR+=rem;
+    const st = {}; inv.garments.forEach(g=>{ const l=STATUSES.find(s=>s.v===g.status)?.label||g.status; st[l]=(st[l]||0)+1; });
+    return `<tr><td>${esc(inv.number)}</td><td>${inv.date||"—"}</td><td>${esc(inv.customerName||"—")}</td><td>${inv.garments.length}</td><td style="font-size:11px;">${Object.entries(st).map(([k,v])=>`${k}: ${v}`).join("، ")}</td><td>${sar(t)}</td><td>${sar(d)}</td><td>${sar(pd)}</td><td>${sar(rem)}</td></tr>`;
+  });
+  html += section("فواتير التفصيل", ["رقم","التاريخ","العميل","الثياب","الحالات","الإجمالي","الخصم","المدفوع","المتبقي"], invRows,
+    `<td colspan="5">الإجمالي</td><td>${sar(tT)}</td><td>${sar(tD)}</td><td>${sar(tP)}</td><td>${sar(tR)}</td>`);
+  // collections dated in the month, per user
+  const coll = {};
+  const addC = (u, c, n)=>{ const k=u||"—"; const x = coll[k] || (coll[k]={cash:0, network:0, count:0}); x.cash+=c||0; x.network+=n||0; x.count++; };
+  state.invoices.forEach(inv=> (inv.payments||[]).forEach(p=>{ if(inM(p.date) && ((p.cash||0)+(p.network||0))>0) addC(p.recordedBy, p.cash, p.network); }));
+  state.salesInvoices.forEach(x=>{ const p=x.payment; if(p && inM(p.date||x.date)) addC(p.recordedBy||x.recordedBy, p.cash, p.network); });
+  (state.openingDebtPayments||[]).forEach(p=>{ if(inM(p.date)) addC(p.recordedBy, p.cash, p.network); });
+  (state.legacyPayments||[]).forEach(l=>{ if(inM(l.date)) addC(l.recordedBy, legacyCashOf(l), legacyNetworkOf(l)); });
+  const cRows = Object.entries(coll).map(([u,x])=>`<tr><td>${esc(u)}</td><td>${x.count}</td><td>${sar(x.cash)}</td><td>${sar(x.network)}</td><td>${sar(x.cash+x.network)}</td></tr>`);
+  const cs = Object.values(coll).reduce((a,x)=>({cash:a.cash+x.cash, network:a.network+x.network, count:a.count+x.count}),{cash:0,network:0,count:0});
+  html += section("المقبوضات حسب المستخدم", ["المستخدم","عدد الدفعات","كاش","شبكة","الإجمالي"], cRows,
+    `<td>الإجمالي</td><td>${cs.count}</td><td>${sar(cs.cash)}</td><td>${sar(cs.network)}</td><td>${sar(cs.cash+cs.network)}</td>`);
+  // ready-made sales
+  const sales = state.salesInvoices.filter(x=>inM(x.date));
+  html += section("فواتير المبيعات (الجاهز)", ["رقم","التاريخ","العميل","الأصناف","الصافي"],
+    sales.map(x=>`<tr><td>${esc(x.number)}</td><td>${x.date}</td><td>${esc(x.customerName||"—")}</td><td>${x.items.length}</td><td>${sar(saleNetTotal(x))}</td></tr>`),
+    `<td colspan="4">الإجمالي</td><td>${sar(sales.reduce((a,x)=>a+saleNetTotal(x),0))}</td>`);
+  // expenses
+  const exps = expenseReportEntries(true).filter(e=>inM(e.date)).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+  html += section("المصروفات", ["التاريخ","سند","التصنيف","البند","المستفيد","المبلغ"],
+    exps.map(e=>`<tr><td>${e.date}</td><td>${e.no||"—"}</td><td>${esc(e.cat)}</td><td>${esc(e.sub)}</td><td>${esc(e.party||"—")}</td><td>${sar(e.amount)}</td></tr>`),
+    `<td colspan="5">الإجمالي</td><td>${sar(exps.reduce((a,e)=>a+e.amount,0))}</td>`);
+  // payroll
+  const typeLbl = {entitlement:"استحقاق", payment:"صرف راتب", advance:"سلفة"};
+  const pay = state.payrollLedger.filter(e=> e.type==="entitlement" ? e.monthLabel===m : inM(e.date) && typeLbl[e.type]);
+  html += section("الرواتب والسلف", ["التاريخ","الموظف","النوع","المبلغ","ملاحظة"],
+    pay.map(e=>`<tr><td>${e.date||"—"}</td><td>${esc(e.username)}</td><td>${typeLbl[e.type]||e.type}</td><td>${sar(e.amount)}</td><td style="font-size:11px;">${esc(e.note||"")}</td></tr>`));
+  // purchases
+  const purch = state.purchases.filter(x=>inM(x.date));
+  html += section("المشتريات", ["التاريخ","رقم","الصنف","الكمية","الإجمالي","الدفع"],
+    purch.map(x=>{ const c=findItemCard(x.itemCardId); const sp=state.suppliers.find(z=>z.id===x.supplierId); return `<tr><td>${x.date}</td><td>${esc(x.invoiceNo||"—")}</td><td>${esc(c?c.name:"—")}${sp?`<br><span style="font-size:10.5px;">${esc(sp.name)}</span>`:""}</td><td>${x.quantity}</td><td>${sar(x.total)}</td><td>${x.payStatus==="paid"?"مدفوع":"آجل"}</td></tr>`; }),
+    `<td colspan="4">الإجمالي</td><td>${sar(purch.reduce((a,x)=>a+(x.total||0),0))}</td><td></td>`);
+  // returns
+  const rets = state.invoiceReturns.filter(r=>inM(r.date)).map(r=>`<tr><td>${r.date}</td><td>تفصيل — فاتورة ${esc(r.invoiceNumber)}</td><td>${esc(r.reason||"—")}</td><td>${sar(r.refundAmount)}</td></tr>`)
+    .concat((state.salesReturns||[]).filter(r=>inM(r.date)).map(r=>`<tr><td>${r.date}</td><td>مبيعات — فاتورة ${esc(r.saleInvoiceNumber)}</td><td>${esc(r.reason||"—")}</td><td>${sar(r.refundAmount)}</td></tr>`));
+  html += section("المرتجعات", ["التاريخ","الفاتورة","السبب","المسترد"], rets);
+  printHtml(html);
+}
+function closingSummaryHtml(monthLabel){
+  const r = state.closingReports.find(x=>x.monthLabel===monthLabel); if(!r) return "";
   const row = (k,v)=> `<tr><td>${k}</td><td>${v}</td></tr>`;
   const sar = n=> `${fmtSar(n||0)} ﷼`;
   const closedAt = r.closedAt ? new Date(r.closedAt).toLocaleString("ar-SA-u-ca-gregory-nu-latn",{timeZone:"Asia/Riyadh", dateStyle:"short", timeStyle:"short"}) : "—";
-  printHtml(`<h2>تقرير إقفال شهر ${monthDisplay(r.monthLabel)}</h2><p>${esc(state.settings.shopName||"")} — تاريخ الإقفال: ${closedAt}</p>
+  return (`<h2>تقرير إقفال شهر ${monthDisplay(r.monthLabel)}</h2><p style="font-size:12px;">${state.settings.shopName?esc(state.settings.shopName)+" — ":""}تاريخ الإقفال: ${closedAt}</p>
     <table><tbody>
       ${row("عدد الفواتير", r.invoiceCount||0)}${row("عدد الثياب", r.garmentCount||0)}
       ${row("المفوتر", sar(r.invoicedTotal))}${row("التكلفة", sar(r.costTotal))}${row("الربح (مفوتر)", sar(r.profitInvoiced))}
