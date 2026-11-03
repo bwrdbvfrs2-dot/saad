@@ -1001,8 +1001,12 @@
 <div class="panel">
 
   <h3 style="margin:0 0 10px;font-size:14px;">تقرير الخياط الشهري</h3>
-  <p class="sub" style="margin-bottom:10px;">كل الفواتير وعدد الثياب اللي فصّلها أي خياط بالشهر الحالي.</p>
-  <div class="field" style="max-width:260px;"><label>اختر الخياط</label><select id="tailorReportSelect"></select></div>
+  <p class="sub" style="margin-bottom:10px;">كل الفواتير وعدد الثياب اللي فصّلها الخياط بالشهر، مع أجرته — لأي شهر، حتى المقفل.</p>
+  <div class="row-3">
+    <div class="field"><label>الخياط</label><select id="tailorReportSelect"></select></div>
+    <div class="field"><label>الشهر</label><input type="month" id="tailorReportMonth"></div>
+    <div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-ghost" id="printTailorReportBtn" style="width:100%;">طباعة التقرير</button></div>
+  </div>
   <div id="tailorReportView" style="margin-top:10px;"></div>
   <div class="stitch"></div>
   <h3 style="margin:0 0 10px;font-size:14px;">تقرير التعديلات الشهري</h3>
@@ -1205,8 +1209,9 @@
 
   <h3 style="margin:0 0 10px;font-size:14px;">التقرير اليومي الشامل</h3>
   <p class="sub" style="margin-bottom:10px;">يوم المحل كامل، كل الموظفين. ملخص مالي سريع (فواتير جديدة + تسليمات + كاش/شبكة) بس. لكل حركة بأي قسم ثاني (مشتريات، مصروفات، رواتب...)، استخدم «السجل الشامل لكل الحركات» بأعلى الصفحة.</p>
-  <div class="row-2">
-    <div class="field"><label>اليوم</label><input type="date" id="dailyDate"></div>
+  <div class="row-3">
+    <div class="field"><label>من (أو اليوم)</label><input type="date" id="dailyDate"></div>
+    <div class="field"><label>إلى (اختياري — لفترة أو شهر)</label><input type="date" id="dailyDateTo"></div>
     <div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-ghost" id="printDailyBtn" style="width:100%;">عرض/طباعة التقرير اليومي</button></div>
   </div>
   <div class="row-2">
@@ -1225,7 +1230,8 @@
   <p class="sub" style="margin-bottom:10px;">اللي سويته أنت في اليوم: الفواتير اللي سجّلتها، الثياب اللي سلّمتها، الدفعات اللي استلمتها، المصروفات والسندات اللي سجّلتها، وحركة صناديقك. يوم المحل كامل في «التقرير اليومي الشامل».</p>
   <div class="row-3">
     <div class="field" id="myDailyUserWrap" style="display:none;"><label>الموظف</label><select id="myDailyUser"></select></div>
-    <div class="field"><label>اليوم</label><input type="date" id="myDailyDate"></div>
+    <div class="field"><label>من (أو اليوم)</label><input type="date" id="myDailyDate"></div>
+    <div class="field"><label>إلى (اختياري)</label><input type="date" id="myDailyDateTo"></div>
     <div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-ghost" id="printMyDailyBtn" style="width:100%;">طباعة التقرير</button></div>
   </div>
   <div class="row-2">

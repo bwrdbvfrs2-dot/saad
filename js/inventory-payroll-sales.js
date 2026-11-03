@@ -2033,7 +2033,8 @@ function renderTailorReportSelector(){
   const current = sel.value;
   const tailors = state.users.filter(u=>u.role==="خياط");
   sel.innerHTML = tailors.length ? tailors.map(u=>`<option value="${esc(u.username)}" ${u.username===current?"selected":""}>${esc(u.username)}</option>`).join("") : `<option value="">-- ما فيه خياطين --</option>`;
-  $("tailorReportView").innerHTML = buildTailorMonthlyReport(sel.value, todayStr().slice(0,7));
+  const mInp = $("tailorReportMonth"); if(mInp && !mInp.value) mInp.value = todayStr().slice(0,7);
+  $("tailorReportView").innerHTML = buildTailorMonthlyReport(sel.value, (mInp && mInp.value) || todayStr().slice(0,7));
   renderAlterationsMonthlyReport();
 }
 // every thobe that came back for an alteration in a month — who sewed it, why, and who was held

@@ -484,10 +484,14 @@ function buildTailorMonthlyReport(username, monthLabel){
     if(matching.length){ rows.push({inv, count:matching.length}); totalGarments += matching.length; }
   });
   const cancelledNote = cancelled.length ? `<p class="sub" style="margin-top:6px;color:var(--loss);">ثياب ملغاة بدون أجر: ${cancelled.length} (فاتورة ${[...new Set(cancelled)].map(n=>"#"+esc(n)).join("، ")}) — أي ثوب يُلغى قبل إقفال الشهر ما يُصرف عليه أجر حتى لو تمت خياطته.</p>` : "";
-  if(!rows.length) return `<p class="sub">ما فيه ثياب فصّلها هذا الخياط هذا الشهر.</p>` + cancelledNote;
-  const tableRows = rows.map(({inv,count})=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${inv.date}</td><td>${count}</td></tr>`).join("");
-  return `<div class="table-wrap"><table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>التاريخ</th><th>عدد الثياب</th></tr></thead><tbody>${tableRows}</tbody></table></div>
-    <p style="margin-top:8px;font-weight:700;">إجمالي: ${rows.length} فاتورة — ${totalGarments} ثوب هذا الشهر</p>` + cancelledNote;
+  if(!rows.length) return `<p class="sub">ما فيه ثياب فصّلها ${esc(username)} في ${monthDisplay(monthLabel)}.</p>` + cancelledNote;
+  // the wage per invoice at the tailor's own rate (what the payroll pays), and its total
+  const wageOf = inv=> inv.garments.filter(g=> g.tailor===username && g.tailorCompletedDate && g.tailorCompletedDate.slice(0,7)===monthLabel && g.status!=="ملغي" && g.status!=="قص" && g.status!=="جديد").reduce((a,g)=>a+tailorWageFor(g),0);
+  const totalWage = rows.reduce((a,{inv})=>a+wageOf(inv),0);
+  const tableRows = rows.map(({inv,count})=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${inv.date}</td><td>${count}</td><td>${fmtSar(wageOf(inv))} ﷼</td></tr>`).join("");
+  return `<h3 style="margin:0 0 6px;font-size:15px;">تقرير الخياط ${esc(username)} — ${monthDisplay(monthLabel)}${isMonthClosed(monthLabel)?" (مقفل)":""}</h3>
+    <div class="table-wrap"><table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>التاريخ</th><th>عدد الثياب</th><th>الأجرة</th></tr></thead><tbody>${tableRows}</tbody>
+    <tfoot><tr style="font-weight:800;"><td colspan="3">الإجمالي — ${rows.length} فاتورة</td><td>${totalGarments}</td><td>${fmtSar(totalWage)} ﷼</td></tr></tfoot></table></div>` + cancelledNote;
 }
 function buildInvoiceStatusReport(inv){
   const rows = inv.garments.map((g,idx)=>{
@@ -688,6 +692,10 @@ function renderDebtsTab(){
         <div class="field"><label>رقم السند</label><input type="text" class="debt-receipt" data-inv="${inv.id}" data-idx="${idx}"></div>
       </div>
       <button class="btn btn-gold btn-sm" onclick="payCreditDebt('${inv.id}', ${idx})">تسديد الدين</button>
+      ${currentUser && currentUser.role==="مدير" ? `<div class="row-3" style="margin-top:10px;align-items:end;">
+        <div class="field" style="grid-column:span 2;"><label>سبب الإتلاف (للمدير)</label><input type="text" class="debt-writeoff-reason" data-inv="${inv.id}" data-idx="${idx}" placeholder="مثلاً: العميل ما رجع / دين ميؤوس منه"></div>
+        <div class="field"><button class="btn btn-danger btn-sm" onclick="writeOffCreditDebt('${inv.id}', ${idx})">إتلاف الدين</button></div>
+      </div>` : ""}
     </div>`;
   }).join("");
 }
@@ -912,6 +920,30 @@ async function payCreditDebt(invId, idx){
     showToast("تم تسجيل السداد");
   }
 }
+// manager only: drop a credit-delivered garment's unpaid balance for good (bad debt). Recorded as a
+// discount on the invoice so the invoice closes, the boxes don't move, and the loss shows in reports.
+async function writeOffCreditDebt(invId, idx){
+  if(!currentUser || currentUser.role!=="مدير"){ showToast("إتلاف الدين متاح للمدير فقط"); return; }
+  const inv = state.invoices.find(i=>i.id===invId); if(!inv) return;
+  const g = inv.garments[idx]; if(!g || !g.creditDelivered) return;
+  const owed = creditGarmentOwed(g, inv);
+  if(owed<=0.01){ showToast("ما فيه مبلغ متبقي على هذا الثوب"); return; }
+  const reasonInp = document.querySelector(`.debt-writeoff-reason[data-inv="${invId}"][data-idx="${idx}"]`);
+  const reason = reasonInp ? reasonInp.value.trim() : "";
+  if(!reason){ showToast("اكتب سبب الإتلاف أول"); return; }
+  if(!await showConfirm(`إتلاف دين فاتورة ${inv.number} — ${inv.customerName||"—"}\nالمبلغ: ${fmtSar(owed)} ريال\nالسبب: ${reason}\n\nالمبلغ يُسجَّل كخصم (خسارة) ويختفي من المديونيات نهائياً. متابعة؟`)) return;
+  const snapshot = JSON.parse(JSON.stringify(state));
+  inv.payments = inv.payments || [];
+  inv.payments.push({id:newId(), date:todayStr(), cash:0, network:0, receipt:"", discount:owed, writeOff:true, note:`إتلاف دين: ${reason}`, by:currentUser.username});
+  g.creditPaid = (g.creditPaid||0) + owed;
+  g.creditWrittenOff = (g.creditWrittenOff||0) + owed;
+  g.creditWriteOffReason = reason;
+  g.creditWriteOffDate = todayStr();
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("credit_debt_written_off", {invoiceNumber:inv.number, garmentIdx:idx, amount:owed, reason});
+    showToast(`تم إتلاف الدين (${fmtSar(owed)} ريال)`);
+  }
+}
 async function saveDistribution(inv){
   const isAdmin = currentUser.role==="مدير";
   const intents = inv.garments.map((g,i)=>{
@@ -930,7 +962,7 @@ async function saveDistribution(inv){
     if(intent.newStatus==="جاهز" && g.status!=="جاهز"){ showToast(`لا يمكن تحويل ثوب ${i+1} إلى "جاهز" مباشرة — لازم يخلص "تم التفصيل" من شاشة الخياط أولاً`); return; }
     if(intent.newStatus==="جاهز" && state.settings.qcEnabled && !g.qcPassedDate){ showToast(`ثوب ${i+1} لازم يجتاز فحص الجودة (من شاشة فحص الجودة) قبل ما يصير "جاهز"`); return; }
     if(intent.newStatus==="تسليم"){
-      if(g.status!=="جاهز"){ showToast(`لا يمكن تسليم ثوب ${i+1} قبل اكتمال التفصيل فعلياً ووصوله لمرحلة "جاهز"`); return; }
+      if(g.status!=="جاهز" && g.status!=="معلقة"){ showToast(`لا يمكن تسليم ثوب ${i+1} قبل اكتمال التفصيل فعلياً ووصوله لمرحلة "جاهز"`); return; }
       if(Math.abs(remaining)>0.01){ showToast(`لا يمكن التسليم قبل سداد كامل الفاتورة (المتبقي ${fmtSar(remaining)} ريال)`); return; }
     }
   }

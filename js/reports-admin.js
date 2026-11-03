@@ -243,46 +243,49 @@ function showCustomerReport(mobile, filterName){
 // ---------------- daily report ----------------
 // username given: only what that person did that day (their invoices, deliveries, payments taken, their
 // boxes' movements…); without it, the whole shop's day
-function buildDailyReport(day, username){
+function buildDailyReport(day, username, toDay){
+  // one day, or a period from `day` to `toDay` (a week, a month…) — everything below counts what falls in it
+  const to = toDay && toDay>day ? toDay : day;
+  const inR = d=> !!d && d>=day && d<=to;
   const mine = who=> !username || who===username;
-  const newInvoices = state.invoices.filter(i=>i.date===day && mine(i.createdBy));
+  const newInvoices = state.invoices.filter(i=>inR(i.date) && mine(i.createdBy));
   const deliveredThisMonth = [];
   const deliveredOverdue = [];
   state.invoices.forEach(inv=> inv.garments.forEach(g=>{
-    if(g.deliveredDate===day && mine(g.deliveredBy)){
+    if(inR(g.deliveredDate) && mine(g.deliveredBy)){
       if(inv.originMonth===state.settings.currentMonth) deliveredThisMonth.push({inv,g});
       else deliveredOverdue.push({inv,g});
     }
   }));
-  const legacyDelivered = username ? [] : state.legacyItems.filter(x=>x.lastDeliveryDate===day || x.deliveredDate===day);
-  const vouchersToday = state.vouchers.filter(v=>v.date===day && mine(v.recordedBy));
-  const expensesToday = state.expenses.filter(e=>e.date===day && mine(e.recordedBy));
+  const legacyDelivered = username ? [] : state.legacyItems.filter(x=>inR(x.lastDeliveryDate) || inR(x.deliveredDate));
+  const vouchersToday = state.vouchers.filter(v=>inR(v.date) && mine(v.recordedBy));
+  const expensesToday = state.expenses.filter(e=>inR(e.date) && mine(e.recordedBy));
   const expensesTotal = expensesToday.reduce((a,e)=>a+e.amount,0);
-  const openingAdjustmentsToday = (state.openingBalanceAdjustments||[]).filter(a=>a.date===day && mine(a.username));
+  const openingAdjustmentsToday = (state.openingBalanceAdjustments||[]).filter(a=>inR(a.date) && mine(a.username));
   let cash=0, network=0, discount=0; const paymentRows=[];
   state.invoices.forEach(inv=> (inv.payments||[]).forEach(p=>{
-    if(p.date===day && mine(p.recordedBy)){ cash+=p.cash||0; network+=p.network||0; discount+=p.discount||0; paymentRows.push({inv,p}); }
+    if(inR(p.date) && mine(p.recordedBy)){ cash+=p.cash||0; network+=p.network||0; discount+=p.discount||0; paymentRows.push({inv,p}); }
   }));
   // ready-made sales, their returns and tailoring refunds of the day — none of these were in the report
-  const salesToday = state.salesInvoices.filter(s=>(s.payment&&s.payment.date||s.date)===day && mine(s.recordedBy));
+  const salesToday = state.salesInvoices.filter(s=>inR(s.payment&&s.payment.date||s.date) && mine(s.recordedBy));
   // external repairs: new ones taken in today, and every repair payment received today
-  const repairsToday = (state.repairs||[]).filter(r=>r.date===day && mine(r.createdBy));
+  const repairsToday = (state.repairs||[]).filter(r=>inR(r.date) && mine(r.createdBy));
   const repairPaymentsToday = [];
-  (state.repairs||[]).forEach(r=> (r.payments||[]).forEach(p=>{ if(p.date===day && mine(p.recordedBy)) repairPaymentsToday.push({r,p}); }));
-  const saleReturnsToday = (state.salesReturns||[]).filter(r=>r.date===day && mine(r.recordedBy));
-  const refundsToday = state.invoiceReturns.filter(r=>r.date===day && r.refundAmount && mine(r.recordedBy));
+  (state.repairs||[]).forEach(r=> (r.payments||[]).forEach(p=>{ if(inR(p.date) && mine(p.recordedBy)) repairPaymentsToday.push({r,p}); }));
+  const saleReturnsToday = (state.salesReturns||[]).filter(r=>inR(r.date) && mine(r.recordedBy));
+  const refundsToday = state.invoiceReturns.filter(r=>inR(r.date) && r.refundAmount && mine(r.recordedBy));
   // every box movement of the day, split by box type — the real in/out of cash and of network
   const boxType = id=> (findCashBox(id)||{}).type;
-  const moves = collectBoxMovements().filter(m=>m.date===day && (!username || (findCashBox(m.boxId)||{}).owner===username));
+  const moves = collectBoxMovements().filter(m=>inR(m.date) && (!username || (findCashBox(m.boxId)||{}).owner===username));
   const sumType = (t, sign)=> moves.filter(m=>boxType(m.boxId)===t && Math.sign(m.amount)===sign).reduce((a,m)=>a+m.amount,0);
   const flows = {cashIn:sumType("cash",1), cashOut:-sumType("cash",-1), netIn:sumType("network",1), netOut:-sumType("network",-1)};
-  const cardDay = (typeof allCardPayments==="function" ? allCardPayments() : []).filter(p=> p.date===day && mine(p.recordedBy));
+  const cardDay = (typeof allCardPayments==="function" ? allCardPayments() : []).filter(p=> inR(p.date) && mine(p.recordedBy));
   const cardGross = cardDay.reduce((a,p)=>a+(p.network||0),0), cardFees = cardDay.reduce((a,p)=>a+networkFeeOf(p),0);
-  return {cardGross, cardFees, newInvoices, deliveredThisMonth, deliveredOverdue, legacyDelivered, vouchersToday, expensesToday, expensesTotal, openingAdjustmentsToday, cash, network, discount, paymentRows, salesToday, saleReturnsToday, refundsToday, flows, moves, repairsToday, repairPaymentsToday};
+  return {from:day, to, inR, cardGross, cardFees, newInvoices, deliveredThisMonth, deliveredOverdue, legacyDelivered, vouchersToday, expensesToday, expensesTotal, openingAdjustmentsToday, cash, network, discount, paymentRows, salesToday, saleReturnsToday, refundsToday, flows, moves, repairsToday, repairPaymentsToday};
 }
 function renderDailyPreview(){
   const day = $("dailyDate").value || todayStr();
-  const r = buildDailyReport(day);
+  const r = buildDailyReport(day, null, ($("dailyDateTo")||{}).value);
   $("dailyPreview").innerHTML = `
     <div class="report-grid" style="grid-template-columns:repeat(4,1fr);">
       <div class="report-card"><div class="st">فواتير جديدة</div><div class="amt">${r.newInvoices.length}</div></div>
@@ -381,7 +384,7 @@ function buildDailyReportHtml(day, r, username){
   let html = `<div class="daily-report">
     <div class="dr-head"><div class="dr-shop">${esc(shop)}</div>
       <div class="dr-name">${username ? `التقرير اليومي — ${esc(username)}` : "التقرير اليومي الشامل"}</div>
-      <div class="dr-date">${day}</div></div>`;
+      <div class="dr-date">${r.to && r.to!==day ? `من ${day} إلى ${r.to}` : day}</div></div>`;
   const parts = [];
   parts.push(dailySection("فواتير جديدة", ["رقم","العميل","عدد الثياب","الإجمالي"],
     r.newInvoices.map(inv=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${inv.garments.length}</td><td>${sar(invoiceSaleTotal(inv))}</td></tr>`),
@@ -391,7 +394,7 @@ function buildDailyReportHtml(day, r, username){
   parts.push(dailySection("تسليمات — متعثرة من أشهر سابقة", ["رقم الفاتورة","الشهر الأصلي","نوع القماش","السعر","رقم الإيصال"],
     r.deliveredOverdue.map(({inv,g})=>`<tr><td>${esc(inv.number)}</td><td>${monthDisplay(inv.originMonth)}</td><td>${esc(g.fabricType)}</td><td>${sar(garmentNetSalePrice(g, inv))}</td><td>${esc(deliveryReceiptOf(inv,g))}</td></tr>`)));
   // what was collected for each piece that day, cash and network apart, with the voucher / slip
-  const legacyPaidThatDay = x=>{ const ps = (state.legacyPayments||[]).filter(l=>l.itemId===x.id && l.date===day);
+  const legacyPaidThatDay = x=>{ const ps = (state.legacyPayments||[]).filter(l=>l.itemId===x.id && (r.inR ? r.inR(l.date) : l.date===day));
     const c = ps.reduce((a,l)=>a+legacyCashOf(l),0), n = ps.reduce((a,l)=>a+legacyNetworkOf(l),0);
     const nos = ps.map(l=>[ (l.cashReceiptNo||l.voucherNo) ? `قبض ${l.cashReceiptNo||l.voucherNo}` : "", l.networkReceiptNo ? `شبكة ${l.networkReceiptNo}` : "" ].filter(Boolean).join(" / ")).filter(Boolean).join("، ");
     return {c, n, nos}; };
@@ -458,7 +461,7 @@ function dailyReportText(day, r, username){
   const L = [];
   if(state.settings.shopName) L.push(`*${state.settings.shopName}*`);
   L.push(username ? `التقرير اليومي — ${username}` : "التقرير اليومي الشامل");
-  L.push(`التاريخ: ${day}`);
+  L.push(r.to && r.to!==day ? `الفترة: من ${day} إلى ${r.to}` : `التاريخ: ${day}`);
   L.push("");
   const add = (label, count, extra)=>{ if(count) L.push(`• ${label}: ${count}${extra?` — ${extra}`:""}`); };
   add("فواتير جديدة", r.newInvoices.length, `${n(r.newInvoices.reduce((a,i)=>a+invoiceSaleTotal(i),0))} ﷼`);
@@ -495,13 +498,13 @@ function dailyReportText(day, r, username){
   return L.join("\n");
 }
 // the report goes as a picture of the full report, with the text summary as its message
-async function sendDailyReportWhatsApp(selId, day, username){
+async function sendDailyReportWhatsApp(selId, day, username, toDay){
   const to = ($(selId)||{}).value;
   if(!to){ showToast("اختر المستلم من القائمة"); return; }
   const u = state.users.find(x=>x.username===to);
   if(!u || !u.mobile){ showToast("المستلم ما له جوال — أضفه من إعدادات المستخدمين"); return; }
   const chat = canShareImageFiles() ? null : window.open("", "_blank");
-  const r = buildDailyReport(day, username);
+  const r = buildDailyReport(day, username, toDay);
   const text = dailyReportText(day, r, username);
   showToast("جاري تجهيز صورة التقرير…");
   try{
@@ -530,7 +533,7 @@ function renderMyDaily(){
   }
   if(!$("myDailyDate").value) $("myDailyDate").value = todayStr();
   const day = $("myDailyDate").value, who = myDailyTarget();
-  const r = buildDailyReport(day, who);
+  const r = buildDailyReport(day, who, ($("myDailyDateTo")||{}).value);
   $("myDailyPreview").innerHTML = `
     <div class="report-grid" style="grid-template-columns:repeat(4,1fr);">
       <div class="report-card"><div class="st">فواتير سجّلها</div><div class="amt">${r.newInvoices.length}</div></div>
@@ -547,7 +550,7 @@ function printMyDaily(){
 }
 function printDaily(){
   const day = $("dailyDate").value || todayStr();
-  const r = buildDailyReport(day);
+  const r = buildDailyReport(day, null, ($("dailyDateTo")||{}).value);
   const html = buildDailyReportHtml(day, r);
   $("dailyReportView").innerHTML = html;
   printHtml(html);
@@ -788,12 +791,25 @@ function showGarmentInventory(){
   });
   const statusTxt = statusFilter ? `الحالة: ${STATUSES.find(s=>s.v===statusFilter)?.label||statusFilter}` : "كل الحالات";
   const title = `جرد الثياب — ${statusTxt} — ${periodLabel("garmInv")}`;
+  const statusLabel = st=> STATUSES.find(s=>s.v===st)?.label||st;
+  const byStatus = {};
+  let grandAmount = 0;
+  rows.forEach(r=>{ r.amount = garmentNetSalePrice(r.g, r.inv); grandAmount += r.amount;
+    const b = byStatus[r.g.status] || (byStatus[r.g.status] = {count:0, amount:0}); b.count++; b.amount += r.amount; });
+  const order = ["جديد","قص","تفصيل","جاهز","معلقة","تسليم","ملغي"];
+  const statusKeys = Object.keys(byStatus).sort((a,b)=> (order.indexOf(a)+99*(order.indexOf(a)<0)) - (order.indexOf(b)+99*(order.indexOf(b)<0)));
   let html = `<h2>${title}</h2>`;
-  html += `<p>إجمالي العدد: <b>${rows.length}</b></p>`;
+  html += `<p>إجمالي العدد: <b>${rows.length}</b> ثوب — إجمالي المبلغ: <b>${fmtSar(grandAmount)} ﷼</b></p>`;
+  html += `<h3 style="margin:10px 0 6px;font-size:13px;">الملخص حسب الحالة</h3>`;
+  html += `<table class="garm-inv-summary" style="max-width:520px;"><thead><tr><th>الحالة</th><th>عدد الثياب</th><th>المبلغ</th></tr></thead><tbody>`;
+  statusKeys.forEach(st=> html += `<tr><td>${statusLabel(st)}</td><td>${byStatus[st].count}</td><td>${fmtSar(byStatus[st].amount)} ﷼</td></tr>`);
+  if(!statusKeys.length) html += `<tr><td colspan="3" style="text-align:center;">لا يوجد</td></tr>`;
+  html += `</tbody><tfoot><tr style="font-weight:700;"><td>الإجمالي</td><td>${rows.length}</td><td>${fmtSar(grandAmount)} ﷼</td></tr></tfoot></table>`;
+  html += `<h3 style="margin:14px 0 6px;font-size:13px;">التفاصيل</h3>`;
   html += `<table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>الجوال</th><th>نوع القماش</th><th>الخياط</th><th>السعر</th><th>الحالة</th><th>شهر الإصدار</th></tr></thead><tbody>`;
-  rows.forEach(({inv,g})=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${esc(g.fabricType)}</td><td>${esc(g.tailor||"—")}</td><td>${fmtSar(garmentNetSalePrice(g, inv))} ﷼</td><td>${STATUSES.find(s=>s.v===g.status)?.label||g.status}</td><td>${monthDisplay(inv.originMonth)}</td></tr>`);
+  rows.forEach(({inv,g,amount})=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${esc(g.fabricType)}</td><td>${esc(g.tailor||"—")}</td><td>${fmtSar(amount)} ﷼</td><td>${statusLabel(g.status)}</td><td>${monthDisplay(inv.originMonth)}</td></tr>`);
   if(!rows.length) html+=`<tr><td colspan="8" style="text-align:center;">لا يوجد</td></tr>`;
-  html += `</tbody></table>`;
+  html += `</tbody>${rows.length?`<tfoot><tr style="font-weight:700;"><td colspan="5">الإجمالي (${rows.length} ثوب)</td><td>${fmtSar(grandAmount)} ﷼</td><td colspan="2"></td></tr></tfoot>`:""}</table>`;
   $("garmentInventoryView").innerHTML = html + `<button class="btn btn-ghost btn-sm" id="printGarmentInventoryBtn" style="margin-top:10px;">طباعة الجرد</button>`;
   $("printGarmentInventoryBtn").addEventListener("click", ()=>{ printHtml(html); });
 }
@@ -1397,12 +1413,14 @@ $("showSalesRankingBtn").addEventListener("click", showSalesRankingReport);
 $("printCustomersBtn").addEventListener("click", printCustomers);
 $("exportCustomersBtn").addEventListener("click", exportCustomersCsv);
 $("dailyDate").addEventListener("change", renderDailyPreview);
+$("dailyDateTo").addEventListener("change", renderDailyPreview);
+$("myDailyDateTo").addEventListener("change", renderMyDaily);
 $("printDailyBtn").addEventListener("click", printDaily);
 $("myDailyDate").addEventListener("change", renderMyDaily);
 $("myDailyUser").addEventListener("change", renderMyDaily);
 $("printMyDailyBtn").addEventListener("click", printMyDaily);
-$("myDailyWaBtn").addEventListener("click", ()=> sendDailyReportWhatsApp("myDailyWaTo", $("myDailyDate").value || todayStr(), myDailyTarget()));
-$("dailyWaBtn").addEventListener("click", ()=> sendDailyReportWhatsApp("dailyWaTo", $("dailyDate").value || todayStr(), null));
+$("myDailyWaBtn").addEventListener("click", ()=> sendDailyReportWhatsApp("myDailyWaTo", $("myDailyDate").value || todayStr(), myDailyTarget(), $("myDailyDateTo").value));
+$("dailyWaBtn").addEventListener("click", ()=> sendDailyReportWhatsApp("dailyWaTo", $("dailyDate").value || todayStr(), null, $("dailyDateTo").value));
 $("findMissingReceiptBtn").addEventListener("click", findMissingReceiptInvoices);
 $("addLegacyBtn").addEventListener("click", addLegacyItem);
 function isInvoiceFormDirty(){
@@ -1919,7 +1937,10 @@ $("setWaPromo").addEventListener("input", ()=>{
   $("itemCardSearchInput").addEventListener("input", renderItemCards);
   $("submitBonusBtn").addEventListener("click", submitBonusOrDeduction);
   $("addSeasonBtn").addEventListener("click", addSeason);
-  $("tailorReportSelect").addEventListener("change", ()=>{ $("tailorReportView").innerHTML = buildTailorMonthlyReport($("tailorReportSelect").value, todayStr().slice(0,7)); });
+  const showTailorReport = ()=>{ $("tailorReportView").innerHTML = buildTailorMonthlyReport($("tailorReportSelect").value, $("tailorReportMonth").value || todayStr().slice(0,7)); };
+  $("tailorReportSelect").addEventListener("change", showTailorReport);
+  $("tailorReportMonth").addEventListener("change", showTailorReport);
+  $("printTailorReportBtn").addEventListener("click", ()=>{ showTailorReport(); printHtml(`<div style="direction:rtl;">${$("tailorReportView").innerHTML}</div>`); });
   $("alterReportMonth").addEventListener("change", renderAlterationsMonthlyReport);
   $("rpSaveBtn").addEventListener("click", saveNewRepair);
   $("repairsSearch").addEventListener("input", renderRepairsList);
