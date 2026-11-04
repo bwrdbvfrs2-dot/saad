@@ -917,17 +917,25 @@ function showExpenseDetailReport(fCat, fSub, includeOther){
   $("expenseSubItemsReportView").innerHTML = `<div class="table-wrap">${html}</div><button class="btn btn-ghost btn-sm" id="printExpenseSubItemsBtn" style="margin-top:10px;">طباعة التقرير</button>`;
   $("printExpenseSubItemsBtn").addEventListener("click", ()=>{ printHtml(html); });
 }
+// a ready (or stuck) thobe gets the pick-up reminder; one still in production gets where it stands
+function undeliveredWaMessage(inv, g){
+  if(g.status==="جاهز" || g.status==="معلقة") return buildReminderMessage(inv, g);
+  const stage = STATUSES.find(s=>s.v===g.status)?.label || g.status;
+  return `مرحباً ${inv.customerName||""}،\nنطمّنك إن ثوبك (فاتورة رقم ${inv.number} — ${g.fabricType}) حالياً بمرحلة «${stage}»${inv.expectedDeliveryDate?`، وموعد التسليم المتوقع ${inv.expectedDeliveryDate}`:""}، ونبلغك أول ما يصير جاهز.\n\n${state.settings.shopName||"محلنا"}`;
+}
 function printUndelivered(){
   const rows=[];
   state.invoices.forEach(inv=>{
     if(!dateMatchesPeriod("undel", inv.date, inv.originMonth)) return;
     inv.garments.forEach(g=>{ if(g.status!=="تسليم"&&g.status!=="ملغي") rows.push({inv,g}); });
   });
-  let html = `<h2>تقرير الثياب غير المسلّمة — ${periodLabel("undel")}</h2><table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>الجوال</th><th>نوع القماش</th><th>الخياط</th><th>السعر</th><th>الحالة</th><th>شهر الإصدار</th></tr></thead><tbody>`;
-  rows.forEach(({inv,g})=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${esc(g.fabricType)}</td><td>${esc(g.tailor||"—")}</td><td>${fmtSar(garmentNetSalePrice(g, inv))} ﷼</td><td>${STATUSES.find(s=>s.v===g.status).label}</td><td>${monthDisplay(inv.originMonth)}</td></tr>`);
-  if(!rows.length) html+=`<tr><td colspan="8">لا يوجد</td></tr>`;
-  html += `</tbody></table><p>إجمالي: ${rows.length}</p>`;
-  $("undeliveredReportView").innerHTML = html + `<button class="btn btn-ghost btn-sm" id="printUndeliveredNowBtn" style="margin-top:10px;">طباعة</button>`;
+  const head = `<h2>تقرير الثياب غير المسلّمة — ${periodLabel("undel")}</h2>`;
+  const cols = `<th>رقم الفاتورة</th><th>العميل</th><th>الجوال</th><th>نوع القماش</th><th>الخياط</th><th>السعر</th><th>الحالة</th><th>شهر الإصدار</th>`;
+  const rowHtml = ({inv,g}, withWa)=> `<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}${withWa && inv.customerMobile ? ` <a href="${waLink(inv.customerMobile, undeliveredWaMessage(inv, g))}" target="_blank" class="icon-btn" title="إرسال تذكير واتساب"><i data-lucide="message-circle"></i></a>` : ""}</td><td>${esc(g.fabricType)}</td><td>${esc(g.tailor||"—")}</td><td>${fmtSar(garmentNetSalePrice(g, inv))} ﷼</td><td>${STATUSES.find(s=>s.v===g.status)?.label||g.status}</td><td>${monthDisplay(inv.originMonth)}</td></tr>`;
+  const table = withWa => `<table><thead><tr>${cols}</tr></thead><tbody>${rows.map(r=>rowHtml(r, withWa)).join("") || `<tr><td colspan="8">لا يوجد</td></tr>`}</tbody></table><p>إجمالي: ${rows.length}</p>`;
+  const html = head + table(false); // the printed copy has no WhatsApp icons
+  $("undeliveredReportView").innerHTML = `<div class="table-wrap">${head + table(true)}</div><button class="btn btn-ghost btn-sm" id="printUndeliveredNowBtn" style="margin-top:10px;">طباعة</button>`;
+  refreshLucideIcons();
   $("printUndeliveredNowBtn").addEventListener("click", ()=>{ printHtml(html); });
 }
 function printCustomers(){
