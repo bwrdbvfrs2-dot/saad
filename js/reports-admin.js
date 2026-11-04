@@ -807,11 +807,15 @@ function showGarmentInventory(){
   html += `</tbody><tfoot><tr style="font-weight:700;"><td>الإجمالي</td><td>${rows.length}</td><td>${fmtSar(grandAmount)} ﷼</td></tr></tfoot></table>`;
   html += `<h3 style="margin:14px 0 6px;font-size:13px;">التفاصيل</h3>`;
   html += `<table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>الجوال</th><th>نوع القماش</th><th>الخياط</th><th>السعر</th><th>الحالة</th><th>شهر الإصدار</th></tr></thead><tbody>`;
-  rows.forEach(({inv,g,amount})=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${esc(g.fabricType)}</td><td>${esc(g.tailor||"—")}</td><td>${fmtSar(amount)} ﷼</td><td>${statusLabel(g.status)}</td><td>${monthDisplay(inv.originMonth)}</td></tr>`);
+  rows.forEach(({inv,g,amount},i)=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}<!--wa:${i}--></td><td>${esc(g.fabricType)}</td><td>${esc(g.tailor||"—")}</td><td>${fmtSar(amount)} ﷼</td><td>${statusLabel(g.status)}</td><td>${monthDisplay(inv.originMonth)}</td></tr>`);
   if(!rows.length) html+=`<tr><td colspan="8" style="text-align:center;">لا يوجد</td></tr>`;
   html += `</tbody>${rows.length?`<tfoot><tr style="font-weight:700;"><td colspan="5">الإجمالي (${rows.length} ثوب)</td><td>${fmtSar(grandAmount)} ﷼</td><td colspan="2"></td></tr></tfoot>`:""}</table>`;
-  $("garmentInventoryView").innerHTML = html + `<button class="btn btn-ghost btn-sm" id="printGarmentInventoryBtn" style="margin-top:10px;">طباعة الجرد</button>`;
-  $("printGarmentInventoryBtn").addEventListener("click", ()=>{ printHtml(html); });
+  // on screen each thobe not yet delivered/cancelled gets a WhatsApp reminder icon; the printed copy doesn't
+  const screenHtml = html.replace(/<!--wa:(\d+)-->/g, (m,i)=>{ const {inv,g} = rows[+i];
+    return inv.customerMobile && g.status!=="تسليم" && g.status!=="ملغي" ? ` <a href="${waLink(inv.customerMobile, undeliveredWaMessage(inv, g))}" target="_blank" class="icon-btn" title="إرسال تذكير واتساب"><i data-lucide="message-circle"></i></a>` : ""; });
+  $("garmentInventoryView").innerHTML = `<div class="table-wrap">${screenHtml}</div><button class="btn btn-ghost btn-sm" id="printGarmentInventoryBtn" style="margin-top:10px;">طباعة الجرد</button>`;
+  refreshLucideIcons();
+  $("printGarmentInventoryBtn").addEventListener("click", ()=>{ printHtml(html.replace(/<!--wa:\d+-->/g, "")); });
 }
 function showNoFabricWageReport(){
   const rows = [];
