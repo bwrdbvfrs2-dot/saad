@@ -426,6 +426,44 @@ function computeIssuedInvoicesStats(monthLabel){
   });
   return {total, paid, remaining: total-paid};
 }
+// where a month's cost figure comes from, item by item — the same pieces computeMonthlyFinancials adds up
+function monthlyCostBreakdown(monthLabel){
+  const m = monthLabel;
+  const inM = d=> !!d && d.slice(0,7)===m;
+  let fabric=0, fabricN=0, wages=0, wagesN=0, cancelledLoss=0;
+  state.invoices.forEach(inv=> inv.garments.forEach(g=>{
+    if(g.status==="ملغي"){ if(inM(g.cutDate)) cancelledLoss += garmentFabricCost(g); return; }
+    if(inM(g.cutDate)){ fabric += garmentFabricCost(g); fabricN++; }
+    if(inM(g.tailorCompletedDate)){ wages += tailorWageFor(g) + (state.settings.padding||0) + (g.hasEmbroidery?(state.settings.embroideryWage||0):0) + garmentAddonsCost(g); wagesN++; }
+  }));
+  const fixedItems = (state.settings.fixedItems||[]).filter(i=>(parseFloat(i.amount)||0)>0).map(i=>({label:i.label||i.name||"بند ثابت", amount:parseFloat(i.amount)||0}));
+  const salaries = state.users.filter(u=>u.role!=="خياط" && (u.baseSalary||0)>0).map(u=>({label:`راتب ${u.username} (${u.role})`, amount:u.baseSalary}));
+  const fin = computeMonthlyFinancials(m);
+  const repairs = typeof repairsFinancialsForMonth==="function" ? repairsFinancialsForMonth(m) : {cost:0, count:0};
+  const lines = [
+    ...fixedItems.map(x=>({...x, group:"ثابت"})),
+    ...salaries.map(x=>({...x, group:"ثابت"})),
+    {label:"ربح مبيعات الجاهز (يغطي من التكاليف الثابتة)", amount:-(fin.salesProfit||0)},
+    {label:`قماش الثياب اللي انقصّت هذا الشهر (${fabricN} ثوب)`, amount:fabric},
+    {label:`أجور التفصيل والحشوة والتطريز والإضافات (${wagesN} ثوب)`, amount:wages},
+    {label:"قماش ثياب انقصّت وانلغت", amount:cancelledLoss},
+    {label:"مصاريف عامة", amount:fin.generalExpenses||0},
+    {label:"عمولة الشبكة", amount:fin.networkFees||0},
+    {label:"خسائر تشغيلية (إتلاف / مرتجعات)", amount:fin.operationalLosses||0},
+    {label:"هدايا العروض", amount:fin.giftsCost||0},
+    {label:`تكلفة الصيانة الخارجية (${repairs.count||0})`, amount:repairs.cost||0},
+  ].filter(x=>Math.abs(x.amount)>0.005);
+  const sum = lines.reduce((a,x)=>a+x.amount,0);
+  if(Math.abs(fin.cost-sum)>0.5) lines.push({label:"أخرى", amount:fin.cost-sum});
+  return {lines, total:fin.cost};
+}
+function renderCostBreakdownCard(){
+  const b = monthlyCostBreakdown(state.settings.currentMonth);
+  return `<div class="stat-card cost" style="grid-column:1/-1;"><div class="lbl">من وين جا إجمالي التكاليف (الشهر الحالي)</div>
+    <table style="width:100%;margin-top:6px;font-size:13px;"><tbody>${b.lines.map(x=>`<tr><td>${esc(x.label)}${x.group==="ثابت"?` <span class="sub" style="font-size:11px;">— تكلفة ثابتة شهرية</span>`:""}</td><td style="text-align:left;white-space:nowrap;">${fmtSar(x.amount)} ﷼</td></tr>`).join("") || `<tr><td>ما فيه تكاليف</td><td></td></tr>`}</tbody>
+    <tfoot><tr style="font-weight:700;"><td>الإجمالي</td><td style="text-align:left;white-space:nowrap;">${fmtSar(b.total)} ﷼</td></tr></tfoot></table>
+    <p class="sub" style="margin:6px 0 0;font-size:11.5px;">التكاليف الثابتة (البنود الثابتة من الإعدادات + الراتب الأساسي لكل مستخدم غير خياط) تنحسب على الشهر كامل من أوله. الرواتب تتعدل من إعدادات المستخدمين، والبنود الثابتة من الإعدادات المالية.</p></div>`;
+}
 function renderSensitiveFinancials(){
   const monthlyFin = computeMonthlyFinancials(state.settings.currentMonth);
   const pendingCustody = totalPendingCustody();
@@ -450,7 +488,7 @@ function renderSensitiveFinancials(){
     <div class="stat-card cost"><div class="lbl">باقي الفواتير الصادرة (هذا الشهر)</div><div class="val">${fmtSar(issued.remaining)} ﷼</div></div>
     <div class="stat-card"><div class="lbl">جاهزة للبيع (لكل الفترات)</div><div class="val" style="font-size:16px;">${rfs.all.length} ثوب<br><span style="font-size:12px;color:var(--muted);">${rfs.allTotal.toFixed(0)} ﷼ مشطوبة</span></div></div>
     <div class="stat-card"><div class="lbl">جاهزة للبيع (هذا الشهر)</div><div class="val" style="font-size:16px;">${rfs.thisMonth.length} ثوب<br><span style="font-size:12px;color:var(--muted);">${rfs.thisMonthTotal.toFixed(0)} ﷼</span></div></div>
-    <div class="stat-card" style="grid-column:span 2;"><div class="lbl">نقطة التعادل (الشهر الحالي)</div><div class="val" style="font-size:15px;color:${remainingToBreakEven>0?'var(--loss)':'var(--profit)'};">${remainingToBreakEven>0?`لسا محتاج ${remainingToBreakEven.toFixed(0)} ﷼`:`تجاوزتها بـ${Math.abs(remainingToBreakEven).toFixed(0)} ﷼`}</div></div>`;
+    <div class="stat-card" style="grid-column:span 2;"><div class="lbl">نقطة التعادل (الشهر الحالي)</div><div class="val" style="font-size:15px;color:${remainingToBreakEven>0?'var(--loss)':'var(--profit)'};">${remainingToBreakEven>0?`لسا محتاج ${remainingToBreakEven.toFixed(0)} ﷼`:`تجاوزتها بـ${Math.abs(remainingToBreakEven).toFixed(0)} ﷼`}</div></div>` + renderCostBreakdownCard();
   renderStuckInvoicesReportInto("sensitiveStuckInvoicesView");
 }
 function renderStuckInvoicesReportInto(targetId){
