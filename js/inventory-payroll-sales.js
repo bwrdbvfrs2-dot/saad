@@ -890,7 +890,7 @@ async function approveUnscannedSewn(keys){
 function wageReconciliationRows(monthLabel){
   const closed = isMonthClosed(monthLabel);
   return state.users.filter(u=>u.role==="خياط").map(u=>{
-    let scanned=0, cancelled=0, zeroWage=0, expected=0, carried=0, carriedWage=0, paidElsewhere=0;
+    let scanned=0, cancelled=0, zeroWage=0, expected=0, carried=0, carriedWage=0, paidElsewhere=0, pendingOut=0, pendingOutWage=0;
     state.invoices.forEach(inv=> inv.garments.forEach(g=>{
       if(g.tailor!==u.username) return;
       const sd = garmentSewnDate(g);
@@ -900,6 +900,9 @@ function wageReconciliationRows(monthLabel){
         const w = tailorWageFor(g); if(w<=0) zeroWage++;
         expected += w;
         if(g.wagePaidOut && g.wagePaidMonth && g.wagePaidMonth!==monthLabel) paidElsewhere++;
+        // a closed month: sewn in it but not paid with it (scanned after the close, or approved later) —
+        // its wage goes with the current month's entitlement
+        else if(closed && !g.wagePaidOut){ pendingOut++; pendingOutWage += w; }
       } else if(g.status!=="ملغي" && sd && (closed ? g.wagePaidMonth===monthLabel : (tailorWageCountsIn(g, monthLabel) && !garmentWagePaidElsewhere(g, monthLabel)))){
         carried++; carriedWage += tailorWageFor(g);
       }
@@ -917,9 +920,11 @@ function wageReconciliationRows(monthLabel){
     if(cancelled) reasons.push(`${cancelled} ملغي (بدون أجرة)`);
     if(zeroWage) reasons.push(`${zeroWage} أجرته صفر — حدّد أجرة الخياط من إعدادات المستخدمين`);
     if(paidElsewhere) reasons.push(`${paidElsewhere} انصرفت أجرته بشهر ثاني`);
+    if(pendingOut) reasons.push(`${pendingOut} ما دخلت باستحقاق الشهر (سُجّلت بعد الإقفال أو اعتُمدت لاحقاً) — أجرتها ${fmtSar(pendingOutWage)} ﷼ تنضاف على استحقاق ${monthDisplay(state.settings.currentMonth)}`);
     if(carried) reasons.push(`${carried} من شهر سابق انضافت هنا (${fmtSar(carriedWage)} ﷼)`);
     if(unscanned) reasons.push(`${unscanned} بدون تسجيل الخياط (فوق)`);
-    const ok = counted === scanned - paidElsewhere + carried && !zeroWage && !unscanned;
+    // explained differences (pending carry-over) still show their reason, but don't count as a mismatch
+    const ok = counted === scanned - paidElsewhere - pendingOut + carried && !zeroWage && !unscanned;
     return {u, scanned, counted, expected: expected + carriedWage, wage, label, reasons, ok, closed};
   });
 }
