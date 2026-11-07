@@ -717,8 +717,9 @@ function openLegacyDeliverModal(id){
   $("legDeliverItemLabel").textContent = `${item.name} — ${item.desc} (متبقي ${remainingCount} من ${item.count})`;
   $("legDeliverQtyInput").value = remainingCount;
   $("legDeliverQtyInput").max = remainingCount;
-  $("legDeliverAmountInput").value = item.remaining>0 ? +item.remaining.toFixed(2) : 0;
-  $("legDeliverNetworkInput").value = 0; $("legDeliverReceipt").value = "";
+  // the amounts are typed by the user — a pre-filled remaining got saved as cash without anyone counting it
+  $("legDeliverAmountInput").value = ""; $("legDeliverAmountInput").placeholder = item.remaining>0 ? `المتبقي ${fmtSar(item.remaining)}` : "0";
+  $("legDeliverNetworkInput").value = ""; $("legDeliverReceipt").value = "";
   $("legDeliverCardType").innerHTML = cardTypeOptionsHtml();
   $("legDeliverNetworkWrap").style.display = "none";
   $("legacyDeliverModalOverlay").classList.remove("hidden");

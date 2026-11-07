@@ -588,15 +588,29 @@ function renderLoyaltyInfo(){
     updateLiveTotals();
   });
 }
+// the measurements last auto-filled into the form and whose they were: once the name changes to someone
+// else (a new individual on the same mobile), those are taken back out unless the user has edited them —
+// the new person started with the first individual's measurements
+let autoFilledMeas = null;
+// measurements compared by value whatever their type (the form gives numbers, saved invoices may hold text)
+function measKey(m){ return Object.keys(m||{}).filter(k=> m[k]!==""&&m[k]!=null).sort().map(k=> k+"="+String(m[k]).trim()).join("|"); }
 function refreshMeasurementsForCustomer(mobile, name){
-  if(!/^[0-9]{10}$/.test(mobile) || !name || editingId) return;
-  const lastGarment = findLastGarmentDataForCustomer(mobile, name);
+  if(!/^[0-9]{10}$/.test(mobile) || editingId) return;
   const current = garmentsFromForm(); // keeps the "بدون قماش" pick on the re-render below
+  let changed = false;
+  if(autoFilledMeas && current[0] && (autoFilledMeas.mobile!==mobile || autoFilledMeas.name!==name)
+     && measKey(current[0].measurements)===autoFilledMeas.json){
+    current[0] = {...current[0], measurements:{}};
+    autoFilledMeas = null; changed = true;
+  }
+  const lastGarment = name ? findLastGarmentDataForCustomer(mobile, name) : null;
   let autoFilled = false;
   if(lastGarment && current[0] && Object.keys(current[0].measurements||{}).length===0){
     current[0] = {...current[0], measurements: {...lastGarment.measurements}, category: lastGarment.category||current[0].category};
-    autoFilled = true;
+    autoFilledMeas = {mobile, name, json: measKey(current[0].measurements)};
+    autoFilled = true; changed = true;
   }
+  if(!changed) return;
   const wasOpenIdx = openMeasPanelIdx;
   renderGarmentFields(current);
   if(wasOpenIdx!==null) openMeasPanel(wasOpenIdx);
@@ -612,7 +626,7 @@ function renderCustomerPicker(mobileInputId, nameInputId, pickerWrapId){
   wrap.innerHTML = `<label>هذا الرقم مسجّل لأكثر من فرد — اختر لمين الفاتورة</label>
     <div class="actions-row" style="margin-top:0;">
       ${cust.individuals.map(i=>`<button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('${nameInputId}').value='${i.name.replace(/'/g,"\\'")}'; ${mobileInputId==="custMobile"?`refreshMeasurementsForCustomer('${mobile}','${i.name.replace(/'/g,"\\'")}');`:""}">${i.name}</button>`).join("")}
-      <button type="button" class="btn btn-ghost btn-sm" style="border-color:var(--gold);color:var(--gold-soft);" onclick="document.getElementById('${nameInputId}').value=''; document.getElementById('${nameInputId}').focus();">فرد جديد</button>
+      <button type="button" class="btn btn-ghost btn-sm" style="border-color:var(--gold);color:var(--gold-soft);" onclick="document.getElementById('${nameInputId}').value=''; ${mobileInputId==="custMobile"?`refreshMeasurementsForCustomer('${mobile}','');`:""} document.getElementById('${nameInputId}').focus();">فرد جديد</button>
     </div>`;
 }
 

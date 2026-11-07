@@ -1043,7 +1043,7 @@ function computeExpectedDeliveryDate(newGarmentsCount){
 }
 function resetForm(){
   if(typeof setMeasOnlyEdit==="function" && measOnlyEdit) setMeasOnlyEdit(false);
-  fetchedHeldId = null;
+  fetchedHeldId = null; autoFilledMeas = null;
   editingId=null; paymentsListTemp=[]; editingPaymentIdx=null; selectedOfferIds=[]; appliedPromoCode=null;
   $("formTitle").textContent="فاتورة جديدة";
   $("invNumber").value = state.settings.nextInvoiceNumber;

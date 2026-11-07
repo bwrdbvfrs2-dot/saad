@@ -1661,12 +1661,27 @@
 <div class="panel">
   <h2>الرواتب — حساب كل موظف</h2>
   <p class="sub">الاستحقاق يُحسب تلقائياً عند إقفال كل شهر (أساسي + عمولة إن فُعّلت). الدفعات والسلف والخصومات تُسجَّل هنا وتُخصم فوراً من الرصيد التراكمي المستحق.</p>
+  <div id="payrollList" style="margin-top:10px;"></div>
+  <div id="empStmtWrap" style="display:none;">
+  <div class="stitch"></div>
+  <h3 style="margin:0 0 8px;font-size:14px;">كشف حساب الموظف</h3>
+  <div class="row-3">
+    <div class="field" style="display:none;"><label>الموظف</label><select id="empStmtUser"></select></div>
+    <div class="field"><label>من تاريخ (اختياري)</label><input type="date" id="empStmtFrom"></div>
+    <div class="field"><label>إلى تاريخ (اختياري)</label><input type="date" id="empStmtTo"></div>
+  </div>
+  <button class="btn btn-ghost btn-sm" onclick="showEmployeeStatement()">عرض الكشف بالفترة</button>
+  <div id="empStmtView" style="margin-top:12px;"></div>
+  </div>
+  <div class="stitch"></div>
+  <div id="unscannedSewnWrap"></div>
+  <p class="sub" style="margin-bottom:8px;"><b>مطابقة الثياب مع الأجور:</b> لكل خياط: الثياب اللي سجّل لها «تم التفصيل» بالشهر مقابل اللي انحسبت لها أجرة. أي فرق يطلع سببه.</p>
+  <div class="row-2"><div class="field"><label>الشهر</label><input type="month" id="wageReconMonth" onchange="renderWageReconciliation()"></div></div>
+  <div id="wageReconView" style="margin-bottom:14px;"></div>
   <div class="stitch"></div>
   <h3 style="margin:0 0 8px;font-size:14px;">معاينة استحقاق الشهر الحالي (قبل الإقفال)</h3>
   <p class="sub" style="margin-bottom:10px;">هذا حساب حي لما استحقه كل موظف لين الآن هذا الشهر — يتحدث تلقائياً، ويُسجَّل رسمياً بسجل الرواتب بس عند إقفال الشهر.</p>
   <div id="entitlementPreviewView"></div>
-  <div class="stitch"></div>
-  <div id="payrollList"></div>
 </div>
 </div>
 
@@ -1805,6 +1820,7 @@
 
 <div id="measModalBackdrop" class="hidden" style="position:fixed;inset:0;background:rgba(8,10,14,0.68);z-index:300;backdrop-filter:blur(2px);"></div>
 <div class="toast" id="toast"></div>
+<div class="save-pill" id="saveStatusPill" role="status" aria-live="polite"></div>
 <div id="printArea"></div>
 <div id="confirmModalOverlay" class="modal-overlay hidden">
   <div class="modal-box">

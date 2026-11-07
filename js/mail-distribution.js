@@ -801,7 +801,7 @@ function openDistributionInvoice(inv){
   $("distWaReadyBanner").style.display = "none";
   renderDistributionArea(inv);
 }
-function buildStepperHtml(status){
+function buildStepperHtml(status, g){
   if(status==="ملغي") return `<div class="badge b-cancel" style="margin:6px 0 10px;">ملغي</div>`;
   const stages = [
     {v:"جديد", lbl:"استلام الطلب"},
@@ -815,7 +815,13 @@ function buildStepperHtml(status){
   const stepsHtml = stages.map((s,i)=>{
     const cls = i<idx ? "done" : i===idx ? "current" : "";
     const mark = i<idx ? "✓" : (i+1);
-    return `<div class="stepper-step ${cls}"><div class="dot">${mark}</div><div class="lbl">${esc(s.lbl)}</div></div>`;
+    // the day each stage was recorded — «الخياطة» shows when the tailor scanned «تم التفصيل», and says so
+    // plainly when a thobe got past it without that scan (its wage was never counted)
+    const day = g ? ({قص:g.cutDate, تفصيل:g.tailorCompletedDate, جاهز:g.readyDate, تسليم:g.deliveredDate})[s.v] : null;
+    const noScan = g && s.v==="تفصيل" && idx>=2 && !g.tailorCompletedDate;
+    const dateHtml = day ? `<div class="sub" style="font-size:10.5px;margin-top:2px;">${esc(day)}</div>`
+      : noScan ? `<div style="font-size:10.5px;margin-top:2px;color:var(--loss);font-weight:700;">بدون تسجيل الخياط</div>` : "";
+    return `<div class="stepper-step ${cls}"><div class="dot">${mark}</div><div class="lbl">${esc(s.lbl)}</div>${dateHtml}</div>`;
   }).join("");
   return `<div class="stepper">${stepsHtml}</div>` + (status==="معلقة" ? `<p class="locked-note" style="color:var(--warn);">معلّقة — جاهزة بس تجاوزت إقفال الشهر بدون تسليم</p>` : "");
 }
@@ -859,7 +865,7 @@ function renderDistributionArea(inv){
       const canCreditDeliver = isAdmin && g.status!=="تسليم" && g.status!=="ملغي" && g.status!=="جديد" && g.status!=="قص";
       const creditBadge = g.creditDelivered ? `<p class="locked-note" style="color:var(--loss);">مسلَّم بدين — متبقٍ عليه ${creditGarmentOwed(g, inv).toFixed(0)} ﷼ (تابعه من "مديونية الثياب")</p>` : "";
       return `<div class="garment-card"><span class="tag">ثوب ${i+1} — ${esc(g.fabricType)}</span>
-        ${buildStepperHtml(g.status)}
+        ${buildStepperHtml(g.status, g)}
         ${readyCounterHtml(g)}
         <div class="row-2">
           <div class="field"><label>اسم الخياط</label><input type="text" class="dist-tailor" data-idx="${i}" value="${esc(g.tailor||"")}" ${dis}></div>
