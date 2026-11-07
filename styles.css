@@ -373,3 +373,12 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 .save-pill.ok{background:#e6f6ea;color:#1d7a3a;border:1px solid #8fd3a3;}
 .save-pill.fail{background:#fdeaea;color:#b42318;border:1px solid #f1a9a3;}
 @media print{ .save-pill{display:none !important;} }
+
+/* payroll: employees as name buttons */
+.payroll-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
+.payroll-chip{display:flex;align-items:center;gap:8px;padding:6px 12px 6px 8px;border-radius:12px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-family:inherit;color:inherit;text-align:right;}
+.payroll-chip:hover{border-color:var(--gold);}
+.payroll-chip.active{border-color:var(--gold);background:var(--surface2);box-shadow:0 0 0 2px rgba(201,162,39,.25);}
+.payroll-chip .pc-avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;background:var(--gold-soft);color:#fff;flex:0 0 34px;}
+.payroll-chip .pc-text{display:flex;flex-direction:column;line-height:1.25;}
+.payroll-chip .pc-text small{color:var(--muted);font-size:11px;}

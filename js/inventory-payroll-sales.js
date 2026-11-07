@@ -950,11 +950,26 @@ function renderEntitlementPreview(){
     ${rows.map(({u,ent})=>`<tr><td>${esc(u.username)}</td><td>${u.role}</td><td>${ent.garmentCount}</td><td style="font-weight:700;color:var(--profit);">${ent.total.toFixed(0)} ﷼</td></tr>`).join("")}
   </tbody></table></div>`;
 }
+// the employees as name buttons; picking one opens only his card and his statement below it
+let payrollSelectedUser = "";
+function selectPayrollUser(username){
+  payrollSelectedUser = username;
+  renderPayrollTab();
+  if($("empStmtUser")){ $("empStmtUser").value = username; $("empStmtFrom").value = ""; $("empStmtTo").value = ""; showEmployeeStatement(); }
+  const card = $("payrollList"); if(card) card.scrollIntoView({behavior:"smooth", block:"start"});
+}
 function renderPayrollTab(){
   const el = $("payrollList");
   if(!el || !currentUser || currentUser.role!=="مدير") return;
   renderEmployeeStatementSelect();
-  el.innerHTML = state.users.map(u=>{
+  if(payrollSelectedUser && !state.users.some(u=>u.username===payrollSelectedUser)) payrollSelectedUser = "";
+  const chips = `<div class="payroll-chips">${state.users.map(u=>{ const bal = employeeBalance(u.username);
+    return `<button type="button" class="payroll-chip${u.username===payrollSelectedUser?" active":""}" onclick="selectPayrollUser('${u.username.replace(/\\/g,"\\\\").replace(/'/g,"\\'")}')">
+      <span class="pc-avatar">${esc((u.username||"?").trim().charAt(0).toUpperCase())}</span>
+      <span class="pc-text"><b>${esc(u.username)}</b><small>${esc(u.role)} — ${fmtSar(bal)} ﷼</small></span></button>`; }).join("")}</div>`;
+  const stmtWrap = $("empStmtWrap"); if(stmtWrap) stmtWrap.style.display = payrollSelectedUser ? "" : "none";
+  if(!payrollSelectedUser){ el.innerHTML = chips + `<p class="sub" style="margin-top:10px;">اختر موظف عشان تفتح صفحته: المستحق، صرف راتب أو سلفة أو خصم، آخر الحركات، وكشف حسابه.</p>`; return; }
+  el.innerHTML = chips + state.users.filter(u=>u.username===payrollSelectedUser).map(u=>{
     const balance = employeeBalance(u.username);
     const history = state.payrollLedger.filter(e=>e.username===u.username).slice().reverse().slice(0,15);
     const historyHtml = history.length ? history.map(e=>{
@@ -999,6 +1014,7 @@ async function submitPayrollEntry(username){
   if(await saveStateWithRollback(snapshot)){
     showToast("تم تسجيل الحركة — جاري فتح سند الاستلام للطباعة");
     printPayrollReceipt(entry.id); // the receipt the employee signs — voucher number is set by the save
+    if(payrollSelectedUser===username && $("empStmtView") && $("empStmtView").innerHTML) showEmployeeStatement();
   }
 }
 const PAYROLL_TYPE_LABELS = {entitlement:"استحقاق", bonus:"مكافأة", payment:"صرف راتب", advance:"سلفة", deduction:"خصم"};
