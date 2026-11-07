@@ -1050,9 +1050,18 @@ function confirmWithPassword(message){
 }
 
 // ---------------- users ----------------
+// the users as name buttons (like the payroll page); picking one opens only his settings
+let usersSelected = "";
+function selectUserEdit(username){ usersSelected = username; renderUsers(); }
 function renderUsers(){
   const managerCount = state.users.filter(u=>u.role==="مدير").length;
-  $("usersList").innerHTML = state.users.map((u,i)=>{
+  if(usersSelected && !state.users.some(u=>u.username===usersSelected)) usersSelected = "";
+  const chips = `<div class="payroll-chips">${state.users.map(u=>`<button type="button" class="payroll-chip${u.username===usersSelected?" active":""}" onclick="selectUserEdit('${u.username.replace(/\\/g,"\\\\").replace(/'/g,"\\'")}')">
+      <span class="pc-avatar">${esc((u.username||"?").trim().charAt(0).toUpperCase())}</span>
+      <span class="pc-text"><b>${esc(u.username)}</b><small>${esc(u.role)}</small></span></button>`).join("")}</div>`;
+  if(!usersSelected){ $("usersList").innerHTML = chips + `<p class="sub">اختر مستخدم عشان تفتح بياناته: الاسم وكلمة المرور والدور والراتب أو الأجور والصلاحيات.</p>`; return; }
+  $("usersList").innerHTML = chips + state.users.map((u,i)=>{
+    if(u.username!==usersSelected) return "";
     const isLastManager = u.role==="مدير" && managerCount<=1;
     return `<div class="user-row"><div class="row-3" style="margin-bottom:0;align-items:end;">
         <div class="field" style="margin-bottom:0;"><label>اسم المستخدم</label><input type="text" class="edit-username" data-idx="${i}" value="${u.username}"></div>
@@ -1233,6 +1242,7 @@ async function saveUserEdit(i){
   // the old one — and nobody could log in with either password.
   const wasCurrent = currentUser && currentUser.username===oldUsername;
   state.users[i]=updatedUser;
+  if(usersSelected===oldUsername) usersSelected = updatedUser.username; // a rename keeps his page open
   if(wasCurrent){ currentUser=state.users[i]; }
   normalizeState();
   const saved = await saveState();
@@ -1300,7 +1310,7 @@ async function addUser(){
     return;
   }
   const newUser = {username,role,authUid:uid,authEmail:email,joinedDate:todayStr(),baseSalary:0,commissionEnabled:false,commissionRate:0,commissionThreshold:0,discountEnabled:false,discountType:"amount",discountValue:0,dailyCapacity:0,productionCapacity:0,wageMen:0,wageChild:0,wageChildSmall:0};
-  state.users.push(newUser); ensureUserBoxes(username);
+  state.users.push(newUser); ensureUserBoxes(username); usersSelected = username; // opens the new user's page
   // fully normalize before saving so the server copy already has every per-user default field —
   // otherwise the new user's OWN client would backfill a missing field locally on first login,
   // and every one of their writes afterward would be rejected by the rules' "users must be
