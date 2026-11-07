@@ -834,9 +834,115 @@ function refreshReturnForm(){
   $("returnLinkedPurchase").innerHTML = `<option value="">-- بدون ربط --</option>` + relevantPurchases.map(p=>`<option value="${p.id}">#${p.invoiceNo} — ${p.date}${p.supplierInvoiceNo?" (مورد: "+esc(p.supplierInvoiceNo)+")":""}</option>`).join("");
 }
 // ---------------- payroll ----------------
+// ---- thobes that reached «جاهز»/«تسليم» with a tailor's name on them but without the tailor's own
+// «تم التفصيل» scan (early days, or set by hand): no sewing date, so no wage was ever counted for them.
+// The manager confirms the day it was sewn; the wage then counts — in the current month's entitlement
+// when that day's month is already closed (the same carry-over the payroll already does)
+function unscannedSewnGarments(){
+  const out = [];
+  state.invoices.forEach(inv=> inv.garments.forEach((g,idx)=>{
+    if(!g.tailor || g.wagePaidOut || !["تفصيل","جاهز","تسليم","معلقة"].includes(g.status)) return;
+    if(garmentSewnDate(g)) return;
+    out.push({inv, g, idx, suggested: g.readyDate || g.deliveredDate || g.cutDate || inv.date});
+  }));
+  return out;
+}
+function renderUnscannedSewn(){
+  const el = $("unscannedSewnWrap"); if(!el) return;
+  const list = unscannedSewnGarments();
+  if(!list.length){ el.innerHTML = ""; return; }
+  const cur = state.settings.currentMonth;
+  el.innerHTML = `<div class="garment-card" style="border-color:var(--loss);margin-bottom:14px;">
+    <h3 style="margin:0 0 6px;font-size:14px;color:var(--loss);">ثياب مفصّلة بدون تسجيل الخياط (${list.length}) — ما انحسبت لها أجرة</h3>
+    <p class="sub" style="margin:0 0 8px;">هذي الثياب عليها اسم خياط وتعدّت مرحلة التفصيل، بس الخياط ما سجّل لها «تم التفصيل». تأكد من التاريخ واضغط «اعتماد» — الأجرة تنحسب بشهر التاريخ، ولو شهره مقفل تنضاف على استحقاق ${monthDisplay(cur)}.</p>
+    <div class="table-wrap"><table><thead><tr><th>فاتورة</th><th>ثوب</th><th>الخياط</th><th>الحالة</th><th>الأجرة</th><th>تاريخ التفصيل</th><th></th></tr></thead><tbody>
+    ${list.map(({inv,g,idx,suggested})=>`<tr><td>${esc(inv.number)}</td><td>${idx+1} — ${esc(g.fabricType||"")}</td><td>${esc(g.tailor)}</td><td>${STATUSES.find(s=>s.v===g.status)?.label||g.status}</td><td>${fmtSar(tailorWageFor(g))} ﷼</td>
+      <td><input type="date" class="unscanned-date" data-inv="${inv.id}" data-idx="${idx}" value="${esc(suggested)}" style="max-width:150px;"></td>
+      <td><button class="btn btn-gold btn-sm" onclick="approveUnscannedSewn(['${inv.id}:${idx}'])">اعتماد</button></td></tr>`).join("")}
+    </tbody></table></div>
+    ${list.length>1?`<button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="approveUnscannedSewn(${JSON.stringify(list.map(x=>x.inv.id+":"+x.idx)).replace(/"/g,"'")})">اعتماد الكل (${list.length})</button>`:""}
+  </div>`;
+}
+async function approveUnscannedSewn(keys){
+  if(!currentUser || currentUser.role!=="مدير"){ showToast("الاعتماد للمدير فقط"); return; }
+  const picks = keys.map(k=>{ const [invId, idx] = k.split(":"); const inv = state.invoices.find(i=>i.id===invId); const g = inv && inv.garments[+idx];
+    const inp = document.querySelector(`.unscanned-date[data-inv="${invId}"][data-idx="${idx}"]`);
+    return {inv, g, idx:+idx, date: inp ? inp.value : ""}; }).filter(x=>x.g && !garmentSewnDate(x.g) && !x.g.wagePaidOut);
+  if(!picks.length){ showToast("ما فيه شي للاعتماد"); return; }
+  if(picks.some(x=>!/^\d{4}-\d{2}-\d{2}$/.test(x.date))){ showToast("حدد تاريخ التفصيل"); return; }
+  if(picks.some(x=>x.date>todayStr())){ showToast("تاريخ التفصيل ما يكون بعد اليوم"); return; }
+  const total = picks.reduce((a,x)=>a+tailorWageFor(x.g),0);
+  if(!await showConfirm(`اعتماد ${picks.length} ثوب كـ«تم التفصيل»:\n${picks.map(x=>`فاتورة ${x.inv.number} ثوب ${x.idx+1} — ${x.g.tailor} — ${x.date}`).join("\n")}\n\nإجمالي الأجرة: ${fmtSar(total)} ريال. متابعة؟`)) return;
+  const snapshot = JSON.parse(JSON.stringify(state));
+  picks.forEach(({g, date})=>{
+    g.tailorCompletedDate = date;
+    if(!g.cutDate){ g.cutDate = date; g.cutAuto = true; }
+    g.sewnApprovedBy = currentUser.username; g.sewnApprovedAt = todayStr();
+    if(typeof syncGarmentWageAdvisory==="function") syncGarmentWageAdvisory(g);
+  });
+  if(await saveStateWithRollback(snapshot)){
+    picks.forEach(({inv,g,idx,date})=> logAudit("sewn_date_approved", {invoiceNumber:inv.number, garmentIdx:idx, tailor:g.tailor, date}));
+    showToast(`تم اعتماد ${picks.length} ثوب — الأجرة انضافت لاستحقاق الخياط`);
+  }
+}
+// ---- wages reconciliation: per tailor, the thobes scanned «تم التفصيل» in the month vs the thobes the
+// entitlement counted (live for the open month, the recorded one for a closed month), with the reasons
+function wageReconciliationRows(monthLabel){
+  const closed = isMonthClosed(monthLabel);
+  return state.users.filter(u=>u.role==="خياط").map(u=>{
+    let scanned=0, cancelled=0, zeroWage=0, expected=0, carried=0, carriedWage=0, paidElsewhere=0;
+    state.invoices.forEach(inv=> inv.garments.forEach(g=>{
+      if(g.tailor!==u.username) return;
+      const sd = garmentSewnDate(g);
+      if(sd && sd.slice(0,7)===monthLabel){
+        if(g.status==="ملغي"){ cancelled++; return; }
+        scanned++;
+        const w = tailorWageFor(g); if(w<=0) zeroWage++;
+        expected += w;
+        if(g.wagePaidOut && g.wagePaidMonth && g.wagePaidMonth!==monthLabel) paidElsewhere++;
+      } else if(g.status!=="ملغي" && sd && (closed ? g.wagePaidMonth===monthLabel : (tailorWageCountsIn(g, monthLabel) && !garmentWagePaidElsewhere(g, monthLabel)))){
+        carried++; carriedWage += tailorWageFor(g);
+      }
+    }));
+    const unscanned = unscannedSewnGarments().filter(x=>x.g.tailor===u.username).length;
+    let counted, wage, label;
+    if(closed){
+      const e = state.payrollLedger.find(x=>x.username===u.username && x.type==="entitlement" && x.monthLabel===monthLabel);
+      counted = e ? (e.garmentCount||0) : 0; wage = e ? e.amount : 0; label = "المسجّل بالاستحقاق";
+    } else {
+      const ent = computeEmployeeEntitlement(u, monthLabel);
+      counted = ent.garmentCount; wage = ent.commission - (ent.repairWages||0); label = "المحسوب لين الآن";
+    }
+    const reasons = [];
+    if(cancelled) reasons.push(`${cancelled} ملغي (بدون أجرة)`);
+    if(zeroWage) reasons.push(`${zeroWage} أجرته صفر — حدّد أجرة الخياط من إعدادات المستخدمين`);
+    if(paidElsewhere) reasons.push(`${paidElsewhere} انصرفت أجرته بشهر ثاني`);
+    if(carried) reasons.push(`${carried} من شهر سابق انضافت هنا (${fmtSar(carriedWage)} ﷼)`);
+    if(unscanned) reasons.push(`${unscanned} بدون تسجيل الخياط (فوق)`);
+    const ok = counted === scanned - paidElsewhere + carried && !zeroWage && !unscanned;
+    return {u, scanned, counted, expected: expected + carriedWage, wage, label, reasons, ok, closed};
+  });
+}
+function renderWageReconciliation(){
+  const el = $("wageReconView"); if(!el) return;
+  const mInp = $("wageReconMonth");
+  if(mInp && !mInp.value) mInp.value = state.settings.currentMonth;
+  const m = (mInp && mInp.value) || state.settings.currentMonth;
+  const rows = wageReconciliationRows(m);
+  if(!rows.length){ el.innerHTML = `<p class="sub">ما فيه حسابات خياطين.</p>`; return; }
+  const closed = isMonthClosed(m);
+  const html = `<h3 style="margin:0 0 6px;font-size:14px;">مطابقة الثياب مع الأجور — ${monthDisplay(m)}${closed?" (مقفل)":" (قبل الإقفال)"}</h3>
+    <table><thead><tr><th>الخياط</th><th>سجّل «تم التفصيل»</th><th>انحسبت له أجرة</th><th>الأجرة المتوقعة</th><th>${closed?"الاستحقاق المسجّل":"الأجرة المحسوبة"}</th><th>النتيجة</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr><td>${esc(r.u.username)}</td><td>${r.scanned}</td><td>${r.counted}</td><td>${fmtSar(r.expected)} ﷼</td><td>${fmtSar(r.wage)} ﷼</td>
+      <td style="color:${r.ok?"var(--profit)":"var(--loss)"};font-weight:700;">${r.ok?"✓ متطابق":"✗ فيه فرق"}${r.reasons.length?`<div class="sub" style="font-weight:400;font-size:11.5px;">${r.reasons.map(esc).join("<br>")}</div>`:""}</td></tr>`).join("")}
+    </tbody></table>${closed?`<p class="sub" style="font-size:11.5px;">الاستحقاق المسجّل يشمل الراتب الأساسي والصيانة الخارجية لو موجودة.</p>`:""}`;
+  el.innerHTML = `<div class="table-wrap">${html}</div><button class="btn btn-ghost btn-sm" id="printWageReconBtn" style="margin-top:6px;">طباعة المطابقة</button>`;
+  $("printWageReconBtn").addEventListener("click", ()=> printHtml(html));
+}
 function renderEntitlementPreview(){
   const el = $("entitlementPreviewView");
   if(!el || !currentUser || currentUser.role!=="مدير") return;
+  renderUnscannedSewn(); renderWageReconciliation();
   const monthLabel = state.settings.currentMonth;
   const rows = state.users.map(u=>({u, ent: computeEmployeeEntitlement(u, monthLabel)})).filter(({ent})=>ent.total>0.001);
   if(!rows.length){ el.innerHTML = `<p class="sub">ما فيه استحقاقات محسوبة لهذا الشهر بعد.</p>`; return; }
@@ -847,6 +953,7 @@ function renderEntitlementPreview(){
 function renderPayrollTab(){
   const el = $("payrollList");
   if(!el || !currentUser || currentUser.role!=="مدير") return;
+  renderEmployeeStatementSelect();
   el.innerHTML = state.users.map(u=>{
     const balance = employeeBalance(u.username);
     const history = state.payrollLedger.filter(e=>e.username===u.username).slice().reverse().slice(0,15);
@@ -855,7 +962,8 @@ function renderPayrollTab(){
       const lbl = e.type==="entitlement"?"استحقاق":e.type==="bonus"?"مكافأة":e.type==="payment"?"دفعة":e.type==="advance"?"سلفة":"خصم";
       const sign = credit ? "+" : "-";
       const color = credit ? "var(--profit)" : "var(--loss)";
-      return `<div class="payment-row"><span style="color:${color};">${sign}${e.amount.toFixed(0)} ﷼</span><span>${lbl}</span><span style="color:var(--muted);">${e.date}</span>${e.note?`<span style="color:var(--muted);">${e.note}</span>`:""}</div>`;
+      const printBtn = ["payment","advance","deduction"].includes(e.type) && e.id ? `<button class="btn btn-ghost btn-sm" style="padding:2px 8px;" onclick="printPayrollReceipt('${e.id}')">🖨 سند</button>` : "";
+      return `<div class="payment-row"><span style="color:${color};">${sign}${e.amount.toFixed(0)} ﷼</span><span>${lbl}${e.voucherNo?` #${e.voucherNo}`:""}</span><span style="color:var(--muted);">${e.date}</span>${e.note?`<span style="color:var(--muted);">${esc(e.note)}</span>`:""}${printBtn}</div>`;
     }).join("") : `<p class="sub">ما فيه حركات بعد.</p>`;
     return `<div class="garment-card">
       <span class="tag">${u.username} — ${u.role}</span>
@@ -887,7 +995,103 @@ async function submitPayrollEntry(username){
   const snapshot = JSON.parse(JSON.stringify(state));
   const result = addPayrollEntry(username, type, amount, boxId, note);
   if(!result.ok){ showToast(result.msg); return; }
-  if(await saveStateWithRollback(snapshot)) showToast("تم تسجيل الحركة");
+  const entry = state.payrollLedger[state.payrollLedger.length-1];
+  if(await saveStateWithRollback(snapshot)){
+    showToast("تم تسجيل الحركة — جاري فتح سند الاستلام للطباعة");
+    printPayrollReceipt(entry.id); // the receipt the employee signs — voucher number is set by the save
+  }
+}
+const PAYROLL_TYPE_LABELS = {entitlement:"استحقاق", bonus:"مكافأة", payment:"صرف راتب", advance:"سلفة", deduction:"خصم"};
+// a printed receipt for one payroll movement: what the employee was owed in total, what he'd already
+// received, this amount, and what's left after it — for him to sign
+function printPayrollReceipt(entryId){
+  const all = state.payrollLedger;
+  const pos = all.findIndex(e=>e.id===entryId); if(pos<0) return;
+  const e = all[pos];
+  const before = all.slice(0, pos).filter(x=>x.username===e.username);
+  const entitled = before.filter(x=>x.type==="entitlement"||x.type==="bonus").reduce((a,x)=>a+x.amount,0);
+  const paidBefore = before.filter(x=>x.type==="payment"||x.type==="advance").reduce((a,x)=>a+x.amount,0);
+  const deductedBefore = before.filter(x=>x.type==="deduction").reduce((a,x)=>a+x.amount,0);
+  const dueBefore = entitled - paidBefore - deductedBefore;
+  const after = dueBefore - e.amount;
+  const box = e.boxId ? findCashBox(e.boxId) : null;
+  const u = state.users.find(x=>x.username===e.username);
+  const sar = n=> `${fmtSar(n||0)} ﷼`;
+  const row = (k,v,b)=> `<tr${b?' style="font-weight:800;"':""}><td>${k}</td><td>${v}</td></tr>`;
+  const title = e.type==="deduction" ? "إشعار خصم" : "سند استلام";
+  printHtml(`<h2>${title} — ${PAYROLL_TYPE_LABELS[e.type]||e.type}${e.voucherNo?` — سند صرف رقم ${e.voucherNo}`:""}</h2>
+    <p style="font-size:12px;">${state.settings.shopName?esc(state.settings.shopName)+" — ":""}التاريخ: ${e.date}</p>
+    <table><tbody>
+      ${row("اسم الموظف", `${esc(e.username)}${u?` (${esc(u.role)})`:""}`)}
+      ${row("إجمالي المستحق له (استحقاقات ومكافآت)", sar(entitled))}
+      ${row("المصروف له سابقاً (رواتب وسلف)", sar(paidBefore))}
+      ${deductedBefore?row("خصومات سابقة", sar(deductedBefore)):""}
+      ${row("الباقي له قبل هذا السند", sar(dueBefore))}
+      ${row(e.type==="deduction"?"مبلغ الخصم":"مبلغ الصرف المستلم", sar(e.amount), true)}
+      ${row("الباقي له بعد هذا السند", sar(after), true)}
+      ${box?row("صُرف من", `${esc(box.owner)} — ${esc(box.name)}`):""}
+      ${e.note?row("ملاحظة", esc(e.note)):""}
+      ${row("سجّله", esc(e.recordedBy||"—"))}
+    </tbody></table>
+    <p style="margin-top:26px;">${e.type==="deduction"?"اطلعت على الخصم":"استلمت المبلغ أعلاه"} — توقيع الموظف: ____________ &nbsp;&nbsp;&nbsp; توقيع المدير: ____________</p>`);
+}
+// ---- employee statement: every payroll movement in the period with a running balance, then one line per
+// month (entitlement by the month it's for, the rest by date). The open month shows its live entitlement
+function renderEmployeeStatementSelect(){
+  const sel = $("empStmtUser"); if(!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = state.users.map(u=>`<option value="${esc(u.username)}" ${u.username===cur?"selected":""}>${esc(u.username)} (${esc(u.role)})</option>`).join("");
+}
+function showEmployeeStatement(){
+  const username = $("empStmtUser").value; const u = state.users.find(x=>x.username===username);
+  if(!u){ showToast("اختر الموظف"); return; }
+  const from = $("empStmtFrom").value, to = $("empStmtTo").value;
+  if(from && to && from>to){ showToast("تاريخ البداية بعد تاريخ النهاية"); return; }
+  const sar = n=> `${fmtSar(n||0)} ﷼`;
+  const credit = e=> e.type==="entitlement"||e.type==="bonus";
+  const entries = state.payrollLedger.filter(e=>e.username===username);
+  let opening = 0; const rows = [];
+  entries.forEach(e=>{
+    const signed = credit(e) ? e.amount : -e.amount;
+    if(from && (e.date||"") < from){ opening += signed; return; }
+    if(to && (e.date||"") > to) return;
+    rows.push({e, signed});
+  });
+  let run = opening;
+  rows.forEach(r=>{ run += r.signed; r.balance = run; });
+  const period = from||to ? `من ${from||"البداية"} إلى ${to||"اليوم"}` : "كل الفترات";
+  let html = `<h2>كشف حساب موظف — ${esc(username)} (${esc(u.role)})</h2><p style="font-size:12px;">الفترة: ${period}</p>`;
+  html += `<table><thead><tr><th>التاريخ</th><th>الحركة</th><th>البيان</th><th>له</th><th>عليه / صُرف</th><th>الرصيد له</th></tr></thead><tbody>`;
+  html += `<tr style="font-weight:700;"><td>${from||"—"}</td><td colspan="4">${from?"رصيد ما قبل الفترة":"الرصيد الافتتاحي"}</td><td>${sar(opening)}</td></tr>`;
+  rows.forEach(({e,signed,balance})=> html += `<tr><td>${e.date||"—"}</td><td>${PAYROLL_TYPE_LABELS[e.type]||e.type}${e.voucherNo?` #${e.voucherNo}`:""}</td><td style="font-size:11.5px;">${esc(e.note||"")}</td><td>${signed>0?fmtSar(signed):""}</td><td>${signed<0?fmtSar(-signed):""}</td><td>${sar(balance)}</td></tr>`);
+  if(!rows.length) html += `<tr><td colspan="6" style="text-align:center;">ما فيه حركات بهذي الفترة</td></tr>`;
+  const tIn = rows.filter(r=>r.signed>0).reduce((a,r)=>a+r.signed,0), tOut = rows.filter(r=>r.signed<0).reduce((a,r)=>a-r.signed,0);
+  html += `</tbody><tfoot><tr style="font-weight:800;"><td colspan="3">الإجمالي (${rows.length} حركة)</td><td>${fmtSar(tIn)}</td><td>${fmtSar(tOut)}</td><td>${sar(run)}</td></tr></tfoot></table>`;
+  // per month
+  const months = {};
+  const mk = m=> months[m] || (months[m] = {entitled:0, bonus:0, paid:0, deducted:0});
+  rows.forEach(({e})=>{
+    const m = e.type==="entitlement" && e.monthLabel ? e.monthLabel : (e.date||"").slice(0,7);
+    const x = mk(m);
+    if(e.type==="entitlement") x.entitled += e.amount; else if(e.type==="bonus") x.bonus += e.amount;
+    else if(e.type==="deduction") x.deducted += e.amount; else x.paid += e.amount;
+  });
+  const cur = state.settings.currentMonth;
+  const inPeriod = m=> (!from || m >= from.slice(0,7)) && (!to || m <= to.slice(0,7));
+  const live = !isMonthClosed(cur) && inPeriod(cur) ? computeEmployeeEntitlement(u, cur).total : 0;
+  if(live>0.001) mk(cur);
+  let carry = opening;
+  const mRows = Object.keys(months).sort().map(m=>{
+    const x = months[m];
+    carry += x.entitled + x.bonus - x.paid - x.deducted;
+    const isLive = m===cur && live>0.001;
+    return `<tr><td>${monthDisplay(m)}</td><td>${fmtSar(x.entitled)}${isLive?`<br><span style="font-size:10.5px;">+ متوقع ${fmtSar(live)} (ما انقفل)</span>`:""}</td><td>${fmtSar(x.bonus)}</td><td>${fmtSar(x.paid)}</td><td>${fmtSar(x.deducted)}</td><td>${sar(carry)}</td></tr>`;
+  });
+  const sum = k=> Object.values(months).reduce((a,x)=>a+x[k],0);
+  html += `<h3 style="margin:14px 0 6px;font-size:13px;">ملخص كل شهر</h3><table><thead><tr><th>الشهر</th><th>المستحق</th><th>مكافآت</th><th>المصروف (رواتب وسلف)</th><th>الخصومات</th><th>الباقي له آخر الشهر</th></tr></thead><tbody>${mRows.join("") || `<tr><td colspan="6" style="text-align:center;">لا يوجد</td></tr>`}</tbody>
+    <tfoot><tr style="font-weight:800;"><td>الإجمالي</td><td>${fmtSar(sum("entitled"))}</td><td>${fmtSar(sum("bonus"))}</td><td>${fmtSar(sum("paid"))}</td><td>${fmtSar(sum("deducted"))}</td><td>${sar(carry)}</td></tr></tfoot></table>`;
+  $("empStmtView").innerHTML = `<div class="table-wrap">${html}</div><button class="btn btn-ghost btn-sm" id="printEmpStmtBtn" style="margin-top:10px;">طباعة الكشف</button>`;
+  $("printEmpStmtBtn").addEventListener("click", ()=> printHtml(html));
 }
 
 async function addPurchaseReturn(){
@@ -1881,6 +2085,10 @@ function printClosingDetail(monthLabel){
   const pay = state.payrollLedger.filter(e=> e.type==="entitlement" ? e.monthLabel===m : inM(e.date) && typeLbl[e.type]);
   html += section("الرواتب والسلف", ["التاريخ","الموظف","النوع","المبلغ","ملاحظة"],
     pay.map(e=>`<tr><td>${e.date||"—"}</td><td>${esc(e.username)}</td><td>${typeLbl[e.type]||e.type}</td><td>${sar(e.amount)}</td><td style="font-size:11px;">${esc(e.note||"")}</td></tr>`));
+  // tailors: thobes sewn vs wages counted
+  const recon = wageReconciliationRows(m);
+  if(recon.length) html += section("مطابقة الثياب مع أجور الخياطين", ["الخياط","سجّل «تم التفصيل»","انحسبت له أجرة","الأجرة المتوقعة","الاستحقاق المسجّل","النتيجة"],
+    recon.map(r=>`<tr><td>${esc(r.u.username)}</td><td>${r.scanned}</td><td>${r.counted}</td><td>${sar(r.expected)}</td><td>${sar(r.wage)}</td><td>${r.ok?"✓ متطابق":"✗ فيه فرق"}${r.reasons.length?`<br><span style="font-size:10.5px;">${r.reasons.map(esc).join(" — ")}</span>`:""}</td></tr>`));
   // purchases
   const purch = state.purchases.filter(x=>inM(x.date));
   html += section("المشتريات", ["التاريخ","رقم","الصنف","الكمية","الإجمالي","الدفع"],

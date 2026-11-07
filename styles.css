@@ -364,3 +364,12 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 #tab-invoice.meas-only .panel button.meas-toggle-btn, #tab-invoice.meas-only #saveInvoiceBtn, #tab-invoice.meas-only #resetFormBtn{pointer-events:auto;opacity:1;}
 #tab-invoice.meas-only #saveAndPrintBtn, #tab-invoice.meas-only #saveAndSendBtn{display:none;}
 #tab-invoice.meas-only .meas-toggle-btn, #tab-invoice.meas-only #saveInvoiceBtn, #tab-invoice.meas-only #resetFormBtn{position:relative;z-index:5;}
+
+/* save status: a clear badge at the top centre for every save — «جاري الحفظ…» then «تم الحفظ ✓» */
+.save-pill{position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-8px);z-index:9999;padding:8px 18px;border-radius:999px;
+  font-weight:800;font-size:14px;box-shadow:0 6px 18px rgba(0,0,0,.18);opacity:0;pointer-events:none;transition:opacity .18s, transform .18s;white-space:nowrap;}
+.save-pill.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.save-pill.saving{background:#fff7e0;color:#8a6200;border:1px solid #e6c766;}
+.save-pill.ok{background:#e6f6ea;color:#1d7a3a;border:1px solid #8fd3a3;}
+.save-pill.fail{background:#fdeaea;color:#b42318;border:1px solid #f1a9a3;}
+@media print{ .save-pill{display:none !important;} }

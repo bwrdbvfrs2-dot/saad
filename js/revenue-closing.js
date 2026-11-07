@@ -532,15 +532,17 @@ function buildTailorMonthlyReport(username, monthLabel){
   // the wage per invoice at the tailor's own rate (what the payroll pays), and its total
   const wageOf = inv=> inv.garments.filter(g=> g.tailor===username && g.tailorCompletedDate && g.tailorCompletedDate.slice(0,7)===monthLabel && g.status!=="ملغي" && g.status!=="قص" && g.status!=="جديد").reduce((a,g)=>a+tailorWageFor(g),0);
   const totalWage = rows.reduce((a,{inv})=>a+wageOf(inv),0);
-  const tableRows = rows.map(({inv,count})=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${inv.date}</td><td>${count}</td><td>${fmtSar(wageOf(inv))} ﷼</td></tr>`).join("");
+  // the day(s) the tailor scanned «تم التفصيل» for this invoice's thobes, next to the invoice date
+  const sewnDays = inv=> [...new Set(inv.garments.filter(g=> g.tailor===username && g.tailorCompletedDate && g.tailorCompletedDate.slice(0,7)===monthLabel && g.status!=="ملغي").map(g=>g.tailorCompletedDate))].sort().join("، ");
+  const tableRows = rows.map(({inv,count})=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${inv.date}</td><td>${sewnDays(inv)}</td><td>${count}</td><td>${fmtSar(wageOf(inv))} ﷼</td></tr>`).join("");
   return `<h3 style="margin:0 0 6px;font-size:15px;">تقرير الخياط ${esc(username)} — ${monthDisplay(monthLabel)}${isMonthClosed(monthLabel)?" (مقفل)":""}</h3>
-    <div class="table-wrap"><table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>التاريخ</th><th>عدد الثياب</th><th>الأجرة</th></tr></thead><tbody>${tableRows}</tbody>
-    <tfoot><tr style="font-weight:800;"><td colspan="3">الإجمالي — ${rows.length} فاتورة</td><td>${totalGarments}</td><td>${fmtSar(totalWage)} ﷼</td></tr></tfoot></table></div>` + cancelledNote;
+    <div class="table-wrap"><table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>تاريخ الفاتورة</th><th>تاريخ «تم التفصيل»</th><th>عدد الثياب</th><th>الأجرة</th></tr></thead><tbody>${tableRows}</tbody>
+    <tfoot><tr style="font-weight:800;"><td colspan="4">الإجمالي — ${rows.length} فاتورة</td><td>${totalGarments}</td><td>${fmtSar(totalWage)} ﷼</td></tr></tfoot></table></div>` + cancelledNote;
 }
 function buildInvoiceStatusReport(inv){
   const rows = inv.garments.map((g,idx)=>{
     const statusLabel = STATUSES.find(s=>s.v===g.status)?.label || g.status;
-    const tailorNote = (g.status==="تفصيل"||g.status==="جاهز"||g.status==="تسليم") && g.tailor ? ` — الخياط: ${esc(g.tailor)}` : "";
+    const tailorNote = (g.status==="تفصيل"||g.status==="جاهز"||g.status==="تسليم"||g.status==="معلقة") && g.tailor ? ` — الخياط: ${esc(g.tailor)}${g.tailorCompletedDate?` (فصّله ${g.tailorCompletedDate})`:` <span style="color:var(--loss);">(بدون تسجيل الخياط)</span>`}` : "";
     return `<div style="padding:4px 0;border-bottom:1px solid var(--border);"><div style="display:flex;justify-content:space-between;"><span>ثوب ${idx+1} — ${esc(g.fabricType||"—")}</span><span><b>${statusLabel}</b>${tailorNote}</span></div>${readyCounterHtml(g)}</div>`;
   }).join("");
   const remaining = invoiceRemaining(inv);
@@ -646,8 +648,8 @@ function showQuickDeliveryPayment(inv, idx, remaining, targetId){
   $(target).innerHTML = `<div class="garment-card">
     <p style="margin:0 0 10px;color:var(--loss);font-weight:700;">متبقي على الفاتورة ${fmtSar(remaining)} ريال — حصّل المبلغ عشان تكمل التسليم</p>
     <div class="row-2">
-      <div class="field"><label>كاش (ريال)</label><input type="number" id="quickPayCash" min="0" value="${+remaining.toFixed(2)}"></div>
-      <div class="field"><label>شبكة (ريال)</label><input type="number" id="quickPayNetwork" min="0" value="0"></div>
+      <div class="field"><label>كاش (ريال)</label><input type="number" id="quickPayCash" min="0" placeholder="0"></div>
+      <div class="field"><label>شبكة (ريال)</label><input type="number" id="quickPayNetwork" min="0" placeholder="0"></div>
     </div>
     <div class="field"><label>نوع البطاقة</label><select id="quickPayCard" class="card-type-select">${cardTypeOptionsHtml()}</select></div>
     <div class="field"><label>رقم سند الشبكة (إلزامي لو فيه شبكة)</label><input type="text" id="quickPayReceipt"></div>

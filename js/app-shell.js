@@ -518,7 +518,26 @@ const OFFLINE_SAVE_MSG = "ما انحفظ — ما فيه اتصال بالإن�
 // a save uploads the whole shop document — on a slow connection that's seconds with no sign of life,
 // so the top bar says «جاري الحفظ…» while any save is running and «✓ انحفظ» when they're done
 let lastSaveOk = true, saveIndicatorTimer = null;
+// the floating badge: «جاري الحفظ…» stays up at least a moment (a fast save would flash past unseen),
+// then «تم الحفظ ✓» — or «ما انحفظ» in red, which stays longer
+let savePillShownAt = 0, savePillTimer = null;
+function updateSavePill(){
+  const pill = typeof document!=="undefined" && document.getElementById("saveStatusPill"); if(!pill) return;
+  clearTimeout(savePillTimer);
+  if(pendingSaves>0){
+    if(!pill.classList.contains("saving") || !pill.classList.contains("show")) savePillShownAt = Date.now();
+    pill.className = "save-pill saving show"; pill.textContent = "⏳ جاري الحفظ…"; return;
+  }
+  const wait = Math.max(0, 600 - (Date.now() - savePillShownAt));
+  savePillTimer = setTimeout(()=>{
+    if(pendingSaves>0) return;
+    pill.className = "save-pill show " + (lastSaveOk ? "ok" : "fail");
+    pill.textContent = lastSaveOk ? "✓ تم الحفظ" : "✗ ما انحفظ — حاول مرة ثانية";
+    savePillTimer = setTimeout(()=>{ pill.classList.remove("show"); }, lastSaveOk ? 1800 : 6000);
+  }, wait);
+}
 function updateSaveIndicator(){
+  updateSavePill();
   const el = typeof document!=="undefined" && document.getElementById("saveIndicator"); if(!el) return;
   clearTimeout(saveIndicatorTimer);
   if(pendingSaves>0){ el.style.display=""; el.style.color="var(--gold-soft)"; el.textContent = "⏳ جاري الحفظ…"; return; }
@@ -938,6 +957,20 @@ async function tryLogin(){
   try{ await tryLoginOnce(); }
   finally{ loginInProgress = false; setLoginBusy(false); }
 }
+// a connection that drops for a moment failed the login outright and the button had to be pressed
+// again (and again) — retry by itself a couple of times, only for connection errors
+const NETWORK_ERR_CODES = ["auth/network-request-failed","unavailable","deadline-exceeded","auth/timeout","auth/internal-error"];
+async function withNetworkRetry(fn){
+  const waits = [1500, 3000];
+  for(let i=0;;i++){
+    try{ return await fn(); }
+    catch(e){
+      if(i>=waits.length || !(e && NETWORK_ERR_CODES.includes(e.code))) throw e;
+      setLoginBusy(true, "الاتصال ضعيف — جاري إعادة المحاولة…");
+      await new Promise(r=>setTimeout(r, waits[i]));
+    }
+  }
+}
 async function tryLoginOnce(){
   let u=$("loginUser").value.trim(), p=$("loginPass").value;
   // a password the browser filled in by itself can read as empty until the first click has landed —
@@ -948,12 +981,12 @@ async function tryLoginOnce(){
   setLoginBusy(true, "جاري التحقق…");
   let email;
   try{
-    const doc = await USERNAMES_COL.doc(u).get();
+    const doc = await withNetworkRetry(()=> USERNAMES_COL.doc(u).get());
     if(!doc.exists){ $("loginErr").textContent="اسم المستخدم أو كلمة المرور غير صحيحة"; return; }
     email = doc.data().authEmail;
   }catch(e){ console.error("username lookup failed", e); $("loginErr").textContent = authErrorMessage(e); return; }
   try{
-    await fbAuth.signInWithEmailAndPassword(email, p);
+    await withNetworkRetry(()=> fbAuth.signInWithEmailAndPassword(email, p));
   }catch(e){
     const wrongCreds = e && ["auth/wrong-password","auth/user-not-found","auth/invalid-credential","auth/invalid-login-credentials"].includes(e.code);
     $("loginErr").textContent = wrongCreds ? "اسم المستخدم أو كلمة المرور غير صحيحة" : authErrorMessage(e);
