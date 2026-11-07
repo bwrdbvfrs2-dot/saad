@@ -891,6 +891,7 @@ function wageReconciliationRows(monthLabel){
   const closed = isMonthClosed(monthLabel);
   return state.users.filter(u=>u.role==="خياط").map(u=>{
     let scanned=0, cancelled=0, zeroWage=0, expected=0, carried=0, carriedWage=0, paidElsewhere=0, pendingOut=0, pendingOutWage=0;
+    const pendingDays = {}, carriedFrom = {};
     state.invoices.forEach(inv=> inv.garments.forEach(g=>{
       if(g.tailor!==u.username) return;
       const sd = garmentSewnDate(g);
@@ -902,9 +903,9 @@ function wageReconciliationRows(monthLabel){
         if(g.wagePaidOut && g.wagePaidMonth && g.wagePaidMonth!==monthLabel) paidElsewhere++;
         // a closed month: sewn in it but not paid with it (scanned after the close, or approved later) —
         // its wage goes with the current month's entitlement
-        else if(closed && !g.wagePaidOut){ pendingOut++; pendingOutWage += w; }
+        else if(closed && !g.wagePaidOut){ pendingOut++; pendingOutWage += w; pendingDays[sd] = (pendingDays[sd]||0)+1; }
       } else if(g.status!=="ملغي" && sd && (closed ? g.wagePaidMonth===monthLabel : (tailorWageCountsIn(g, monthLabel) && !garmentWagePaidElsewhere(g, monthLabel)))){
-        carried++; carriedWage += tailorWageFor(g);
+        carried++; carriedWage += tailorWageFor(g); carriedFrom[sd] = (carriedFrom[sd]||0)+1;
       }
     }));
     const unscanned = unscannedSewnGarments().filter(x=>x.g.tailor===u.username).length;
@@ -919,9 +920,10 @@ function wageReconciliationRows(monthLabel){
     const reasons = [];
     if(cancelled) reasons.push(`${cancelled} ملغي (بدون أجرة)`);
     if(zeroWage) reasons.push(`${zeroWage} أجرته صفر — حدّد أجرة الخياط من إعدادات المستخدمين`);
+    const daysTxt = o=> Object.keys(o).sort().map(d=> `${d}${o[d]>1?` ×${o[d]}`:""}`).join("، ");
     if(paidElsewhere) reasons.push(`${paidElsewhere} انصرفت أجرته بشهر ثاني`);
-    if(pendingOut) reasons.push(`${pendingOut} ما دخلت باستحقاق الشهر (سُجّلت بعد الإقفال أو اعتُمدت لاحقاً) — أجرتها ${fmtSar(pendingOutWage)} ﷼ تنضاف على استحقاق ${monthDisplay(state.settings.currentMonth)}`);
-    if(carried) reasons.push(`${carried} من شهر سابق انضافت هنا (${fmtSar(carriedWage)} ﷼)`);
+    if(pendingOut) reasons.push(`${pendingOut} ما دخلت باستحقاق الشهر (سُجّلت بعد الإقفال أو اعتُمدت لاحقاً) — أجرتها ${fmtSar(pendingOutWage)} ﷼ تنضاف على استحقاق ${monthDisplay(state.settings.currentMonth)} — تواريخ تفصيلها: ${daysTxt(pendingDays)}`);
+    if(carried) reasons.push(`${carried} من شهر سابق انضافت هنا (${fmtSar(carriedWage)} ﷼) — تواريخ تفصيلها: ${daysTxt(carriedFrom)}`);
     if(unscanned) reasons.push(`${unscanned} بدون تسجيل الخياط (فوق)`);
     // explained differences (pending carry-over) still show their reason, but don't count as a mismatch
     const ok = counted === scanned - paidElsewhere - pendingOut + carried && !zeroWage && !unscanned;
