@@ -492,17 +492,80 @@ function renderSensitiveBalanceCards(){
   const b = shopBalancesSummary();
   const sewn = sewnCountText(state.settings.currentMonth);
   const line = (k,v)=> `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:3px;"><span>${k}</span><span>${fmtSar(v)} ﷼</span></div>`;
+  const click = k=> ` style="cursor:pointer;" onclick="showSensitiveDetail('${k}')" title="اضغط عشان تشوف من وين جا الرقم"`;
+  const hint = `<div style="font-size:10.5px;color:var(--gold-soft);margin-top:6px;">اضغط للتفاصيل ↓</div>`;
   return `
-    <div class="stat-card cost"><div class="lbl">الديون اللي على المحل</div><div class="val">${fmtSar(b.owedByShop)} ﷼</div>
-      ${line("للموردين", b.suppliers)}${line("للدائنين", b.creditors)}</div>
-    <div class="stat-card sales"><div class="lbl">الديون اللي للمحل (على العملاء)</div><div class="val">${fmtSar(b.owedToShop)} ﷼</div>
+    <div class="stat-card cost"${click("owedByShop")}><div class="lbl">الديون اللي على المحل</div><div class="val">${fmtSar(b.owedByShop)} ﷼</div>
+      ${line("للموردين", b.suppliers)}${line("للدائنين", b.creditors)}${hint}</div>
+    <div class="stat-card sales"${click("owedToShop")}><div class="lbl">الديون اللي للمحل (على العملاء)</div><div class="val">${fmtSar(b.owedToShop)} ﷼</div>
       ${line("فواتير مسلّمة وما تسددت", b.customers)}${line("ثياب مسلّمة بالآجل", b.credit)}${line("ديون سابقة (قبل النظام)", b.opening)}
-      <div style="font-size:11px;color:var(--muted);margin-top:4px;">غير داخل فيها: باقي فواتير لسا ما انسلّمت ${fmtSar(b.inProgress)} ﷼</div></div>
-    <div class="stat-card" style="border-color:var(--gold-soft);"><div class="lbl">الأجور المستحقة للموظفين</div><div class="val" style="color:var(--gold-soft);">${fmtSar(b.wagesDue)} ﷼</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;">غير داخل فيها: باقي فواتير لسا ما انسلّمت ${fmtSar(b.inProgress)} ﷼</div>${hint}</div>
+    <div class="stat-card" style="border-color:var(--gold-soft);cursor:pointer;" onclick="showSensitiveDetail('wages')" title="اضغط عشان تشوف من وين جا الرقم"><div class="lbl">الأجور المستحقة للموظفين</div><div class="val" style="color:var(--gold-soft);">${fmtSar(b.wagesDue)} ﷼</div>
       ${line("من أشهر مقفلة", b.wagesDue)}${line(`متوقعة لـ${monthDisplay(state.settings.currentMonth)}`, b.wagesThisMonth)}
-      ${b.wagesAdvanced>0.01?line("سلف زيادة (على الموظفين)", b.wagesAdvanced):""}</div>
+      ${b.wagesAdvanced>0.01?line("سلف زيادة (على الموظفين)", b.wagesAdvanced):""}${hint}</div>
     <div class="stat-card count"><div class="lbl">ثياب تم تفصيلها (الشهر الحالي)</div><div class="val">${sewn.total} ثوب</div>
       ${sewn.detail?`<div style="font-size:12px;color:var(--muted);margin-top:3px;">${esc(sewn.detail)}</div>`:""}</div>`;
+}
+// the names and amounts behind a balance card, shown under the cards (press the same card again to close)
+let sensitiveDetailOpen = "";
+function showSensitiveDetail(kind){
+  const el = $("sensitiveDetailView"); if(!el) return;
+  if(sensitiveDetailOpen===kind){ sensitiveDetailOpen = ""; el.innerHTML = ""; return; }
+  sensitiveDetailOpen = kind;
+  const sar = n=> `${fmtSar(n||0)} ﷼`;
+  const table = (title, head, rows, total)=> `<h3 style="margin:12px 0 6px;font-size:13px;">${title} (${rows.length})</h3>` + (rows.length
+    ? `<table><thead><tr>${head.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody>${total!==undefined?`<tfoot><tr style="font-weight:800;"><td colspan="${head.length-1}">الإجمالي</td><td>${sar(total)}</td></tr></tfoot>`:""}</table>`
+    : `<p class="sub">لا يوجد</p>`);
+  let title = "", html = "";
+  if(kind==="owedByShop"){
+    title = "الديون اللي على المحل — من وين جا الرقم";
+    const list = state.suppliers.filter(sp=>(sp.balance||0)>0.01).sort((a,b)=>b.balance-a.balance);
+    const rowOf = sp=>{ const opening = supplierOpeningDebt(sp), paid = (sp.payments||[]).reduce((a,x)=>a+x.amount,0);
+      const deferred = state.purchases.filter(x=>x.supplierId===sp.id && x.payStatus==="deferred").reduce((a,x)=>a+(x.total||0),0);
+      return `<tr><td>${esc(sp.name)}</td><td>${esc(sp.kind||"مورد")}</td><td>${sar(deferred)}</td><td>${sar(opening)}</td><td>${sar(paid)}</td><td><b>${sar(sp.balance)}</b></td></tr>`; };
+    const sup = list.filter(sp=>(sp.kind||"مورد")==="مورد"), cred = list.filter(sp=>(sp.kind||"مورد")!=="مورد");
+    const head = ["الاسم","النوع","مشتريات آجلة","دين سابق","المسدّد","المتبقي له على المحل"];
+    html = table("للموردين", head, sup.map(rowOf), sup.reduce((a,x)=>a+x.balance,0)) + table("للدائنين", head, cred.map(rowOf), cred.reduce((a,x)=>a+x.balance,0));
+  } else if(kind==="owedToShop"){
+    title = "الديون اللي للمحل — من وين جا الرقم";
+    const delivered = [], credit = [], progress = [];
+    state.invoices.forEach(inv=>{
+      const active = inv.garments.filter(g=>g.status!=="ملغي"); if(!active.length) return;
+      const rem = Math.max(0, invoiceRemaining(inv));
+      if(active.every(g=>g.status==="تسليم")){ if(rem>0.01) delivered.push({inv, rem}); return; }
+      let c = 0;
+      inv.garments.forEach((g,i)=>{ if(g.creditDelivered && g.status!=="ملغي"){ const o = creditGarmentOwed(g, inv); if(o>0.01){ c += o; credit.push({inv, g, i, o}); } } });
+      if(rem - c > 0.01) progress.push({inv, rem: rem - c});
+    });
+    const openings = state.customers.filter(c=>openingDebtRemaining(c)>0.01);
+    html = table("فواتير مسلّمة وما تسددت", ["الفاتورة","العميل","الجوال","التاريخ","المتبقي"],
+        delivered.sort((a,b)=>b.rem-a.rem).map(({inv,rem})=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${inv.date}</td><td><b>${sar(rem)}</b></td></tr>`), delivered.reduce((a,x)=>a+x.rem,0))
+      + table("ثياب مسلّمة بالآجل", ["الفاتورة","العميل","الثوب","تاريخ التسليم","المتبقي"],
+        credit.map(({inv,g,i,o})=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${i+1} — ${esc(g.fabricType||"")}</td><td>${g.deliveredDate||"—"}</td><td><b>${sar(o)}</b></td></tr>`), credit.reduce((a,x)=>a+x.o,0))
+      + table("ديون سابقة (قبل النظام)", ["العميل","الكود","الجوال","تاريخ التسجيل","المتبقي"],
+        openings.map(c=>`<tr><td>${esc(customerDisplayName(c))}</td><td>${esc(c.code||"")}</td><td>${esc(c.mobile)}</td><td>${c.openingDebtDate||"—"}</td><td><b>${sar(openingDebtRemaining(c))}</b></td></tr>`), openings.reduce((a,c)=>a+openingDebtRemaining(c),0))
+      + `<p class="sub" style="margin-top:10px;">مو داخلة في الرقم: ${progress.length} فاتورة لسا ما انسلّمت، باقيها ${sar(progress.reduce((a,x)=>a+x.rem,0))} — العميل ما استلم ثوبه بعد.</p>`;
+  } else if(kind==="wages"){
+    title = "الأجور المستحقة للموظفين — من وين جا الرقم";
+    const cur = state.settings.currentMonth;
+    const rows = state.users.map(u=>{
+      const entries = state.payrollLedger.filter(e=>e.username===u.username);
+      const entitled = entries.filter(e=>e.type==="entitlement"||e.type==="bonus").reduce((a,e)=>a+e.amount,0);
+      const paid = entries.filter(e=>e.type==="payment"||e.type==="advance").reduce((a,e)=>a+e.amount,0);
+      const ded = entries.filter(e=>e.type==="deduction").reduce((a,e)=>a+e.amount,0);
+      return {u, entitled, paid, ded, bal: entitled-paid-ded, live: computeEmployeeEntitlement(u, cur).total};
+    }).filter(r=> Math.abs(r.bal)>0.01 || r.live>0.01);
+    html = `<table><thead><tr><th>الموظف</th><th>الدور</th><th>استحقاقات ومكافآت (أشهر مقفلة)</th><th>المصروف له (رواتب وسلف)</th><th>خصومات</th><th>الباقي له</th><th>متوقع لـ${monthDisplay(cur)}</th></tr></thead><tbody>${
+      rows.map(r=>`<tr><td>${esc(r.u.username)}</td><td>${esc(r.u.role)}</td><td>${sar(r.entitled)}</td><td>${sar(r.paid)}</td><td>${sar(r.ded)}</td><td style="color:${r.bal<0?"var(--loss)":""};"><b>${sar(r.bal)}</b>${r.bal<0?" (سلفة زيادة)":""}</td><td>${sar(r.live)}</td></tr>`).join("") || `<tr><td colspan="7" style="text-align:center;">لا يوجد</td></tr>`
+    }</tbody><tfoot><tr style="font-weight:800;"><td colspan="5">الإجمالي</td><td>${sar(rows.reduce((a,r)=>a+Math.max(0,r.bal),0))}</td><td>${sar(rows.reduce((a,r)=>a+r.live,0))}</td></tr></tfoot></table>
+      <p class="sub" style="margin-top:6px;">«الباقي له» = الاستحقاقات المسجّلة عند إقفال كل شهر − اللي انصرف له − الخصومات. «المتوقع» ينضاف رسمياً لما ينقفل الشهر.</p>`;
+  }
+  const full = `<h2>${title}</h2>${html}`;
+  el.innerHTML = `<div class="garment-card" style="margin-top:12px;"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+      <b>${title}</b><span><button class="btn btn-ghost btn-sm" id="printSensDetailBtn">طباعة</button> <button class="btn btn-ghost btn-sm" onclick="showSensitiveDetail('${kind}')">إغلاق</button></span></div>
+    <div class="table-wrap">${html}</div></div>`;
+  $("printSensDetailBtn").addEventListener("click", ()=> printHtml(full));
+  el.scrollIntoView({behavior:"smooth", block:"start"});
 }
 function renderSensitiveFinancials(){
   const monthlyFin = computeMonthlyFinancials(state.settings.currentMonth);
@@ -530,6 +593,7 @@ function renderSensitiveFinancials(){
     <div class="stat-card"><div class="lbl">جاهزة للبيع (هذا الشهر)</div><div class="val" style="font-size:16px;">${rfs.thisMonth.length} ثوب<br><span style="font-size:12px;color:var(--muted);">${rfs.thisMonthTotal.toFixed(0)} ﷼</span></div></div>
     <div class="stat-card" style="grid-column:span 2;"><div class="lbl">نقطة التعادل (الشهر الحالي)</div><div class="val" style="font-size:15px;color:${remainingToBreakEven>0?'var(--loss)':'var(--profit)'};">${remainingToBreakEven>0?`لسا محتاج ${remainingToBreakEven.toFixed(0)} ﷼`:`تجاوزتها بـ${Math.abs(remainingToBreakEven).toFixed(0)} ﷼`}</div></div>` + renderSensitiveBalanceCards() + renderCostBreakdownCard();
   renderStuckInvoicesReportInto("sensitiveStuckInvoicesView");
+  if(sensitiveDetailOpen){ const k = sensitiveDetailOpen; sensitiveDetailOpen = ""; const y = window.scrollY; showSensitiveDetail(k); window.scrollTo(0, y); }
 }
 function renderStuckInvoicesReportInto(targetId){
   const el = $(targetId);

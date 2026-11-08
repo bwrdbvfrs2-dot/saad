@@ -526,7 +526,7 @@ function updateSavePill(){
   clearTimeout(savePillTimer);
   if(pendingSaves>0){
     if(!pill.classList.contains("saving") || !pill.classList.contains("show")) savePillShownAt = Date.now();
-    pill.className = "save-pill saving show"; pill.textContent = "⏳ جاري الحفظ…"; return;
+    pill.className = "save-pill saving show"; pill.textContent = "جاري الحفظ…"; return;
   }
   const wait = Math.max(0, 600 - (Date.now() - savePillShownAt));
   savePillTimer = setTimeout(()=>{

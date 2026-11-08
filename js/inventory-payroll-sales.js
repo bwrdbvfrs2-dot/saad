@@ -986,7 +986,7 @@ function renderPayrollTab(){
       const lbl = e.type==="entitlement"?"استحقاق":e.type==="bonus"?"مكافأة":e.type==="payment"?"دفعة":e.type==="advance"?"سلفة":"خصم";
       const sign = credit ? "+" : "-";
       const color = credit ? "var(--profit)" : "var(--loss)";
-      const printBtn = ["payment","advance","deduction"].includes(e.type) && e.id ? `<button class="btn btn-ghost btn-sm" style="padding:2px 8px;" onclick="printPayrollReceipt('${e.id}')">🖨 سند</button>` : "";
+      const printBtn = ["payment","advance","deduction"].includes(e.type) && e.id ? `<button class="btn btn-ghost btn-sm" style="padding:2px 8px;" onclick="printPayrollReceipt('${e.id}')">طباعة سند</button>` : "";
       return `<div class="payment-row"><span style="color:${color};">${sign}${e.amount.toFixed(0)} ﷼</span><span>${lbl}${e.voucherNo?` #${e.voucherNo}`:""}</span><span style="color:var(--muted);">${e.date}</span>${e.note?`<span style="color:var(--muted);">${esc(e.note)}</span>`:""}${printBtn}</div>`;
     }).join("") : `<p class="sub">ما فيه حركات بعد.</p>`;
     return `<div class="garment-card">
@@ -1118,8 +1118,8 @@ function showEmployeeStatement(){
     <tfoot><tr style="font-weight:800;"><td>الإجمالي</td><td>${fmtSar(sum("entitled"))}</td><td>${fmtSar(sum("bonus"))}</td><td>${fmtSar(sum("paid"))}</td><td>${fmtSar(sum("deducted"))}</td><td>${sar(carry)}</td></tr></tfoot></table>`;
   const summaryHtml = html;
   $("empStmtView").innerHTML = `<div class="section-btns">
-      <button type="button" class="section-btn active" onclick="toggleSection(this,'empStmtMoves')">📄 الحركات</button>
-      <button type="button" class="section-btn" onclick="toggleSection(this,'empStmtMonths')">📅 ملخص كل شهر</button>
+      <button type="button" class="section-btn active" onclick="toggleSection(this,'empStmtMoves')">الحركات</button>
+      <button type="button" class="section-btn" onclick="toggleSection(this,'empStmtMonths')">ملخص كل شهر</button>
     </div>
     <div id="empStmtMoves" class="table-wrap">${movesHtml}</div>
     <div id="empStmtMonths" class="table-wrap" style="display:none;">${summaryHtml}</div>
