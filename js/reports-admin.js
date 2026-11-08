@@ -779,17 +779,30 @@ function dateMatchesPeriod(prefix, dateStr, originMonth){
   return (!from || (dateStr||"") >= from) && (!to || (dateStr||"") <= to);
 }
 
+// a thobe that's ready and not picked up yet — this month's «جاهز» or an earlier month's «معلقة» — and
+// not already turned into a for-sale thobe
+function isReadyUndelivered(g){ return (g.status==="جاهز" || g.status==="معلقة") && !g.convertedToSale; }
+// from the dashboard card: the ready-not-delivered list of every month, with the WhatsApp reminders
+function openReadyUndeliveredList(){
+  switchTab("report-garmentInventory");
+  setTimeout(()=>{
+    if($("garmInvPeriodMode")){ $("garmInvPeriodMode").value = "all"; $("garmInvPeriodMode").dispatchEvent(new Event("change")); }
+    $("garmentInventoryStatus").value = "readyAll";
+    showGarmentInventory();
+  }, 60);
+}
 function showGarmentInventory(){
   const statusFilter = $("garmentInventoryStatus").value;
   const rows = [];
   state.invoices.forEach(inv=>{
     if(!dateMatchesPeriod("garmInv", inv.date, inv.originMonth)) return;
     inv.garments.forEach(g=>{
-      if(statusFilter && g.status!==statusFilter) return;
+      if(statusFilter==="readyAll"){ if(!isReadyUndelivered(g)) return; }
+      else if(statusFilter && g.status!==statusFilter) return;
       rows.push({inv,g});
     });
   });
-  const statusTxt = statusFilter ? `الحالة: ${STATUSES.find(s=>s.v===statusFilter)?.label||statusFilter}` : "كل الحالات";
+  const statusTxt = statusFilter==="readyAll" ? "جاهزة ما انسلّمت (كل الأشهر)" : statusFilter ? `الحالة: ${STATUSES.find(s=>s.v===statusFilter)?.label||statusFilter}` : "كل الحالات";
   const title = `جرد الثياب — ${statusTxt} — ${periodLabel("garmInv")}`;
   const statusLabel = st=> STATUSES.find(s=>s.v===st)?.label||st;
   const byStatus = {};
@@ -806,10 +819,15 @@ function showGarmentInventory(){
   if(!statusKeys.length) html += `<tr><td colspan="3" style="text-align:center;">لا يوجد</td></tr>`;
   html += `</tbody><tfoot><tr style="font-weight:700;"><td>الإجمالي</td><td>${rows.length}</td><td>${fmtSar(grandAmount)} ﷼</td></tr></tfoot></table>`;
   html += `<h3 style="margin:14px 0 6px;font-size:13px;">التفاصيل</h3>`;
-  html += `<table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>الجوال</th><th>نوع القماش</th><th>الخياط</th><th>السعر</th><th>الحالة</th><th>شهر الإصدار</th></tr></thead><tbody>`;
-  rows.forEach(({inv,g,amount},i)=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}<!--wa:${i}--></td><td>${esc(g.fabricType)}</td><td>${esc(g.tailor||"—")}</td><td>${fmtSar(amount)} ﷼</td><td>${statusLabel(g.status)}</td><td>${monthDisplay(inv.originMonth)}</td></tr>`);
-  if(!rows.length) html+=`<tr><td colspan="8" style="text-align:center;">لا يوجد</td></tr>`;
-  html += `</tbody>${rows.length?`<tfoot><tr style="font-weight:700;"><td colspan="5">الإجمالي (${rows.length} ثوب)</td><td>${fmtSar(grandAmount)} ﷼</td><td colspan="2"></td></tr></tfoot>`:""}</table>`;
+  const readyCols = statusFilter==="readyAll" || statusFilter==="جاهز" || statusFilter==="معلقة";
+  if(readyCols) rows.sort((a,b)=> (a.g.readyDate||"").localeCompare(b.g.readyDate||""));
+  const readyCells = g=>{ if(!readyCols) return ""; const d = g.readyDate ? daysSinceDate(g.readyDate) : null; const left = d===null ? null : readyToSaleDays() - d;
+    return `<td>${g.readyDate||"—"}${d!==null?`<br><span style="font-size:11px;">${d} يوم</span>`:""}</td><td style="${left!==null&&left<=7?"color:var(--loss);font-weight:700;":""}">${left===null?"—":left>0?`${left} يوم`:"اليوم"}</td>`; };
+  const cols = 8 + (readyCols?2:0);
+  html += `<table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>الجوال</th><th>نوع القماش</th><th>الخياط</th><th>السعر</th><th>الحالة</th><th>شهر الإصدار</th>${readyCols?"<th>جاهز من</th><th>يتحول للبيع بعد</th>":""}</tr></thead><tbody>`;
+  rows.forEach(({inv,g,amount},i)=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}<!--wa:${i}--></td><td>${esc(g.fabricType)}</td><td>${esc(g.tailor||"—")}</td><td>${fmtSar(amount)} ﷼</td><td>${statusLabel(g.status)}</td><td>${monthDisplay(inv.originMonth)}</td>${readyCells(g)}</tr>`);
+  if(!rows.length) html+=`<tr><td colspan="${cols}" style="text-align:center;">لا يوجد</td></tr>`;
+  html += `</tbody>${rows.length?`<tfoot><tr style="font-weight:700;"><td colspan="5">الإجمالي (${rows.length} ثوب)</td><td>${fmtSar(grandAmount)} ﷼</td><td colspan="${cols-6}"></td></tr></tfoot>`:""}</table>`;
   // on screen each thobe not yet delivered/cancelled gets a WhatsApp reminder icon; the printed copy doesn't
   const screenHtml = html.replace(/<!--wa:(\d+)-->/g, (m,i)=>{ const {inv,g} = rows[+i];
     return inv.customerMobile && g.status!=="تسليم" && g.status!=="ملغي" ? ` <a href="${waLink(inv.customerMobile, undeliveredWaMessage(inv, g))}" target="_blank" class="icon-btn" title="إرسال تذكير واتساب"><i data-lucide="message-circle"></i></a>` : ""; });
@@ -1359,7 +1377,11 @@ document.addEventListener("click", e=>{
 });
 $("quickMenuToggleBtn").addEventListener("click", ()=>{
   const bar = $("quickMenuBar");
-  bar.style.display = bar.style.display==="none" ? "" : "none";
+  const open = bar.style.display==="none";
+  bar.style.display = open ? "" : "none";
+  // remembered on this device: once opened it stays open (after refresh and the next login too)
+  try{ localStorage.setItem("quickMenuOpen", open ? "1" : "0"); }catch(e){}
+  if(open) pinQuickMenuBar();
 });
 $("closeDrawerBtn").addEventListener("click", closeNavDrawer);
 $("navDrawerOverlay").addEventListener("click", e=>{ if(e.target.id==="navDrawerOverlay") closeNavDrawer(); });

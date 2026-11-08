@@ -1270,10 +1270,21 @@ function renderBottomNav(){
   $("bottomNavMoreBtn").addEventListener("click", openNavDrawer);
   refreshLucideIcons();
 }
+// the quick menu stays pinned under the top bar while scrolling, and open unless the user closed it
+function pinQuickMenuBar(){
+  const bar = $("quickMenuBar"), top = document.querySelector(".topbar"); if(!bar) return;
+  if(window.innerWidth <= 700){ bar.style.position = ""; bar.style.top = ""; return; } // phone: scrolls with the page
+  bar.style.position = "sticky"; bar.style.zIndex = "59";
+  bar.style.top = (top ? top.offsetHeight : 0) + "px";
+}
+if(typeof window!=="undefined") window.addEventListener("resize", ()=>{ try{ pinQuickMenuBar(); }catch(e){} });
 function renderQuickMenuBar(){
   const bar = $("quickMenuBar");
   if(!bar || !currentUser) return;
   if(currentUser.role==="خياط"){ bar.innerHTML=""; bar.style.display="none"; return; }
+  let pref = null; try{ pref = localStorage.getItem("quickMenuOpen"); }catch(e){}
+  bar.style.display = pref==="0" ? "none" : "";   // open by default, closed only if the user closed it
+  pinQuickMenuBar();
   const allowedTabs = (state.permissions[currentUser.role]?.tabs)||[];
   const picks = (state.quickMenus[currentUser.role]||[]).filter(t=>allowedTabs.includes(t));
   const flat = allNavItemsFlat();
@@ -1310,7 +1321,7 @@ function renderQuickMenuEditor(){
     const role = cb.dataset.role, tab = cb.dataset.tab;
     const list = state.quickMenus[role]||(state.quickMenus[role]=[]);
     if(cb.checked){
-      if(list.length>=6){ showToast("أقصى 6 اختصارات بالقائمة السريعة عشان تناسب عرض الشاشة"); cb.checked=false; return; }
+      if(list.length>=8){ showToast("أقصى 8 اختصارات بالقائمة السريعة"); cb.checked=false; return; }
       if(!list.includes(tab)) list.push(tab);
     } else {
       state.quickMenus[role] = list.filter(t=>t!==tab);
