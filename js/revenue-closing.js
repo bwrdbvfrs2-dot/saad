@@ -861,6 +861,25 @@ function renderCustomerDebts(){
     printHtml(html);
   });
 }
+// a printed receipt (سند قبض) for a debt payment: who paid, for what, the debt before, this amount and
+// what's left — handed to the customer, with room for both signatures
+function printDebtReceipt(r){
+  const sar = n=> `${fmtSar(n||0)} ﷼`;
+  const row = (k,v,b)=> `<tr${b?' style="font-weight:800;"':""}><td>${k}</td><td>${v}</td></tr>`;
+  const how = [r.cash>0?`كاش ${sar(r.cash)}`:"", r.network>0?`شبكة ${sar(r.network)}${r.networkNo?` (سند شبكة ${esc(r.networkNo)})`:""}`:""].filter(Boolean).join(" + ");
+  printHtml(`<h2>سند قبض — سداد مديونية${r.voucherNo?` — رقم ${r.voucherNo}`:""}</h2>
+    <p style="font-size:12px;">${state.settings.shopName?esc(state.settings.shopName)+" — ":""}التاريخ: ${r.date}</p>
+    <table><tbody>
+      ${row("العميل", `${esc(r.customerName||"—")}${r.mobile?` — ${esc(r.mobile)}`:""}`)}
+      ${row("عن", esc(r.ref))}
+      ${row("المديونية قبل السداد", sar(r.before))}
+      ${row("المبلغ المستلم", sar(r.amount), true)}
+      ${row("طريقة الدفع", how||"—")}
+      ${row("المتبقي بعد السداد", sar(r.after), true)}
+      ${row("استلمه", esc(r.by||"—"))}
+    </tbody></table>
+    <p style="margin-top:26px;">توقيع العميل: ____________ &nbsp;&nbsp;&nbsp; توقيع المستلم: ____________</p>`);
+}
 async function settleCustomerDebt(invId){
   const inv = state.invoices.find(i=>i.id===invId);
   if(!inv) return;
@@ -878,7 +897,9 @@ async function settleCustomerDebt(invId){
   applyPaymentToBalances(payment); // this was missing entirely before — the cash/network was never credited to any box
   if(await saveStateWithRollback(snapshot)){
     logAudit("customer_debt_settled", {invoiceNumber:inv.number, amount, method});
-    showToast(`تم تسجيل سداد ${amount.toFixed(0)} ريال لفاتورة ${inv.number}`);
+    showToast(`تم تسجيل سداد ${amount.toFixed(0)} ريال لفاتورة ${inv.number} — جاري فتح سند القبض`);
+    printDebtReceipt({date:payment.date, voucherNo:payment.cashReceiptNo, customerName:inv.customerName, mobile:inv.customerMobile, ref:`فاتورة رقم ${inv.number}`,
+      before:remaining, amount, cash:payment.cash, network:payment.network, after:Math.max(0, invoiceRemaining(inv)), by:currentUser.username});
   }
 }
 function buildOpeningDebtReminderMessage(c){
@@ -979,6 +1000,8 @@ async function settleOpeningDebt(custId){
   if(await saveStateWithRollback(snapshot)){
     logAudit("opening_debt_settled", {customerCode:cust.code, amount, method});
     showToast(`تم تسجيل سداد ${amount.toFixed(0)} ريال من الدين السابق — المتبقي ${openingDebtRemaining(cust).toFixed(0)} ريال`);
+    printDebtReceipt({date:payment.date, voucherNo:payment.cashReceiptNo, customerName:(cust.individuals&&cust.individuals[0]||{}).name||customerDisplayName(cust), mobile:cust.mobile,
+      ref:`دين سابق (قبل النظام) — عميل ${cust.code}`, before:remaining, amount, cash:payment.cash, network:payment.network, after:openingDebtRemaining(cust), by:currentUser.username});
   }
 }
 async function payCreditDebt(invId, idx){
@@ -1003,7 +1026,9 @@ async function payCreditDebt(invId, idx){
   g.creditPaid += (cash+network);
   if(await saveStateWithRollback(snapshot)){
     logAudit("credit_debt_settled", {invoiceNumber:inv.number, garmentIdx:idx, cash, network});
-    showToast("تم تسجيل السداد");
+    showToast("تم تسجيل السداد — جاري فتح سند القبض");
+    printDebtReceipt({date:payment.date, voucherNo:payment.cashReceiptNo, networkNo:payment.networkReceiptNo, customerName:inv.customerName, mobile:inv.customerMobile,
+      ref:`ثوب مسلّم بالآجل — فاتورة ${inv.number} ثوب ${idx+1} (${g.fabricType||""})`, before:owed, amount:cash+network, cash, network, after:creditGarmentOwed(g, inv), by:currentUser.username});
   }
 }
 // manager only: drop a credit-delivered garment's unpaid balance for good (bad debt). Recorded as a
