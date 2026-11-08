@@ -1473,3 +1473,10 @@ if(typeof document!=="undefined" && typeof MutationObserver!=="undefined"){
   // a value set from code (not by a click) still shows on the buttons
   document.addEventListener("change", ev=>{ if(ev.target && ev.target.matches && ev.target.matches(NAME_PICKER_SELECTOR)) renderNamePicker(ev.target); }, true);
 }
+// a button that opens/closes one part of a page (the button stays highlighted while it's open)
+function toggleSection(btn, id){
+  const el = document.getElementById(id); if(!el) return;
+  const open = el.style.display==="none";
+  el.style.display = open ? "" : "none";
+  if(btn) btn.classList.toggle("active", open);
+}

@@ -464,6 +464,46 @@ function renderCostBreakdownCard(){
     <tfoot><tr style="font-weight:700;"><td>الإجمالي</td><td style="text-align:left;white-space:nowrap;">${fmtSar(b.total)} ﷼</td></tr></tfoot></table>
     <p class="sub" style="margin:6px 0 0;font-size:11.5px;">التكاليف الثابتة (البنود الثابتة من الإعدادات + الراتب الأساسي لكل مستخدم غير خياط) تنحسب على الشهر كامل من أوله. الرواتب تتعدل من إعدادات المستخدمين، والبنود الثابتة من الإعدادات المالية.</p></div>`;
 }
+// what the shop owes, what it is owed, and the wages due — each on its own card
+function shopBalancesSummary(){
+  // owed TO the shop: delivered invoices still unpaid, thobes handed over on credit, and pre-system debts
+  let customers = 0, credit = 0, inProgress = 0;
+  state.invoices.forEach(inv=>{
+    const active = inv.garments.filter(g=>g.status!=="ملغي"); if(!active.length) return;
+    const rem = Math.max(0, invoiceRemaining(inv));
+    if(active.every(g=>g.status==="تسليم")) customers += rem;
+    else {
+      const c = inv.garments.reduce((a,g)=> a + (g.creditDelivered && g.status!=="ملغي" ? creditGarmentOwed(g, inv) : 0), 0);
+      credit += c; inProgress += Math.max(0, rem - c);
+    }
+  });
+  const opening = totalOpeningDebtRemaining();
+  // owed BY the shop: suppliers (deferred purchases) and other creditors (pre-system debts)
+  let suppliers = 0, creditors = 0;
+  state.suppliers.forEach(sp=>{ if((sp.balance||0)>0.01){ if((sp.kind||"مورد")==="مورد") suppliers += sp.balance; else creditors += sp.balance; } });
+  // wages: what's recorded as owed to staff (closed months), and the open month's live entitlement
+  let wagesDue = 0, wagesAdvanced = 0;
+  state.users.forEach(u=>{ const b = employeeBalance(u.username); if(b>0.01) wagesDue += b; else if(b<-0.01) wagesAdvanced += -b; });
+  const cur = state.settings.currentMonth;
+  const wagesThisMonth = state.users.reduce((a,u)=> a + computeEmployeeEntitlement(u, cur).total, 0);
+  return {customers, credit, opening, owedToShop: customers+credit+opening, inProgress, suppliers, creditors, owedByShop: suppliers+creditors, wagesDue, wagesAdvanced, wagesThisMonth};
+}
+function renderSensitiveBalanceCards(){
+  const b = shopBalancesSummary();
+  const sewn = sewnCountText(state.settings.currentMonth);
+  const line = (k,v)=> `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:3px;"><span>${k}</span><span>${fmtSar(v)} ﷼</span></div>`;
+  return `
+    <div class="stat-card cost"><div class="lbl">الديون اللي على المحل</div><div class="val">${fmtSar(b.owedByShop)} ﷼</div>
+      ${line("للموردين", b.suppliers)}${line("للدائنين", b.creditors)}</div>
+    <div class="stat-card sales"><div class="lbl">الديون اللي للمحل (على العملاء)</div><div class="val">${fmtSar(b.owedToShop)} ﷼</div>
+      ${line("فواتير مسلّمة وما تسددت", b.customers)}${line("ثياب مسلّمة بالآجل", b.credit)}${line("ديون سابقة (قبل النظام)", b.opening)}
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;">غير داخل فيها: باقي فواتير لسا ما انسلّمت ${fmtSar(b.inProgress)} ﷼</div></div>
+    <div class="stat-card" style="border-color:var(--gold-soft);"><div class="lbl">الأجور المستحقة للموظفين</div><div class="val" style="color:var(--gold-soft);">${fmtSar(b.wagesDue)} ﷼</div>
+      ${line("من أشهر مقفلة", b.wagesDue)}${line(`متوقعة لـ${monthDisplay(state.settings.currentMonth)}`, b.wagesThisMonth)}
+      ${b.wagesAdvanced>0.01?line("سلف زيادة (على الموظفين)", b.wagesAdvanced):""}</div>
+    <div class="stat-card count"><div class="lbl">ثياب تم تفصيلها (الشهر الحالي)</div><div class="val">${sewn.total} ثوب</div>
+      ${sewn.detail?`<div style="font-size:12px;color:var(--muted);margin-top:3px;">${esc(sewn.detail)}</div>`:""}</div>`;
+}
 function renderSensitiveFinancials(){
   const monthlyFin = computeMonthlyFinancials(state.settings.currentMonth);
   const pendingCustody = totalPendingCustody();
@@ -488,7 +528,7 @@ function renderSensitiveFinancials(){
     <div class="stat-card cost"><div class="lbl">باقي الفواتير الصادرة (هذا الشهر)</div><div class="val">${fmtSar(issued.remaining)} ﷼</div></div>
     <div class="stat-card"><div class="lbl">جاهزة للبيع (لكل الفترات)</div><div class="val" style="font-size:16px;">${rfs.all.length} ثوب<br><span style="font-size:12px;color:var(--muted);">${rfs.allTotal.toFixed(0)} ﷼ مشطوبة</span></div></div>
     <div class="stat-card"><div class="lbl">جاهزة للبيع (هذا الشهر)</div><div class="val" style="font-size:16px;">${rfs.thisMonth.length} ثوب<br><span style="font-size:12px;color:var(--muted);">${rfs.thisMonthTotal.toFixed(0)} ﷼</span></div></div>
-    <div class="stat-card" style="grid-column:span 2;"><div class="lbl">نقطة التعادل (الشهر الحالي)</div><div class="val" style="font-size:15px;color:${remainingToBreakEven>0?'var(--loss)':'var(--profit)'};">${remainingToBreakEven>0?`لسا محتاج ${remainingToBreakEven.toFixed(0)} ﷼`:`تجاوزتها بـ${Math.abs(remainingToBreakEven).toFixed(0)} ﷼`}</div></div>` + renderCostBreakdownCard();
+    <div class="stat-card" style="grid-column:span 2;"><div class="lbl">نقطة التعادل (الشهر الحالي)</div><div class="val" style="font-size:15px;color:${remainingToBreakEven>0?'var(--loss)':'var(--profit)'};">${remainingToBreakEven>0?`لسا محتاج ${remainingToBreakEven.toFixed(0)} ﷼`:`تجاوزتها بـ${Math.abs(remainingToBreakEven).toFixed(0)} ﷼`}</div></div>` + renderSensitiveBalanceCards() + renderCostBreakdownCard();
   renderStuckInvoicesReportInto("sensitiveStuckInvoicesView");
 }
 function renderStuckInvoicesReportInto(targetId){
@@ -1086,7 +1126,7 @@ async function closeMonthNow(m){
     monthLabel:m, closedAt:serverDate().toISOString(), invoicedTotal:monthlyFin.revenue, costTotal:monthlyFin.cost, collectedTotal,
     profitInvoiced: monthlyFin.profit, profitCollected: monthlyFin.profit,
     garmentCount, embroCount, embroRevenue, invoiceCount: invs.length, pendingCustodyCarried,
-    readyCount, overdueCount,
+    readyCount, overdueCount, sewnCount: sewnCountForMonth(m).total,
   });
   runPayrollForMonth(m);
   state.settings.currentMonth = nextMonthLabel(m);
@@ -1155,6 +1195,21 @@ async function checkAutoCloseMonth(){
 }
 // when the sewing counts as done: the moment the tailor scans "تم التفصيل" — even while it waits for
 // the quality check. A garment sent back for repair (back at قص) doesn't count until it's re-sewn.
+// thobes sewn («تم التفصيل») in a month — all tailors, and per tailor; cancelled ones aren't counted
+function sewnCountForMonth(monthLabel){
+  const byTailor = {}; let total = 0;
+  state.invoices.forEach(inv=> inv.garments.forEach(g=>{
+    if(g.status==="ملغي") return;
+    const d = garmentSewnDate(g); if(!d || d.slice(0,7)!==monthLabel) return;
+    total++; const t = g.tailor||"—"; byTailor[t] = (byTailor[t]||0)+1;
+  }));
+  return {total, byTailor};
+}
+function sewnCountText(monthLabel){
+  const c = sewnCountForMonth(monthLabel);
+  const parts = Object.entries(c.byTailor).sort((a,b)=>b[1]-a[1]).map(([t,n])=>`${t}: ${n}`);
+  return {total:c.total, detail: parts.join("، ")};
+}
 function garmentSewnDate(g){
   if(g.status==="جديد" || g.status==="قص") return null;
   return g.tailorCompletedDate || g.qcPassedDate || null;

@@ -950,6 +950,8 @@ function renderEntitlementPreview(){
   const el = $("entitlementPreviewView");
   if(!el || !currentUser || currentUser.role!=="مدير") return;
   renderUnscannedSewn(); renderWageReconciliation();
+  if($("payrollSewnSummary")){ const t = sewnCountText(state.settings.currentMonth);
+    $("payrollSewnSummary").innerHTML = `<div class="remaining-box"><span>ثياب تم تفصيلها هذا الشهر (${monthDisplay(state.settings.currentMonth)})${t.detail?` — ${esc(t.detail)}`:""}</span><span class="amt">${t.total} ثوب</span></div>`; }
   const monthLabel = state.settings.currentMonth;
   const rows = state.users.map(u=>({u, ent: computeEmployeeEntitlement(u, monthLabel)})).filter(({ent})=>ent.total>0.001);
   if(!rows.length){ el.innerHTML = `<p class="sub">ما فيه استحقاقات محسوبة لهذا الشهر بعد.</p>`; return; }
@@ -1111,10 +1113,18 @@ function showEmployeeStatement(){
     return `<tr><td>${monthDisplay(m)}</td><td>${fmtSar(x.entitled)}${isLive?`<br><span style="font-size:10.5px;">+ متوقع ${fmtSar(live)} (ما انقفل)</span>`:""}</td><td>${fmtSar(x.bonus)}</td><td>${fmtSar(x.paid)}</td><td>${fmtSar(x.deducted)}</td><td>${sar(carry)}</td></tr>`;
   });
   const sum = k=> Object.values(months).reduce((a,x)=>a+x[k],0);
+  const movesHtml = html; html = "";
   html += `<h3 style="margin:14px 0 6px;font-size:13px;">ملخص كل شهر</h3><table><thead><tr><th>الشهر</th><th>المستحق</th><th>مكافآت</th><th>المصروف (رواتب وسلف)</th><th>الخصومات</th><th>الباقي له آخر الشهر</th></tr></thead><tbody>${mRows.join("") || `<tr><td colspan="6" style="text-align:center;">لا يوجد</td></tr>`}</tbody>
     <tfoot><tr style="font-weight:800;"><td>الإجمالي</td><td>${fmtSar(sum("entitled"))}</td><td>${fmtSar(sum("bonus"))}</td><td>${fmtSar(sum("paid"))}</td><td>${fmtSar(sum("deducted"))}</td><td>${sar(carry)}</td></tr></tfoot></table>`;
-  $("empStmtView").innerHTML = `<div class="table-wrap">${html}</div><button class="btn btn-ghost btn-sm" id="printEmpStmtBtn" style="margin-top:10px;">طباعة الكشف</button>`;
-  $("printEmpStmtBtn").addEventListener("click", ()=> printHtml(html));
+  const summaryHtml = html;
+  $("empStmtView").innerHTML = `<div class="section-btns">
+      <button type="button" class="section-btn active" onclick="toggleSection(this,'empStmtMoves')">📄 الحركات</button>
+      <button type="button" class="section-btn" onclick="toggleSection(this,'empStmtMonths')">📅 ملخص كل شهر</button>
+    </div>
+    <div id="empStmtMoves" class="table-wrap">${movesHtml}</div>
+    <div id="empStmtMonths" class="table-wrap" style="display:none;">${summaryHtml}</div>
+    <button class="btn btn-ghost btn-sm" id="printEmpStmtBtn" style="margin-top:10px;">طباعة الكشف</button>`;
+  $("printEmpStmtBtn").addEventListener("click", ()=> printHtml(movesHtml + summaryHtml));
 }
 
 async function addPurchaseReturn(){
@@ -2037,7 +2047,7 @@ function renderClosedReports(){
   if(state.closingReports.length===0){ el.innerHTML=`<p class="sub">ما فيه أشهر مقفلة بعد.</p>`; return; }
   el.innerHTML = state.closingReports.slice().reverse().map(r=>`
     <div class="archive-item">
-      <b>${monthDisplay(r.monthLabel)}</b> — ${r.invoiceCount} فاتورة / ${r.garmentCount} ثوب<br>
+      <b>${monthDisplay(r.monthLabel)}</b> — ${r.invoiceCount} فاتورة / ${r.garmentCount} ثوب — تم تفصيل ${r.sewnCount!==undefined?r.sewnCount:sewnCountForMonth(r.monthLabel).total} ثوب<br>
       <span class="sub">مفوتر: ${r.invoicedTotal.toFixed(0)} ﷼ · تكلفة: ${r.costTotal.toFixed(0)} ﷼ · ربح (مفوتر): ${r.profitInvoiced.toFixed(0)} ﷼</span><br>
       <span class="sub">مقبوض فعلياً: ${r.collectedTotal.toFixed(0)} ﷼ · ربح (مقبوض): ${r.profitCollected.toFixed(0)} ﷼</span><br>
       <span class="sub">تطريز: ${r.embroCount||0} ثوب — ${(r.embroRevenue||0).toFixed(0)} ﷼</span>${r.pendingCustodyCarried>0.01?`<br><span class="sub" style="color:var(--gold-soft);">أمانات معلّقة مرحّلة لهذا الشهر: ${r.pendingCustodyCarried.toFixed(0)} ﷼</span>`:""}
@@ -2131,6 +2141,7 @@ function closingSummaryHtml(monthLabel){
   return (`<h2>تقرير إقفال شهر ${monthDisplay(r.monthLabel)}</h2><p style="font-size:12px;">${state.settings.shopName?esc(state.settings.shopName)+" — ":""}تاريخ الإقفال: ${closedAt}</p>
     <table><tbody>
       ${row("عدد الفواتير", r.invoiceCount||0)}${row("عدد الثياب", r.garmentCount||0)}
+      ${row("ثياب تم تفصيلها بالشهر", (()=>{ const t = sewnCountText(r.monthLabel); return `${r.sewnCount!==undefined?r.sewnCount:t.total} ثوب${t.detail?` (${esc(t.detail)})`:""}`; })())}
       ${row("المفوتر", sar(r.invoicedTotal))}${row("التكلفة", sar(r.costTotal))}${row("الربح (مفوتر)", sar(r.profitInvoiced))}
       ${row("المقبوض فعلياً", sar(r.collectedTotal))}${row("الربح (مقبوض)", sar(r.profitCollected))}
       ${row("التطريز", `${r.embroCount||0} ثوب — ${sar(r.embroRevenue)}`)}

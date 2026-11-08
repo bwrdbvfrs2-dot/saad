@@ -1661,7 +1661,23 @@
 <div class="panel">
   <h2>الرواتب — حساب كل موظف</h2>
   <p class="sub">الاستحقاق يُحسب تلقائياً عند إقفال كل شهر (أساسي + عمولة إن فُعّلت). الدفعات والسلف والخصومات تُسجَّل هنا وتُخصم فوراً من الرصيد التراكمي المستحق.</p>
-  <div id="payrollList" style="margin-top:10px;"></div>
+  <div id="payrollSewnSummary" style="margin-top:10px;"></div>
+  <div id="unscannedSewnWrap"></div>
+  <div class="section-btns">
+    <button type="button" class="section-btn" onclick="toggleSection(this,'payrollReconSec')">📊 مطابقة الثياب مع الأجور</button>
+    <button type="button" class="section-btn" onclick="toggleSection(this,'payrollPreviewSec')">🧮 معاينة استحقاق الشهر الحالي</button>
+  </div>
+  <div id="payrollReconSec" class="toggle-sec" style="display:none;">
+    <p class="sub" style="margin-bottom:8px;">لكل خياط: الثياب اللي سجّل لها «تم التفصيل» بالشهر مقابل اللي انحسبت لها أجرة. أي فرق يطلع سببه.</p>
+    <div class="row-2"><div class="field"><label>الشهر</label><input type="month" id="wageReconMonth" onchange="renderWageReconciliation()"></div></div>
+    <div id="wageReconView"></div>
+  </div>
+  <div id="payrollPreviewSec" class="toggle-sec" style="display:none;">
+    <p class="sub" style="margin-bottom:10px;">حساب حي لما استحقه كل موظف لين الآن هذا الشهر — يتحدث تلقائياً، ويُسجَّل رسمياً بسجل الرواتب بس عند إقفال الشهر.</p>
+    <div id="entitlementPreviewView"></div>
+  </div>
+  <div class="stitch"></div>
+  <div id="payrollList"></div>
   <div id="empStmtWrap" style="display:none;">
   <div class="stitch"></div>
   <h3 style="margin:0 0 8px;font-size:14px;">كشف حساب الموظف</h3>
@@ -1673,15 +1689,6 @@
   <button class="btn btn-ghost btn-sm" onclick="showEmployeeStatement()">عرض الكشف بالفترة</button>
   <div id="empStmtView" style="margin-top:12px;"></div>
   </div>
-  <div class="stitch"></div>
-  <div id="unscannedSewnWrap"></div>
-  <p class="sub" style="margin-bottom:8px;"><b>مطابقة الثياب مع الأجور:</b> لكل خياط: الثياب اللي سجّل لها «تم التفصيل» بالشهر مقابل اللي انحسبت لها أجرة. أي فرق يطلع سببه.</p>
-  <div class="row-2"><div class="field"><label>الشهر</label><input type="month" id="wageReconMonth" onchange="renderWageReconciliation()"></div></div>
-  <div id="wageReconView" style="margin-bottom:14px;"></div>
-  <div class="stitch"></div>
-  <h3 style="margin:0 0 8px;font-size:14px;">معاينة استحقاق الشهر الحالي (قبل الإقفال)</h3>
-  <p class="sub" style="margin-bottom:10px;">هذا حساب حي لما استحقه كل موظف لين الآن هذا الشهر — يتحدث تلقائياً، ويُسجَّل رسمياً بسجل الرواتب بس عند إقفال الشهر.</p>
-  <div id="entitlementPreviewView"></div>
 </div>
 </div>
 

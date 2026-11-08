@@ -392,3 +392,11 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 .name-chip.active small{color:#fff;opacity:.85;}
 .name-chip:disabled{opacity:.5;cursor:not-allowed;}
 @media print{ .name-chips{display:none !important;} }
+
+/* section buttons: a part of the page opens when its button is pressed */
+.section-btns{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;}
+.section-btn{padding:8px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:inherit;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;}
+.section-btn:hover{border-color:var(--gold);}
+.section-btn.active{border-color:var(--gold);background:var(--gold-soft);color:#fff;}
+.toggle-sec{border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:12px;}
+@media print{ .section-btns{display:none !important;} }
