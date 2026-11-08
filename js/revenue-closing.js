@@ -173,6 +173,7 @@ function computeIntegrityCheck(){
     state.purchases.forEach(p=>{ if(p.supplierId===s.id && p.payStatus==="deferred") e += p.total; });
     state.purchaseReturns.forEach(r=>{ if(r.supplierId===s.id && r.payStatus==="deferred") e -= r.value; });
     (s.openingDebts||[]).forEach(d=> e += d.amount);
+    (s.writeOffs||[]).forEach(w=> e -= w.amount);
     (s.payments||[]).forEach(sp=> e -= sp.amount);
     return {name:s.name, actual:s.balance, rebuilt:e, diff:s.balance-e};
   });
@@ -519,13 +520,14 @@ function showSensitiveDetail(kind){
   let title = "", html = "";
   if(kind==="owedByShop"){
     title = "الديون اللي على المحل — من وين جا الرقم";
+    html = `<p class="sub">لو فيه دين مكرر أو مدخل بالغلط: صفحة «الموردين والدائنين» ← بطاقة الاسم ← «قيود الدين السابق» ← حذف القيد، أو «إتلاف دين» للمتبقي.</p>`;
     const list = state.suppliers.filter(sp=>(sp.balance||0)>0.01).sort((a,b)=>b.balance-a.balance);
     const rowOf = sp=>{ const opening = supplierOpeningDebt(sp), paid = (sp.payments||[]).reduce((a,x)=>a+x.amount,0);
       const deferred = state.purchases.filter(x=>x.supplierId===sp.id && x.payStatus==="deferred").reduce((a,x)=>a+(x.total||0),0);
-      return `<tr><td>${esc(sp.name)}</td><td>${esc(sp.kind||"مورد")}</td><td>${sar(deferred)}</td><td>${sar(opening)}</td><td>${sar(paid)}</td><td><b>${sar(sp.balance)}</b></td></tr>`; };
+      return `<tr><td>${esc(sp.name)}</td><td>${esc(sp.kind||"مورد")}</td><td>${sar(deferred)}</td><td>${sar(opening)}</td><td>${sar(paid)}</td><td>${sar(supplierWrittenOff(sp))}</td><td><b>${sar(sp.balance)}</b></td></tr>`; };
     const sup = list.filter(sp=>(sp.kind||"مورد")==="مورد"), cred = list.filter(sp=>(sp.kind||"مورد")!=="مورد");
-    const head = ["الاسم","النوع","مشتريات آجلة","دين سابق","المسدّد","المتبقي له على المحل"];
-    html = table("للموردين", head, sup.map(rowOf), sup.reduce((a,x)=>a+x.balance,0)) + table("للدائنين", head, cred.map(rowOf), cred.reduce((a,x)=>a+x.balance,0));
+    const head = ["الاسم","النوع","مشتريات آجلة","دين سابق","المسدّد","متلف","المتبقي له على المحل"];
+    html += table("للموردين", head, sup.map(rowOf), sup.reduce((a,x)=>a+x.balance,0)) + table("للدائنين", head, cred.map(rowOf), cred.reduce((a,x)=>a+x.balance,0));
   } else if(kind==="owedToShop"){
     title = "الديون اللي للمحل — من وين جا الرقم";
     const delivered = [], credit = [], progress = [];
