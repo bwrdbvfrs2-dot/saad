@@ -1012,6 +1012,7 @@ async function editOpeningDebt(custId){
   if(Math.abs(newAmount - cust.openingDebt) < 0.01){ showToast("نفس المبلغ الحالي"); return; }
   const reason = openingDebtAdminReason(custId);
   if(!reason){ showToast("اكتب سبب التعديل"); return; }
+  if(!await confirmWithPassword(`تعديل الدين السابق للعميل ${cust.code} من ${cust.openingDebt.toFixed(0)} إلى ${newAmount.toFixed(0)} ريال\nالسبب: ${reason}\nأدخل كلمة مرورك للتأكيد.`)) return;
   const oldAmount = cust.openingDebt;
   const snapshot = JSON.parse(JSON.stringify(state));
   cust.openingDebt = newAmount;
@@ -1026,7 +1027,7 @@ async function writeOffOpeningDebt(custId){
   if(remaining<=0.01){ showToast("ما عليه متبقي"); return; }
   const reason = openingDebtAdminReason(custId);
   if(!reason){ showToast("اكتب سبب الإتلاف"); return; }
-  if(!await showConfirm(`إتلاف المتبقي من الدين السابق على العميل ${cust.code} (${fmtSar(remaining)} ريال)؟ يختفي من المديونيات والتنبيهات ويبقى مسجّلاً في سجل التدقيق.`)) return;
+  if(!await confirmWithPassword(`إتلاف المتبقي من الدين السابق على العميل ${cust.code} (${fmtSar(remaining)} ريال)؟ يختفي من المديونيات والتنبيهات ويبقى مسجّلاً في سجل التدقيق.\nأدخل كلمة مرورك للتأكيد.`)) return;
   const snapshot = JSON.parse(JSON.stringify(state));
   // the debt was never booked as revenue, so writing it off moves no money and touches no P&L figure
   cust.openingDebtWrittenOff = (cust.openingDebtWrittenOff||0) + remaining;
@@ -1042,7 +1043,7 @@ async function deleteOpeningDebt(custId){
   if(openingDebtPaymentsOf(cust).length){ showToast("انسدد جزء من هذا الدين — ما ينحذف. عدّل المبلغ أو أتلف المتبقي"); return; }
   const reason = openingDebtAdminReason(custId);
   if(!reason){ showToast("اكتب سبب الحذف"); return; }
-  if(!await showConfirm(`حذف الدين السابق (${cust.openingDebt.toFixed(0)} ريال) عن العميل ${cust.code} نهائياً؟ العميل نفسه يبقى مسجّلاً.`)) return;
+  if(!await confirmWithPassword(`حذف الدين السابق (${cust.openingDebt.toFixed(0)} ريال) عن العميل ${cust.code} نهائياً؟ العميل نفسه يبقى مسجّلاً.\nأدخل كلمة مرورك للتأكيد.`)) return;
   const snapshot = JSON.parse(JSON.stringify(state));
   const amount = cust.openingDebt;
   ["openingDebt","openingDebtDate","openingDebtBy","openingDebtNote","openingDebtWrittenOff","openingDebtWriteOffs"].forEach(k=> delete cust[k]);
@@ -1108,7 +1109,7 @@ async function writeOffCreditDebt(invId, idx){
   const reasonInp = document.querySelector(`.debt-writeoff-reason[data-inv="${invId}"][data-idx="${idx}"]`);
   const reason = reasonInp ? reasonInp.value.trim() : "";
   if(!reason){ showToast("اكتب سبب الإتلاف أول"); return; }
-  if(!await showConfirm(`إتلاف دين فاتورة ${inv.number} — ${inv.customerName||"—"}\nالمبلغ: ${fmtSar(owed)} ريال\nالسبب: ${reason}\n\nالمبلغ يُسجَّل كخصم (خسارة) ويختفي من المديونيات نهائياً. متابعة؟`)) return;
+  if(!await confirmWithPassword(`إتلاف دين فاتورة ${inv.number} — ${inv.customerName||"—"}\nالمبلغ: ${fmtSar(owed)} ريال\nالسبب: ${reason}\n\nالمبلغ يُسجَّل كخصم (خسارة) ويختفي من المديونيات نهائياً. متابعة؟\nأدخل كلمة مرورك للتأكيد.`)) return;
   const snapshot = JSON.parse(JSON.stringify(state));
   inv.payments = inv.payments || [];
   inv.payments.push({id:newId(), date:todayStr(), cash:0, network:0, receipt:"", discount:owed, writeOff:true, note:`إتلاف دين: ${reason}`, by:currentUser.username});
