@@ -1419,3 +1419,64 @@ function warnStateSizeIfNeeded(){
 }
 function isMonthClosed(m){ return state.closingReports.some(r=>r.monthLabel===m); }
 
+
+// ---------------- employee pickers as name buttons ----------------
+// Every place that picks an employee (a <select>, or a search box with a list of names) is shown as a row
+// of name buttons instead of a drop-down. The original control stays in the page, hidden, and keeps
+// working as before: a button sets its value and fires the same input/change events typing would.
+const NAME_PICKER_SELECTOR = [
+  "#tailorReportSelect", "#myDailyUser", "#auditFilterUser", "#rpTailor", 'select[id^="rpt-"]', "select.qc-responsible",
+  "#returnResponsibleSearch", "#mailReturnResponsibleSearch", "#mailAdvanceEmployeeSearch", "#bonusEmployeeSearch",
+  "#newSubBoxOwnerSearch", "#transferToUserSearch",
+].join(",");
+function namePickerOptions(el){
+  if(el.tagName==="SELECT") return [...el.options].map(o=>({v:o.value, t:o.textContent.trim()}));
+  const dl = el.list || (el.getAttribute("list") && document.getElementById(el.getAttribute("list")));
+  return dl ? [...dl.options].map(o=>({v:o.value, t:o.value})) : [];
+}
+function renderNamePicker(el){
+  const opts = namePickerOptions(el);
+  const sig = el.value + "\u0001" + el.disabled + "\u0001" + opts.map(o=>o.v+"\u0002"+o.t).join("\u0003");
+  if(el._namePickerSig===sig && el._namePickerBar && el._namePickerBar.isConnected) return;
+  el._namePickerSig = sig;
+  let bar = el._namePickerBar;
+  if(!bar || !bar.isConnected){
+    bar = document.createElement("div"); bar.className = "name-chips";
+    el.insertAdjacentElement("afterend", bar); el._namePickerBar = bar;
+    el.style.display = "none";
+    bar.addEventListener("click", ev=>{
+      const btn = ev.target.closest("button[data-v]"); if(!btn || el.disabled) return;
+      // a search box (no empty choice of its own): pressing the picked name again clears it
+      el.value = (el.tagName!=="SELECT" && el.value===btn.dataset.v) ? "" : btn.dataset.v;
+      el.dispatchEvent(new Event("input", {bubbles:true}));
+      el.dispatchEvent(new Event("change", {bubbles:true}));
+      renderNamePicker(el);
+    });
+  }
+  if(!opts.length){ bar.innerHTML = `<span class="sub" style="font-size:12px;">ما فيه أسماء</span>`; return; }
+  bar.innerHTML = opts.map(o=>{
+    const u = state && state.users ? state.users.find(x=>x.username===o.v) : null;
+    const label = o.v==="" ? o.t.replace(/^-+\s*|\s*-+$/g,"") : (u ? u.username : o.t);
+    return `<button type="button" class="name-chip${o.v===el.value?" active":""}" data-v="${esc(o.v)}"${el.disabled?" disabled":""}>${esc(label)}${u?`<small>${esc(u.role)}</small>`:""}</button>`;
+  }).join("");
+}
+function enhanceNamePickers(){
+  if(typeof document==="undefined") return;
+  document.querySelectorAll(NAME_PICKER_SELECTOR).forEach(el=>{ try{ renderNamePicker(el); }catch(e){ console.error("name picker", e); } });
+}
+if(typeof document!=="undefined" && typeof MutationObserver!=="undefined"){
+  let namePickerQueued = false;
+  new MutationObserver(()=>{
+    if(namePickerQueued) return; namePickerQueued = true;
+    requestAnimationFrame(()=>{ namePickerQueued = false; enhanceNamePickers(); });
+  }).observe(document.body, {childList:true, subtree:true});
+  // a value set from code (not by a click) still shows on the buttons
+  document.addEventListener("change", ev=>{ if(ev.target && ev.target.matches && ev.target.matches(NAME_PICKER_SELECTOR)) renderNamePicker(ev.target); }, true);
+}
+// a button that opens/closes one part of a page (the button stays highlighted while it's open)
+function toggleSection(btn, id){
+  const el = document.getElementById(id); if(!el) return;
+  const open = el.style.display==="none";
+  el.style.display = open ? "" : "none";
+  if(btn) btn.classList.toggle("active", open);
+}

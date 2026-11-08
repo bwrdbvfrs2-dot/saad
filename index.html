@@ -1170,7 +1170,7 @@
     <div class="field"><label>سبب المرتجع</label><input type="text" id="returnReason" placeholder="مثلاً: العميل غلط بالقياس"></div>
     <div class="field"><label>المبلغ المرتجع (ريال) — اختياري</label><input type="number" id="returnAmount" min="0" placeholder="0"></div>
   </div>
-  <div class="field"><label>المتسبب (اختياري) — اكتب واختر من الاقتراحات — لو حددته يُفتح طلب قرار للمدير تلقائياً</label><input type="text" id="returnResponsibleSearch" list="returnResponsibleDatalist" placeholder="اكتب اسم الموظف أو اتركه فارغاً..." autocomplete="off"><datalist id="returnResponsibleDatalist"></datalist><input type="hidden" id="returnResponsible"></div>
+  <div class="field"><label>المتسبب (اختياري — اضغط الاسم مرة ثانية لإلغائه) — لو حددته يُفتح طلب قرار للمدير تلقائياً</label><input type="text" id="returnResponsibleSearch" list="returnResponsibleDatalist" placeholder="اكتب اسم الموظف أو اتركه فارغاً..." autocomplete="off"><datalist id="returnResponsibleDatalist"></datalist><input type="hidden" id="returnResponsible"></div>
   <button class="btn btn-gold btn-sm" id="submitReturnBtn">تسجيل المرتجع</button>
   <div class="stitch"></div>
   <div id="returnsLogView"></div>
@@ -1436,7 +1436,7 @@
   <div class="stitch"></div>
   <h3 style="margin:0 0 10px;font-size:14px;">إنشاء صندوق فرعي جديد</h3>
   <div class="row-3">
-    <div class="field" id="subBoxOwnerWrap" style="display:none;"><label>لأي مستخدم — اكتب واختر</label><input type="text" id="newSubBoxOwnerSearch" list="newSubBoxOwnerDatalist" autocomplete="off"><datalist id="newSubBoxOwnerDatalist"></datalist><input type="hidden" id="newSubBoxOwner"></div>
+    <div class="field" id="subBoxOwnerWrap" style="display:none;"><label>لأي مستخدم</label><input type="text" id="newSubBoxOwnerSearch" list="newSubBoxOwnerDatalist" autocomplete="off"><datalist id="newSubBoxOwnerDatalist"></datalist><input type="hidden" id="newSubBoxOwner"></div>
     <div class="field"><label>اسم الصندوق الفرعي</label><input type="text" id="newSubBoxName" placeholder="مثلاً: صندوق التوفير"></div>
     <div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-ghost" id="addSubBoxBtn" style="width:100%;">إنشاء</button></div>
   </div>
@@ -1467,7 +1467,7 @@
   </div>
   <div class="row-2">
     <div class="field" id="transferToMineWrap"><label>الصندوق المستلم (من صناديقي)</label><select id="transferToMyBox"></select></div>
-    <div class="field" id="transferToUserWrap" style="display:none;"><label>المستخدم المستلم — اكتب واختر</label><input type="text" id="transferToUserSearch" list="transferToUserDatalist" autocomplete="off"><datalist id="transferToUserDatalist"></datalist><input type="hidden" id="transferToUser"></div>
+    <div class="field" id="transferToUserWrap" style="display:none;"><label>المستخدم المستلم</label><input type="text" id="transferToUserSearch" list="transferToUserDatalist" autocomplete="off"><datalist id="transferToUserDatalist"></datalist><input type="hidden" id="transferToUser"></div>
     <div class="field"><label>المبلغ (ريال)</label><input type="number" id="transferAmount" min="0" placeholder="0"></div>
   </div>
   <div class="field"><label>الغرض (اختياري)</label><input type="text" id="transferPurpose"></div>
@@ -1661,7 +1661,23 @@
 <div class="panel">
   <h2>الرواتب — حساب كل موظف</h2>
   <p class="sub">الاستحقاق يُحسب تلقائياً عند إقفال كل شهر (أساسي + عمولة إن فُعّلت). الدفعات والسلف والخصومات تُسجَّل هنا وتُخصم فوراً من الرصيد التراكمي المستحق.</p>
-  <div id="payrollList" style="margin-top:10px;"></div>
+  <div id="payrollSewnSummary" style="margin-top:10px;"></div>
+  <div id="unscannedSewnWrap"></div>
+  <div class="section-btns">
+    <button type="button" class="section-btn" onclick="toggleSection(this,'payrollReconSec')">📊 مطابقة الثياب مع الأجور</button>
+    <button type="button" class="section-btn" onclick="toggleSection(this,'payrollPreviewSec')">🧮 معاينة استحقاق الشهر الحالي</button>
+  </div>
+  <div id="payrollReconSec" class="toggle-sec" style="display:none;">
+    <p class="sub" style="margin-bottom:8px;">لكل خياط: الثياب اللي سجّل لها «تم التفصيل» بالشهر مقابل اللي انحسبت لها أجرة. أي فرق يطلع سببه.</p>
+    <div class="row-2"><div class="field"><label>الشهر</label><input type="month" id="wageReconMonth" onchange="renderWageReconciliation()"></div></div>
+    <div id="wageReconView"></div>
+  </div>
+  <div id="payrollPreviewSec" class="toggle-sec" style="display:none;">
+    <p class="sub" style="margin-bottom:10px;">حساب حي لما استحقه كل موظف لين الآن هذا الشهر — يتحدث تلقائياً، ويُسجَّل رسمياً بسجل الرواتب بس عند إقفال الشهر.</p>
+    <div id="entitlementPreviewView"></div>
+  </div>
+  <div class="stitch"></div>
+  <div id="payrollList"></div>
   <div id="empStmtWrap" style="display:none;">
   <div class="stitch"></div>
   <h3 style="margin:0 0 8px;font-size:14px;">كشف حساب الموظف</h3>
@@ -1673,15 +1689,6 @@
   <button class="btn btn-ghost btn-sm" onclick="showEmployeeStatement()">عرض الكشف بالفترة</button>
   <div id="empStmtView" style="margin-top:12px;"></div>
   </div>
-  <div class="stitch"></div>
-  <div id="unscannedSewnWrap"></div>
-  <p class="sub" style="margin-bottom:8px;"><b>مطابقة الثياب مع الأجور:</b> لكل خياط: الثياب اللي سجّل لها «تم التفصيل» بالشهر مقابل اللي انحسبت لها أجرة. أي فرق يطلع سببه.</p>
-  <div class="row-2"><div class="field"><label>الشهر</label><input type="month" id="wageReconMonth" onchange="renderWageReconciliation()"></div></div>
-  <div id="wageReconView" style="margin-bottom:14px;"></div>
-  <div class="stitch"></div>
-  <h3 style="margin:0 0 8px;font-size:14px;">معاينة استحقاق الشهر الحالي (قبل الإقفال)</h3>
-  <p class="sub" style="margin-bottom:10px;">هذا حساب حي لما استحقه كل موظف لين الآن هذا الشهر — يتحدث تلقائياً، ويُسجَّل رسمياً بسجل الرواتب بس عند إقفال الشهر.</p>
-  <div id="entitlementPreviewView"></div>
 </div>
 </div>
 
@@ -1703,7 +1710,7 @@
     <h3 style="margin:0 0 8px;font-size:14px;">خصم ومكافآت (مباشر من المدير)</h3>
     <p class="sub" style="margin-bottom:10px;">قرار مباشر بدون انتظار — يُنفَّذ فوراً وتوصل رسالة للموظف برقم القرار.</p>
     <div class="row-3">
-      <div class="field"><label>الموظف — اكتب واختر</label><input type="text" id="bonusEmployeeSearch" list="bonusEmployeeDatalist" autocomplete="off"><datalist id="bonusEmployeeDatalist"></datalist><input type="hidden" id="bonusEmployee"></div>
+      <div class="field"><label>الموظف</label><input type="text" id="bonusEmployeeSearch" list="bonusEmployeeDatalist" autocomplete="off"><datalist id="bonusEmployeeDatalist"></datalist><input type="hidden" id="bonusEmployee"></div>
       <div class="field"><label>النوع</label><select id="bonusType"><option value="bonus">مكافأة (إضافة)</option><option value="deduction">خصم</option></select></div>
       <div class="field"><label>المبلغ (ريال)</label><input type="number" id="bonusAmount" min="0"></div>
     </div>
@@ -1720,7 +1727,7 @@
     <h3 style="margin:0 0 8px;font-size:14px;">طلب فاتورة مرتجعة بسبب خلل</h3>
     <div class="row-2">
       <div class="field"><label>رقم الفاتورة</label><input type="text" id="mailReturnInvNumber"></div>
-      <div class="field"><label>الموظف المتسبّب — اكتب واختر</label><input type="text" id="mailReturnResponsibleSearch" list="mailReturnResponsibleDatalist" autocomplete="off"><datalist id="mailReturnResponsibleDatalist"></datalist><input type="hidden" id="mailReturnResponsible"></div>
+      <div class="field"><label>الموظف المتسبّب</label><input type="text" id="mailReturnResponsibleSearch" list="mailReturnResponsibleDatalist" autocomplete="off"><datalist id="mailReturnResponsibleDatalist"></datalist><input type="hidden" id="mailReturnResponsible"></div>
     </div>
     <div class="field"><label>سبب الخلل</label><input type="text" id="mailReturnReason" placeholder="مثلاً: خطأ بالمقاس، قص غلط..."></div>
     <button class="btn btn-gold btn-sm" id="mailSubmitReturnBtn">إرسال للمدير</button>
@@ -1730,7 +1737,7 @@
     <div class="stitch"></div>
     <h3 style="margin:0 0 8px;font-size:14px;">طلب سلفة</h3>
     <div class="row-2">
-      <div class="field"><label>الموظف — اكتب واختر</label><input type="text" id="mailAdvanceEmployeeSearch" list="mailAdvanceEmployeeDatalist" autocomplete="off"><datalist id="mailAdvanceEmployeeDatalist"></datalist><input type="hidden" id="mailAdvanceEmployee"></div>
+      <div class="field"><label>الموظف</label><input type="text" id="mailAdvanceEmployeeSearch" list="mailAdvanceEmployeeDatalist" autocomplete="off"><datalist id="mailAdvanceEmployeeDatalist"></datalist><input type="hidden" id="mailAdvanceEmployee"></div>
       <div class="field"><label>المبلغ (ريال)</label><input type="number" id="mailAdvanceAmount" min="0"></div>
     </div>
     <div class="field"><label>السبب</label><input type="text" id="mailAdvanceReason"></div>

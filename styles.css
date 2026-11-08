@@ -382,3 +382,21 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 .payroll-chip .pc-avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;background:var(--gold-soft);color:#fff;flex:0 0 34px;}
 .payroll-chip .pc-text{display:flex;flex-direction:column;line-height:1.25;}
 .payroll-chip .pc-text small{color:var(--muted);font-size:11px;}
+
+/* employee pickers shown as name buttons */
+.name-chips{display:flex;flex-wrap:wrap;gap:6px;}
+.name-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:inherit;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;}
+.name-chip small{color:var(--muted);font-size:10.5px;font-weight:500;}
+.name-chip:hover{border-color:var(--gold);}
+.name-chip.active{border-color:var(--gold);background:var(--gold-soft);color:#fff;}
+.name-chip.active small{color:#fff;opacity:.85;}
+.name-chip:disabled{opacity:.5;cursor:not-allowed;}
+@media print{ .name-chips{display:none !important;} }
+
+/* section buttons: a part of the page opens when its button is pressed */
+.section-btns{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;}
+.section-btn{padding:8px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:inherit;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;}
+.section-btn:hover{border-color:var(--gold);}
+.section-btn.active{border-color:var(--gold);background:var(--gold-soft);color:#fff;}
+.toggle-sec{border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:12px;}
+@media print{ .section-btns{display:none !important;} }
