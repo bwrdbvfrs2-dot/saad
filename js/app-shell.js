@@ -399,6 +399,18 @@ let saveQueue = Promise.resolve();
 // a single device). Local state therefore always = last server copy + every change of our own.
 let pendingSaves = 0;
 let deferredSnapshot = null;
+// while a confirm / password box is open, a newer copy of the data from the server waits: the action
+// behind the box holds references into the current data, and swapping it underneath would make the
+// confirmed change land on a stale copy and be lost. Applied once the box closes (and its save starts).
+let serverUpdateHolds = 0;
+function holdServerUpdates(){ serverUpdateHolds++; }
+function releaseServerUpdates(){
+  // released on the next turn, after the confirmed action has made its change and started its save
+  setTimeout(()=>{
+    serverUpdateHolds = Math.max(0, serverUpdateHolds-1);
+    if(serverUpdateHolds===0 && pendingSaves===0 && deferredSnapshot){ const snap = deferredSnapshot; deferredSnapshot = null; applyServerSnapshot(snap, false); }
+  }, 0);
+}
 let latestOwnRev = 0;
 // ---- catalog (type libraries) kept outside shop/state — see CATALOG_COL ----
 let catalogKeysCache = null;
@@ -526,7 +538,7 @@ function updateSavePill(){
   clearTimeout(savePillTimer);
   if(pendingSaves>0){
     if(!pill.classList.contains("saving") || !pill.classList.contains("show")) savePillShownAt = Date.now();
-    pill.className = "save-pill saving show"; pill.textContent = "⏳ جاري الحفظ…"; return;
+    pill.className = "save-pill saving show"; pill.textContent = "جاري الحفظ…"; return;
   }
   const wait = Math.max(0, 600 - (Date.now() - savePillShownAt));
   savePillTimer = setTimeout(()=>{
@@ -556,7 +568,7 @@ function saveState(){
   pendingSaves++; updateSaveIndicator();
   const run = saveQueue.then(()=> commitStatePayload(payload)).then(ok=>{ lastSaveOk = ok; return ok; }).finally(()=>{
     pendingSaves--; updateSaveIndicator();
-    if(pendingSaves===0 && deferredSnapshot){ const snap = deferredSnapshot; deferredSnapshot = null; applyServerSnapshot(snap, false); }
+    if(pendingSaves===0 && serverUpdateHolds===0 && deferredSnapshot){ const snap = deferredSnapshot; deferredSnapshot = null; applyServerSnapshot(snap, false); }
   });
   saveQueue = run.catch(()=>{});
   return run;
@@ -802,7 +814,7 @@ async function startListeningToState(catalogReady){
       // the type libraries and save them over the real ones) — the login stops and says so
       if(firstLoad && stateLoadFailed){ firstLoad=false; clearTimeout(giveUp); resolve(); return; }
       if(snap.exists){
-        if(!firstLoad && pendingSaves>0){ deferredSnapshot = snap; return; } // applied once our saves land
+        if(!firstLoad && (pendingSaves>0 || serverUpdateHolds>0)){ deferredSnapshot = snap; return; } // applied once our saves land / the open box closes
         const wasFirst = firstLoad;
         await applyServerSnapshot(snap, wasFirst);
       }
@@ -817,6 +829,7 @@ async function startListeningToState(catalogReady){
 }
 function stopListeningToState(){
   stateListenerGen++; // whatever the old listener still delivers is ignored
+  serverUpdateHolds = 0; deferredSnapshot = null;
   if(stateUnsubscribe){ stateUnsubscribe(); stateUnsubscribe=null; }
 }
 // runs once, right after a real sign-in succeeds (fresh login or first-time setup) — everything

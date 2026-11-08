@@ -430,6 +430,53 @@ async function deleteItemCard(id){
 }
 
 function supplierOpeningDebt(s){ return (s.openingDebts||[]).reduce((a,d)=>a+d.amount,0); }
+function supplierWrittenOff(s){ return (s.writeOffs||[]).reduce((a,w)=>a+w.amount,0); }
+// manager: an opening-debt entry typed twice or by mistake is taken out (only what hasn't been paid yet)
+async function deleteSupplierOpeningDebt(supId, debtId){
+  if(!currentUser || currentUser.role!=="مدير"){ showToast("للمدير فقط"); return; }
+  const s = state.suppliers.find(x=>x.id===supId); if(!s) return;
+  const d = (s.openingDebts||[]).find(x=>x.id===debtId); if(!d) return;
+  if(d.amount - (s.balance||0) > 0.01){ showToast(`ما يصير تحذفه كامل — المتبقي له ${fmtSar(s.balance)} ريال بس (الباقي انسدد). استخدم «إتلاف دين» للمتبقي`); return; }
+  const reason = (prompt(`سبب حذف قيد الدين السابق ${fmtSar(d.amount)} ريال عن ${s.name}؟ (مثلاً: مكرر، مدخل بالغلط)`)||"").trim();
+  if(!reason){ showToast("اكتب السبب عشان يتم الحذف"); return; }
+  if(!await confirmWithPassword(`حذف قيد دين سابق ${fmtSar(d.amount)} ريال عن ${s.name}\nالسبب: ${reason}\nأدخل كلمة مرورك للتأكيد.`)) return;
+  // the data may have been refreshed from the server while the password box was open — work on the
+  // current copy, or the change lands on a stale one and is lost
+  const sNow = state.suppliers.find(x=>x.id===supId), dNow = sNow && (sNow.openingDebts||[]).find(x=>x.id===debtId);
+  if(!dNow){ showToast("القيد تغيّر أو انحذف — حدّث وحاول مرة ثانية"); return; }
+  if(dNow.amount - (sNow.balance||0) > 0.01){ showToast(`ما يصير تحذفه كامل — المتبقي له ${fmtSar(sNow.balance)} ريال بس`); return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
+  sNow.openingDebts = sNow.openingDebts.filter(x=>x.id!==debtId);
+  sNow.balance -= dNow.amount;
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("supplier_opening_debt_deleted", {supplierName:sNow.name, amount:dNow.amount, date:dNow.date, note:dNow.note, reason});
+    showToast(`تم حذف القيد — المستحق له الحين ${fmtSar(sNow.balance)} ريال`);
+  }
+}
+// manager: drop what's left of a debt the shop owes (forgiven, settled outside the system, or wrong) —
+// recorded with its reason; no box moves
+async function writeOffSupplierDebt(supId){
+  if(!currentUser || currentUser.role!=="مدير"){ showToast("للمدير فقط"); return; }
+  const s = state.suppliers.find(x=>x.id===supId); if(!s || !(s.balance>0.01)) return;
+  const raw = prompt(`كم تبي تتلف من دين ${s.name}؟ (المتبقي له ${fmtSar(s.balance)} ريال)`, String(+s.balance.toFixed(2)));
+  if(raw===null) return;
+  const amount = parseFloat(raw)||0;
+  if(!(amount>0)){ showToast("أدخل مبلغ صحيح"); return; }
+  if(amount - s.balance > 0.01){ showToast(`المبلغ أكبر من المتبقي (${fmtSar(s.balance)} ريال)`); return; }
+  const reason = (prompt("سبب الإتلاف؟ (مثلاً: مسامح، انسدد قبل النظام، مدخل بالغلط)")||"").trim();
+  if(!reason){ showToast("اكتب السبب عشان يتم الإتلاف"); return; }
+  if(!await confirmWithPassword(`إتلاف ${fmtSar(amount)} ريال من دين ${s.name}\nالسبب: ${reason}\nما يطلع من أي صندوق. أدخل كلمة مرورك للتأكيد.`)) return;
+  const sNow = state.suppliers.find(x=>x.id===supId); // the current copy (see deleteSupplierOpeningDebt)
+  if(!sNow || amount - sNow.balance > 0.01){ showToast("المتبقي تغيّر — حدّث وحاول مرة ثانية"); return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
+  sNow.writeOffs = sNow.writeOffs || [];
+  sNow.writeOffs.push({id:newId(), date:todayStr(), amount, reason, by:currentUser.username});
+  sNow.balance -= amount;
+  if(await saveStateWithRollback(snapshot)){
+    logAudit("supplier_debt_written_off", {supplierName:sNow.name, amount, reason});
+    showToast(`تم إتلاف ${fmtSar(amount)} ريال — المتبقي له ${fmtSar(sNow.balance)} ريال`);
+  }
+}
 function renderSuppliers(){
   const el = $("suppliersList");
   const isAdmin = currentUser && currentUser.role==="مدير";
@@ -447,7 +494,12 @@ function renderSuppliers(){
       <div class="field"><label>من صندوقي</label><select class="supplier-pay-box" data-sup="${s.id}">${userBoxes(currentUser.username).map(b=>`<option value="${b.id}">${b.name} (${typeLabel(b.type)}) — ${boxTotal(b).toFixed(0)} ﷼</option>`).join("")}</select></div>
       <div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-gold btn-sm" style="width:100%;" onclick="paySupplier('${s.id}')">تسديد</button></div>
     </div>` : ``}
-    ${isAdmin ? `<div class="actions-row" style="margin-top:6px;"><button class="btn btn-ghost btn-sm" onclick="addSupplierOpeningDebt('${s.id}')">إضافة دين سابق</button></div>` : ""}
+    ${(s.writeOffs||[]).length ? `<p class="sub" style="margin:4px 0;color:var(--gold-soft);">متلف: ${fmtSar(supplierWrittenOff(s))} ريال${s.writeOffs.map(w=>` (${esc(w.date)} — ${esc(w.reason)})`).join("")}</p>` : ""}
+    ${isAdmin && (s.openingDebts||[]).length ? `<details style="margin-top:6px;"><summary class="sub" style="cursor:pointer;">قيود الدين السابق (${s.openingDebts.length}) — للتصحيح لو فيه قيد مكرر أو غلط</summary>
+      <div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>المبلغ</th><th>الملاحظة</th><th>سجّله</th><th></th></tr></thead><tbody>
+      ${s.openingDebts.map(d=>`<tr><td>${esc(d.date||"—")}</td><td>${fmtSar(d.amount)} ﷼</td><td>${esc(d.note||"—")}</td><td>${esc(d.recordedBy||"—")}</td><td><button class="btn btn-danger btn-sm" onclick="deleteSupplierOpeningDebt('${s.id}','${d.id}')">حذف القيد</button></td></tr>`).join("")}
+      </tbody></table></div></details>` : ""}
+    ${isAdmin ? `<div class="actions-row" style="margin-top:6px;"><button class="btn btn-ghost btn-sm" onclick="addSupplierOpeningDebt('${s.id}')">إضافة دين سابق</button>${s.balance>0.01?` <button class="btn btn-danger btn-sm" onclick="writeOffSupplierDebt('${s.id}')">إتلاف دين</button>`:""}</div>` : ""}
   </div>`;
   }).join("");
 }
@@ -986,7 +1038,7 @@ function renderPayrollTab(){
       const lbl = e.type==="entitlement"?"استحقاق":e.type==="bonus"?"مكافأة":e.type==="payment"?"دفعة":e.type==="advance"?"سلفة":"خصم";
       const sign = credit ? "+" : "-";
       const color = credit ? "var(--profit)" : "var(--loss)";
-      const printBtn = ["payment","advance","deduction"].includes(e.type) && e.id ? `<button class="btn btn-ghost btn-sm" style="padding:2px 8px;" onclick="printPayrollReceipt('${e.id}')">🖨 سند</button>` : "";
+      const printBtn = ["payment","advance","deduction"].includes(e.type) && e.id ? `<button class="btn btn-ghost btn-sm" style="padding:2px 8px;" onclick="printPayrollReceipt('${e.id}')">طباعة سند</button>` : "";
       return `<div class="payment-row"><span style="color:${color};">${sign}${e.amount.toFixed(0)} ﷼</span><span>${lbl}${e.voucherNo?` #${e.voucherNo}`:""}</span><span style="color:var(--muted);">${e.date}</span>${e.note?`<span style="color:var(--muted);">${esc(e.note)}</span>`:""}${printBtn}</div>`;
     }).join("") : `<p class="sub">ما فيه حركات بعد.</p>`;
     return `<div class="garment-card">
@@ -1118,8 +1170,8 @@ function showEmployeeStatement(){
     <tfoot><tr style="font-weight:800;"><td>الإجمالي</td><td>${fmtSar(sum("entitled"))}</td><td>${fmtSar(sum("bonus"))}</td><td>${fmtSar(sum("paid"))}</td><td>${fmtSar(sum("deducted"))}</td><td>${sar(carry)}</td></tr></tfoot></table>`;
   const summaryHtml = html;
   $("empStmtView").innerHTML = `<div class="section-btns">
-      <button type="button" class="section-btn active" onclick="toggleSection(this,'empStmtMoves')">📄 الحركات</button>
-      <button type="button" class="section-btn" onclick="toggleSection(this,'empStmtMonths')">📅 ملخص كل شهر</button>
+      <button type="button" class="section-btn active" onclick="toggleSection(this,'empStmtMoves')">الحركات</button>
+      <button type="button" class="section-btn" onclick="toggleSection(this,'empStmtMonths')">ملخص كل شهر</button>
     </div>
     <div id="empStmtMoves" class="table-wrap">${movesHtml}</div>
     <div id="empStmtMonths" class="table-wrap" style="display:none;">${summaryHtml}</div>

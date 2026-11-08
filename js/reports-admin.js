@@ -973,6 +973,7 @@ function exportCsv(){
 }
 function showToast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._timer); t._timer=setTimeout(()=>t.classList.remove("show"),2200); }
 function showConfirm(message){
+  holdServerUpdates();
   return new Promise(resolve=>{
     $("confirmModalText").textContent = message;
     $("confirmModalOverlay").classList.remove("hidden");
@@ -980,7 +981,7 @@ function showConfirm(message){
     function cleanup(v){
       $("confirmModalOverlay").classList.add("hidden");
       yesBtn.removeEventListener("click", onYes); noBtn.removeEventListener("click", onNo);
-      resolve(v);
+      resolve(v); releaseServerUpdates();
     }
     function onYes(){ cleanup(true); }
     function onNo(){ cleanup(false); }
@@ -1006,6 +1007,7 @@ function depositBypassStatusText(){
 }
 // asks for a code in the password modal; resolves true only when check(code) passes
 function askForCode(message, placeholder, errorText, check){
+  holdServerUpdates();
   return new Promise(resolve=>{
     const input=$("passwordModalInput"), err=$("passwordModalError"), yesBtn=$("passwordModalYes"), noBtn=$("passwordModalNo");
     const oldPh = input.placeholder, oldErr = err.textContent;
@@ -1015,7 +1017,7 @@ function askForCode(message, placeholder, errorText, check){
     function cleanup(v){
       $("passwordModalOverlay").classList.add("hidden"); input.placeholder = oldPh; err.textContent = oldErr; input.value = "";
       yesBtn.removeEventListener("click", onYes); noBtn.removeEventListener("click", onNo); input.removeEventListener("keydown", onKey);
-      resolve(v);
+      resolve(v); releaseServerUpdates();
     }
     async function onYes(){ if(await check(input.value.trim())) cleanup(true); else { err.style.display = ""; input.value=""; input.focus(); } }
     function onNo(){ cleanup(false); }
@@ -1024,6 +1026,7 @@ function askForCode(message, placeholder, errorText, check){
   });
 }
 function confirmWithPassword(message){
+  holdServerUpdates();
   return new Promise(resolve=>{
     $("passwordModalText").textContent = message;
     $("passwordModalInput").value = "";
@@ -1034,7 +1037,7 @@ function confirmWithPassword(message){
     function cleanup(v){
       $("passwordModalOverlay").classList.add("hidden");
       yesBtn.removeEventListener("click", onYes); noBtn.removeEventListener("click", onNo); input.removeEventListener("keydown", onKey);
-      resolve(v);
+      resolve(v); releaseServerUpdates();
     }
     async function onYes(){
       try{
