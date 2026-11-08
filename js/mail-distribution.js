@@ -718,7 +718,8 @@ function renderDashboardKPIs(){
   const pending = allPendingGarments();
   const readyCount = pending.filter(({g})=> g.status==="جاهز").length;
   const inProgressCount = pending.length - readyCount;
-  const totalDue = state.invoices.reduce((a,inv)=> a + Math.max(0, invoiceRemaining(inv)), 0) + totalOpeningDebtRemaining();
+  // the shop's own invoices only — debts recorded from before the system have their own screen
+  const totalDue = state.invoices.reduce((a,inv)=> a + Math.max(0, invoiceRemaining(inv)), 0);
   // what today's invoices are worth in full (after their discounts), not only what was paid on them
   const invoicedToday = todaysInvoices.reduce((a,inv)=> a + invoiceSaleTotal(inv) - invoiceDiscountTotal(inv), 0)
     + todaysSalesInvoices.reduce((a,x)=> a + saleNetTotal(x), 0);

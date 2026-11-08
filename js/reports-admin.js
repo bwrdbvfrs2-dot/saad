@@ -1359,7 +1359,11 @@ document.addEventListener("click", e=>{
 });
 $("quickMenuToggleBtn").addEventListener("click", ()=>{
   const bar = $("quickMenuBar");
-  bar.style.display = bar.style.display==="none" ? "" : "none";
+  const open = bar.style.display==="none";
+  bar.style.display = open ? "" : "none";
+  // remembered on this device: once opened it stays open (after refresh and the next login too)
+  try{ localStorage.setItem("quickMenuOpen", open ? "1" : "0"); }catch(e){}
+  if(open) pinQuickMenuBar();
 });
 $("closeDrawerBtn").addEventListener("click", closeNavDrawer);
 $("navDrawerOverlay").addEventListener("click", e=>{ if(e.target.id==="navDrawerOverlay") closeNavDrawer(); });
