@@ -1588,8 +1588,9 @@
 
 <div class="tab-panel" id="tab-purchases">
 <div class="panel">
-  <h2>فاتورة مشتريات جديدة</h2>
-  <p class="sub">رقم فاتورتك الخاصة يُصدر تلقائياً — تقدر تضيف رقم فاتورة المورد وصورتها لو حبيت.</p>
+  <h2 id="purchFormTitle">فاتورة مشتريات جديدة</h2>
+  <p class="sub">رقم فاتورتك الخاصة يُصدر تلقائياً — تقدر تضيف رقم فاتورة المورد وصورتها لو حبيت. الفاتورة الوحدة تقدر تضيف فيها أكثر من صنف: عبّي الصنف واضغط «إضافة الصنف للفاتورة»، وكرّر.</p>
+  <div id="purchEditBanner" style="display:none;"></div>
   <div class="row-2">
     <div class="field"><label>المورد — اكتب واختر من الاقتراحات</label><input type="text" id="purchSupplierSearch" list="purchSupplierDatalist" placeholder="اكتب اسم المورد..." autocomplete="off"><datalist id="purchSupplierDatalist"></datalist><input type="hidden" id="purchSupplier"></div>
     <div class="field"><label>نوع الصنف</label><select id="purchType"><option value="fabric">قماش (تفصيل)</option><option value="product">منتج جاهز (بيع)</option><option value="addon">ملحق فعلي (أزرار، كبكات...)</option></select></div>
@@ -1615,6 +1616,8 @@
     <div class="field"><label>سعر الوحدة (ريال)</label><input type="number" id="purchUnitPrice" min="0" placeholder="0"></div>
     <div class="field"><label>الإجمالي</label><input type="text" id="purchTotal" disabled placeholder="0"></div>
   </div>
+  <button type="button" class="btn btn-ghost btn-sm" id="addPurchLineBtn">+ إضافة الصنف للفاتورة</button>
+  <div id="purchLinesView" style="margin:10px 0;"></div>
   <div class="row-2">
     <div class="field"><label>حالة الدفع</label><select id="purchPayStatus"><option value="paid">مدفوعة الآن</option><option value="deferred">آجلة (تُضاف لحساب المورد)</option></select></div>
     <div class="field" id="purchSourceBoxWrap"><label>مصدر الدفع</label><select id="purchSourceBox"></select></div>
@@ -1627,9 +1630,10 @@
     <div class="field"><label>صورة فاتورة المورد (اختياري)</label><input type="file" id="purchImageFile" accept="image/*"></div>
   </div>
   <button class="btn btn-gold btn-sm" id="addPurchaseBtn">حفظ فاتورة الشراء</button>
+  <button class="btn btn-ghost btn-sm" id="cancelPurchEditBtn" style="display:none;">إلغاء التعديل</button>
   <div class="stitch"></div>
   <h3 style="margin:0 0 10px;font-size:14px;">سجل المشتريات</h3>
-  <div class="table-wrap"><table><thead><tr><th>رقم فاتورتي</th><th>رقم فاتورة المورد</th><th>التاريخ</th><th>المورد</th><th>الصنف</th><th>الكمية</th><th>الإجمالي</th><th>الحالة</th><th></th></tr></thead><tbody id="purchasesBody"></tbody></table></div>
+  <div class="table-wrap"><table><thead><tr><th>رقم فاتورتي</th><th>رقم فاتورة المورد</th><th>التاريخ</th><th>المورد</th><th>الأصناف</th><th>الكمية</th><th>الإجمالي</th><th>الحالة</th><th></th></tr></thead><tbody id="purchasesBody"></tbody></table></div>
 </div>
 </div>
 

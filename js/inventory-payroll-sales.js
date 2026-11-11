@@ -754,81 +754,209 @@ async function confirmItemImport(){
     showToast(`تم استيراد ${rows.length} صنف`);
   }
 }
+// ---- purchase invoices: several items on one invoice, and editing a saved one ----
+// Each item is still its own record in state.purchases (stock, supplier balance, boxes, VAT, returns and the
+// item statement all read them that way); the items of one invoice share its number, supplier, payment
+// and voucher. Editing reverses the invoice's old effects and applies the new ones in one save.
+let purchLines = [];          // items added to the invoice on screen
+let editingPurchaseNo = null; // the invoice number being edited, or null for a new invoice
+function purchUnitTxt(type){ return type==="fabric" ? unitLabel() : "قطعة"; }
+function readPurchLineFields(){
+  const type = $("purchType").value, name = $("purchItemName").value.trim();
+  const qty = parseFloat($("purchQty").value)||0, unitPrice = parseFloat($("purchUnitPrice").value)||0;
+  if(!name && !qty && !unitPrice) return {empty:true};
+  if(!name) return {error:"أدخل اسم الصنف"};
+  if(qty<=0 || unitPrice<=0) return {error:`أدخل كمية وسعر صحيحين لـ«${name}»`};
+  const exists = state.itemCards.some(c=>c.type===type && c.name===name) || purchLines.some(l=>l.type===type && l.name===name && l.origin);
+  let origin = "", season = "";
+  if(type==="fabric" && !exists){
+    origin = $("purchOrigin").value; season = $("purchSeason").value;
+    if(!origin || !season) return {error:`«${name}» صنف قماش جديد — لازم تحدد الصناعة والموسم`};
+  }
+  return {line:{id:null, type, name, qty, unitPrice, origin, season}};
+}
+function clearPurchLineFields(){
+  $("purchQty").value=""; $("purchUnitPrice").value=""; $("purchItemName").value=""; $("purchTotal").value="";
+  $("purchItemStatus").textContent=""; $("purchOrigin").value=""; $("purchSeason").value=""; $("purchFabricExtraWrap").style.display="none";
+}
+function addPurchLine(){
+  const r = readPurchLineFields();
+  if(r.empty){ showToast("عبّي الصنف والكمية والسعر أول"); return; }
+  if(r.error){ showToast(r.error); return; }
+  purchLines.push(r.line); clearPurchLineFields(); renderPurchLines();
+  showToast(`انضاف «${r.line.name}» للفاتورة — ${purchLines.length} صنف`);
+}
+function removePurchLine(i){ purchLines.splice(i,1); renderPurchLines(); }
+function editPurchLine(i){
+  const l = purchLines[i]; if(!l) return;
+  $("purchType").value = l.type; refreshPurchaseForm();
+  $("purchItemName").value = l.name; $("purchQty").value = l.qty; $("purchUnitPrice").value = l.unitPrice;
+  updatePurchItemStatus(); if(l.origin) $("purchOrigin").value = l.origin; if(l.season) $("purchSeason").value = l.season; updatePurchTotal();
+  // the line keeps its id (an edited invoice's item) when it goes back in
+  window.__purchLineKeepId = l.id;
+  purchLines.splice(i,1); renderPurchLines();
+}
+function renderPurchLines(){
+  const el = $("purchLinesView"); if(!el) return;
+  if(!purchLines.length){ el.innerHTML = ""; return; }
+  const total = purchLines.reduce((a,l)=>a+l.qty*l.unitPrice,0);
+  const typeTxt = t=> t==="fabric"?"قماش":t==="product"?"منتج":"ملحق";
+  el.innerHTML = `<div class="table-wrap"><table><thead><tr><th>#</th><th>الصنف</th><th>النوع</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th><th></th></tr></thead><tbody>
+    ${purchLines.map((l,i)=>`<tr><td>${i+1}</td><td>${esc(l.name)}</td><td>${typeTxt(l.type)}</td><td>${l.qty} ${purchUnitTxt(l.type)}</td><td>${fmtSar(l.unitPrice)} ﷼</td><td>${fmtSar(l.qty*l.unitPrice)} ﷼</td>
+      <td style="white-space:nowrap;"><button type="button" class="btn btn-ghost btn-sm" onclick="editPurchLine(${i})">تعديل</button> <button type="button" class="btn btn-danger btn-sm" onclick="removePurchLine(${i})">حذف</button></td></tr>`).join("")}
+    </tbody><tfoot><tr style="font-weight:800;"><td colspan="5">إجمالي الفاتورة (${purchLines.length} صنف)</td><td>${fmtSar(total)} ﷼</td><td></td></tr></tfoot></table></div>`;
+}
+function purchaseInvoiceLines(invoiceNo){ return state.purchases.filter(p=>String(p.invoiceNo)===String(invoiceNo)); }
+function purchaseInvoiceLocked(lines){
+  const ids = new Set(lines.map(l=>l.id));
+  if((state.purchaseReturns||[]).some(r=> r.linkedPurchaseId && ids.has(r.linkedPurchaseId))) return "عليها مرتجع مشتريات مربوط — ما تتعدل";
+  return "";
+}
+function startEditPurchase(invoiceNo){
+  if(!currentUser || currentUser.role!=="مدير"){ showToast("تعديل فواتير المشتريات للمدير فقط"); return; }
+  const lines = purchaseInvoiceLines(invoiceNo); if(!lines.length) return;
+  const lock = purchaseInvoiceLocked(lines); if(lock){ showToast(lock); return; }
+  const first = lines[0];
+  editingPurchaseNo = first.invoiceNo;
+  purchLines = lines.map(p=>{ const c = findItemCard(p.itemCardId); return {id:p.id, type:c?c.type:"fabric", name:c?c.name:"—", qty:p.quantity, unitPrice:p.unitPrice, origin:"", season:""}; });
+  const sup = state.suppliers.find(x=>x.id===first.supplierId);
+  $("purchSupplier").value = first.supplierId||""; $("purchSupplierSearch").value = sup ? sup.name : "";
+  $("purchPayStatus").value = first.payStatus; $("purchSourceBoxWrap").style.display = first.payStatus==="paid" ? "" : "none";
+  refreshPurchaseForm();
+  if(first.payStatus==="paid" && first.sourceBoxId){
+    if(![...$("purchSourceBox").options].some(o=>o.value===first.sourceBoxId)){ const b = findCashBox(first.sourceBoxId); if(b) $("purchSourceBox").insertAdjacentHTML("beforeend", `<option value="${b.id}">${esc(b.owner)} — ${esc(b.name)} (${typeLabel(b.type)})</option>`); }
+    $("purchSourceBox").value = first.sourceBoxId;
+  }
+  $("purchVatStatus").value = first.vatStatus || "شاملة";
+  $("purchSupplierInvNo").value = first.supplierInvoiceNo || "";
+  clearPurchLineFields(); renderPurchLines();
+  $("purchFormTitle").textContent = `تعديل فاتورة الشراء رقم ${first.invoiceNo}`;
+  $("purchEditBanner").style.display = "";
+  $("purchEditBanner").innerHTML = `<div class="note-box" style="margin-bottom:10px;">تعدّل فاتورة رقم <b>${esc(first.invoiceNo)}</b> بتاريخ ${esc(first.date)}. عدّل الأصناف أو احذف أو أضف، وغيّر المورد أو الدفع لو تبي، واضغط «حفظ التعديل». المخزون والصندوق وحساب المورد يتعدلون بالفرق.</div>`;
+  $("addPurchaseBtn").textContent = "حفظ التعديل"; $("cancelPurchEditBtn").style.display = "";
+  $("purchFormTitle").scrollIntoView({behavior:"smooth", block:"start"});
+}
+function cancelPurchaseEdit(){
+  editingPurchaseNo = null; purchLines = []; clearPurchLineFields(); renderPurchLines();
+  $("purchFormTitle").textContent = "فاتورة مشتريات جديدة";
+  $("purchEditBanner").style.display = "none"; $("purchEditBanner").innerHTML = "";
+  $("addPurchaseBtn").textContent = "حفظ فاتورة الشراء"; $("cancelPurchEditBtn").style.display = "none";
+  $("purchSupplierInvNo").value = ""; $("purchImageFile").value = "";
+}
 async function addPurchase(){
   const supplierId = $("purchSupplier").value;
   if(!supplierId){ showToast("اختر مورد حقيقي من القائمة (اكتب اسمه واختره من الاقتراحات) — أو أضف مورد جديد أول من شاشة الموردين"); return; }
-  const type = $("purchType").value;
-  const itemName = $("purchItemName").value.trim();
-  const qty = parseFloat($("purchQty").value)||0;
-  const unitPrice = parseFloat($("purchUnitPrice").value)||0;
+  // whatever is still typed in the item fields counts as one more item
+  const pending = readPurchLineFields();
+  if(pending.error){ showToast(pending.error); return; }
+  const lines = purchLines.slice(); if(pending.line){ pending.line.id = window.__purchLineKeepId || null; lines.push(pending.line); }
+  if(!lines.length){ showToast("أضف صنف واحد على الأقل للفاتورة"); return; }
   const payStatus = $("purchPayStatus").value;
   const sourceBoxId = $("purchSourceBox").value;
   const supplierInvoiceNo = $("purchSupplierInvNo").value.trim();
-  if(!itemName){ showToast("أدخل اسم الصنف"); return; }
-  if(qty<=0 || unitPrice<=0){ showToast("أدخل كمية وسعر صحيحين"); return; }
-  let card = state.itemCards.find(c=>c.type===type && c.name===itemName);
-  if(!card){
-    let origin="", season="";
-    if(type==="fabric"){
-      origin = $("purchOrigin").value; season = $("purchSeason").value;
-      if(!origin || !season){ showToast("صنف قماش جديد — لازم تحدد الصناعة والموسم قبل الحفظ"); return; }
-    }
-    card = {id:newId(), code:nextItemCode(), name:itemName, type, unit: type==="fabric"?state.settings.measureUnit:"piece",
-      currentCost:0, openingBalance:0, stockQty:0, reservedQty:0, active:true, minSalePrice:0, minPrices: type==="fabric"?{"رجال":0,"ولادي":0,"طفل":0}:{},
-      origin: type==="fabric" ? origin : undefined, season: type==="fabric" ? season : undefined,
-      prices: type==="fabric" ? {"رجال":0,"ولادي":0,"طفل":0} : undefined,
-      width: type==="fabric" ? "عرضين" : undefined,
-      qty: type==="fabric" ? {...widthFabricQty("عرضين")} : undefined,
-      salePrice: (type==="product"||type==="fabric") ? 0 : undefined };
-    state.itemCards.push(card);
-  }
-  const purchaseSnapshot = JSON.parse(JSON.stringify(state));
-  const total = qty*unitPrice;
-  if(payStatus==="paid"){
-    const box = findCashBox(sourceBoxId);
-    if(!box){ showToast("اختر مصدر الدفع"); return; }
-    if(boxTotal(box) < total){ showToast(`الرصيد غير كافٍ (المتاح ${boxTotal(box).toFixed(0)} ريال)`); return; }
-    box.balance -= total;
-  } else {
-    const sup = state.suppliers.find(s=>s.id===supplierId);
-    sup.balance += total;
-  }
-  card.stockQty = (card.stockQty||0) + qty;
-  const oldCost = card.currentCost;
-  card.currentCost = unitPrice;
-  notifyInventoryChange(`فاتورة شراء — «${card.name}» كمية ${invVal(qty)} بسعر ${invVal(unitPrice)} (الإجمالي ${invVal(total)}${Math.abs((oldCost||0)-unitPrice)>0.001?`، التكلفة ${invVal(oldCost)} ← ${invVal(unitPrice)}`:""})`, card.name);
-  // fabric bought through purchases (the normal way) draws the fabric guideline balance down —
-  // before, only a "شراء قماش" expense did, so this balance only ever grew
-  if(type==="fabric") state.advisory.fabric -= qty*unitPrice;
-  const invoiceNo = nextPurchaseInvoiceNo();
+  const vatStatus = $("purchVatStatus").value;
+  const editing = editingPurchaseNo!==null;
+  if(editing && (!currentUser || currentUser.role!=="مدير")){ showToast("تعديل فواتير المشتريات للمدير فقط"); return; }
+  const oldLines = editing ? purchaseInvoiceLines(editingPurchaseNo) : [];
+  if(editing){ const lock = purchaseInvoiceLocked(oldLines); if(lock){ showToast(lock); return; } }
   const imageFile = $("purchImageFile").files[0];
   let imageData = null;
   if(imageFile){
-    if(imageFile.size > 1024*1024){ showToast("حجم الصورة أكبر من 1 ميجا — اختر صورة أصغر"); state = purchaseSnapshot; return; }
-    imageData = await new Promise(resolve=>{
-      const reader = new FileReader();
-      reader.onload = ()=> resolve(reader.result);
-      reader.onerror = ()=> resolve(null);
-      reader.readAsDataURL(imageFile);
-    });
+    if(imageFile.size > 1024*1024){ showToast("حجم الصورة أكبر من 1 ميجا — اختر صورة أصغر"); return; }
+    imageData = await new Promise(resolve=>{ const reader = new FileReader(); reader.onload = ()=> resolve(reader.result); reader.onerror = ()=> resolve(null); reader.readAsDataURL(imageFile); });
   }
-  const vatStatus = $("purchVatStatus").value;
-  state.purchases.push({id:newId(), invoiceNo, date:todayStr(), supplierId, itemCardId:card.id, quantity:qty, unitPrice, total, payStatus, sourceBoxId: payStatus==="paid"?sourceBoxId:null, recordedBy:currentUser.username, supplierInvoiceNo, imageData, vatStatus});
-  if(await saveStateWithRollback(purchaseSnapshot)){
-    logAudit("purchase_recorded", {invoiceNo, itemName, qty, unitPrice, total, payStatus});
-    $("purchQty").value=""; $("purchUnitPrice").value=""; $("purchItemName").value=""; $("purchTotal").value=""; $("purchItemStatus").textContent=""; $("purchOrigin").value=""; $("purchSeason").value=""; $("purchFabricExtraWrap").style.display="none"; $("purchSupplierInvNo").value=""; $("purchImageFile").value="";
-    showToast(`تم حفظ فاتورة الشراء رقم ${invoiceNo}`);
+  const total = lines.reduce((a,l)=>a+l.qty*l.unitPrice,0);
+  if(editing){
+    const oldTotal = oldLines.reduce((a,p)=>a+p.total,0);
+    if(!await showConfirm(`حفظ تعديل فاتورة الشراء رقم ${editingPurchaseNo}؟\nقبل: ${oldLines.length} صنف — ${fmtSar(oldTotal)} ريال\nبعد: ${lines.length} صنف — ${fmtSar(total)} ريال\nالمخزون والصندوق وحساب المورد يتعدلون بالفرق.`)) return;
+  }
+  const snapshot = JSON.parse(JSON.stringify(state));
+  const fail = msg=>{ state = snapshot; showToast(msg); return false; };
+  const negBefore = new Set(state.itemCards.filter(c=>cardAvailableQty(c) < -0.001).map(c=>c.id));
+  // 1. take the old invoice back out (edit)
+  const oldFirst = oldLines[0] || null;
+  if(editing){
+    oldLines.forEach(p=>{
+      const c = findItemCard(p.itemCardId);
+      if(c){ c.stockQty = (c.stockQty||0) - p.quantity; if(c.type==="fabric") state.advisory.fabric += p.total; }
+      if(p.payStatus==="paid"){ const b = findCashBox(p.sourceBoxId); if(b) b.balance += p.total; }
+      else { const sp = state.suppliers.find(x=>x.id===p.supplierId); if(sp) sp.balance -= p.total; }
+    });
+    const oldIds = new Set(oldLines.map(p=>p.id));
+    state.purchases = state.purchases.filter(p=>!oldIds.has(p.id));
+  }
+  // 2. the payment for the whole invoice
+  if(payStatus==="paid"){
+    const box = findCashBox(sourceBoxId);
+    if(!box) return fail("اختر مصدر الدفع");
+    if(boxTotal(box) < total - 0.001) return fail(`الرصيد غير كافٍ (المتاح ${boxTotal(box).toFixed(0)} ريال، والفاتورة ${fmtSar(total)} ريال)`);
+    box.balance -= total;
+  } else {
+    const sup = state.suppliers.find(s=>s.id===supplierId);
+    if(!sup) return fail("المورد غير موجود");
+    sup.balance += total;
+  }
+  if(editing && oldFirst && oldFirst.payStatus==="deferred"){
+    const oldSup = state.suppliers.find(x=>x.id===oldFirst.supplierId);
+    if(oldSup && oldSup.balance < -0.01) return fail(`ما يصير — ${oldSup.name} مسدّد له أكثر من الفاتورة بعد التعديل (المتبقي له يصير ${fmtSar(oldSup.balance)}). عدّل تسديداته أول`);
+  }
+  // 3. the items
+  const invoiceNo = editing ? editingPurchaseNo : nextPurchaseInvoiceNo();
+  const date = editing ? oldFirst.date : todayStr();
+  const notes = [];
+  const freeOldIds = oldLines.map(p=>p.id);
+  lines.forEach((l, i)=>{
+    let card = state.itemCards.find(c=>c.type===l.type && c.name===l.name);
+    if(!card){
+      card = {id:newId(), code:nextItemCode(), name:l.name, type:l.type, unit: l.type==="fabric"?state.settings.measureUnit:"piece",
+        currentCost:0, openingBalance:0, stockQty:0, reservedQty:0, active:true, minSalePrice:0, minPrices: l.type==="fabric"?{"رجال":0,"ولادي":0,"طفل":0}:{},
+        origin: l.type==="fabric" ? l.origin : undefined, season: l.type==="fabric" ? l.season : undefined,
+        prices: l.type==="fabric" ? {"رجال":0,"ولادي":0,"طفل":0} : undefined, width: l.type==="fabric" ? "عرضين" : undefined,
+        qty: l.type==="fabric" ? {...widthFabricQty("عرضين")} : undefined, salePrice: (l.type==="product"||l.type==="fabric") ? 0 : undefined };
+      state.itemCards.push(card);
+    }
+    const lineTotal = l.qty*l.unitPrice;
+    card.stockQty = (card.stockQty||0) + l.qty;
+    const oldCost = card.currentCost; card.currentCost = l.unitPrice;
+    if(card.type==="fabric") state.advisory.fabric -= lineTotal;
+    notes.push(`«${card.name}» ${invVal(l.qty)} × ${invVal(l.unitPrice)}${Math.abs((oldCost||0)-l.unitPrice)>0.001?` (التكلفة ${invVal(oldCost)} ← ${invVal(l.unitPrice)})`:""}`);
+    // an edited invoice's items keep their ids (and the first keeps the voucher number)
+    const id = (l.id && freeOldIds.includes(l.id)) ? l.id : newId();
+    const rec = {id, invoiceNo, date, supplierId, itemCardId:card.id, quantity:l.qty, unitPrice:l.unitPrice, total:lineTotal, payStatus,
+      sourceBoxId: payStatus==="paid"?sourceBoxId:null, recordedBy: editing ? (oldFirst.recordedBy||currentUser.username) : currentUser.username,
+      supplierInvoiceNo, imageData: i===0 ? (imageData || (oldFirst && oldFirst.imageData) || null) : null, vatStatus};
+    if(i===0 && editing && oldFirst.voucherNo && payStatus==="paid" && oldFirst.payStatus==="paid") rec.voucherNo = oldFirst.voucherNo;
+    if(editing){ rec.editedAt = todayStr(); rec.editedBy = currentUser.username; }
+    state.purchases.push(rec);
+  });
+  // nothing may end up below what was already used/reserved from stock
+  const neg = state.itemCards.find(c=> !negBefore.has(c.id) && cardAvailableQty(c) < -0.001);
+  if(neg) return fail(`ما يصير — «${neg.name}» يصير رصيده بالسالب (${cardAvailableQty(neg).toFixed(1)}) لأن جزء منه انصرف أو محجوز. خفّف التعديل على هالصنف`);
+  notifyInventoryChange(`${editing?`تعديل فاتورة شراء رقم ${invoiceNo}`:`فاتورة شراء رقم ${invoiceNo}`} — ${notes.join("، ")} (الإجمالي ${invVal(total)})`, lines.map(l=>l.name).join("، "));
+  window.__purchLineKeepId = null;
+  if(await saveStateWithRollback(snapshot)){
+    if(editing) logAudit("purchase_edited", {invoiceNo, before: oldLines.map(p=>{ const c=findItemCard(p.itemCardId); return `${c?c.name:"—"} ${p.quantity}×${p.unitPrice}`; }), after: lines.map(l=>`${l.name} ${l.qty}×${l.unitPrice}`), oldTotal: oldLines.reduce((a,p)=>a+p.total,0), total, payStatus});
+    else logAudit("purchase_recorded", {invoiceNo, items: lines.map(l=>`${l.name} ${l.qty}×${l.unitPrice}`), total, payStatus});
+    cancelPurchaseEdit();
+    showToast(editing ? `تم تعديل فاتورة الشراء رقم ${invoiceNo}` : `تم حفظ فاتورة الشراء رقم ${invoiceNo} — ${lines.length} صنف`);
   }
 }
 function nextPurchaseInvoiceNo(){ const n=state.settings.nextPurchaseInvoiceNumber||1; state.settings.nextPurchaseInvoiceNumber=n+1; return n; }
 function renderPurchases(){
   const tbody = $("purchasesBody");
-  const rows = state.purchases.slice().reverse();
-  tbody.innerHTML = rows.length ? rows.map(p=>{
+  const groups = []; const byNo = {};
+  state.purchases.forEach(p=>{ const k = String(p.invoiceNo); if(!byNo[k]){ byNo[k] = []; groups.push(byNo[k]); } byNo[k].push(p); });
+  const isAdmin = currentUser && currentUser.role==="مدير";
+  tbody.innerHTML = groups.length ? groups.slice().reverse().map(lines=>{
+    const p = lines[0];
     const sup = state.suppliers.find(s=>s.id===p.supplierId);
-    const card = findItemCard(p.itemCardId);
-    return `<tr><td>${p.invoiceNo||"—"}</td><td>${esc(p.supplierInvoiceNo||"—")}</td><td>${p.date}</td><td>${sup?esc(sup.name):"—"}</td><td>${card?esc(card.name):"—"}</td><td>${p.quantity}</td><td>${p.total.toFixed(0)} ﷼</td><td>${p.payStatus==="paid"?"مدفوعة":"آجلة"}</td>
-      <td style="white-space:nowrap;"><button class="icon-btn" onclick="printPurchaseInvoice('${p.id}')" title="طباعة"><i data-lucide="printer"></i></button>${p.imageData?`<button class="icon-btn" onclick="previewPurchaseImage('${p.id}')" title="معاينة صورة فاتورة المورد"><i data-lucide="eye"></i></button>`:""}</td></tr>`;
+    const names = lines.map(x=>{ const c = findItemCard(x.itemCardId); return c ? esc(c.name) : "—"; });
+    const total = lines.reduce((a,x)=>a+x.total,0);
+    const img = lines.find(x=>x.imageData);
+    const locked = purchaseInvoiceLocked(lines);
+    return `<tr><td>${p.invoiceNo||"—"}${p.editedAt?`<br><span class="sub" style="font-size:10.5px;">معدّلة ${esc(p.editedAt)}</span>`:""}</td><td>${esc(p.supplierInvoiceNo||"—")}</td><td>${p.date}</td><td>${sup?esc(sup.name):"—"}</td>
+      <td>${lines.length>1?`<b>${lines.length} أصناف:</b> `:""}${names.join("، ")}</td><td>${lines.length>1?lines.map(x=>x.quantity).join(" + "):p.quantity}</td><td>${total.toFixed(0)} ﷼</td><td>${p.payStatus==="paid"?"مدفوعة":"آجلة"}</td>
+      <td style="white-space:nowrap;"><button class="icon-btn" onclick="printPurchaseInvoice('${p.id}')" title="طباعة"><i data-lucide="printer"></i></button>${img?`<button class="icon-btn" onclick="previewPurchaseImage('${img.id}')" title="معاينة صورة فاتورة المورد"><i data-lucide="eye"></i></button>`:""}${isAdmin?`<button class="icon-btn" onclick="startEditPurchase('${esc(String(p.invoiceNo))}')" title="${locked?esc(locked):"تعديل الفاتورة"}"${locked?' style="opacity:.4;"':""}><i data-lucide="pencil"></i></button>`:""}</td></tr>`;
   }).join("") : `<tr><td colspan="9">${emptyStateHtml("shopping-cart","ما فيه مشتريات مسجّلة بعد.")}</td></tr>`;
   refreshLucideIcons();
 }
@@ -848,10 +976,8 @@ function buildPurchaseInvoiceHtml(p){
     ${p.supplierInvoiceNo?`<p style="margin:3px 0;">رقم فاتورة المورد: <b>${esc(p.supplierInvoiceNo)}</b></p>`:""}
     <hr>
     <p style="margin:3px 0;">المورد: <b>${sup?esc(sup.name):"—"}</b></p>
-    <p style="margin:3px 0;">الصنف: ${card?esc(card.name):"—"}</p>
-    <p style="margin:3px 0;">الكمية: ${p.quantity}</p>
-    <p style="margin:3px 0;">سعر الوحدة: ${p.unitPrice.toFixed(2)} ريال</p>
-    <p style="font-weight:700;margin:3px 0;">الإجمالي: ${p.total.toFixed(2)} ريال</p>
+    ${purchaseInvoiceLines(p.invoiceNo).map((x,i,all)=>{ const c = findItemCard(x.itemCardId); return `<p style="margin:4px 0 0;">${all.length>1?`${i+1}. `:"الصنف: "}${c?esc(c.name):"—"}</p><p style="margin:0 0 3px;">${x.quantity} × ${x.unitPrice.toFixed(2)} = ${x.total.toFixed(2)} ريال</p>`; }).join("")}
+    <p style="font-weight:700;margin:3px 0;">الإجمالي: ${purchaseInvoiceLines(p.invoiceNo).reduce((a,x)=>a+x.total,0).toFixed(2)} ريال</p>
     <p style="margin:3px 0;">حالة الدفع: ${p.payStatus==="paid"?"مدفوعة":"آجلة"}</p>
     <hr>
     <p style="font-size:10px;color:#555;margin:3px 0;">سجّلها: ${esc(p.recordedBy||"—")}</p>

@@ -463,7 +463,11 @@ function allVoucherEntries(){
   (state.salesReturns||[]).forEach(r=> push("صرف", r.voucherNo, {date:r.date, amount:r.refundAmount, title:`استرداد مرتجع مبيعات #${r.saleInvoiceNumber}`, note:r.reason, by:r.recordedBy, box:boxName(r.boxId)}));
   (state.suppliers||[]).forEach(su=> (su.payments||[]).forEach(sp=> push("صرف", sp.voucherNo, {date:sp.date, amount:sp.amount, title:`تسديد ${su.kind||"مورد"} — ${su.name}`, by:sp.recordedBy, box:boxName(sp.boxId)})));
   (state.payrollLedger||[]).forEach(e=>{ if(e.type==="payment"||e.type==="advance") push("صرف", e.voucherNo, {date:e.date, amount:e.amount, title:`${e.type==="advance"?"سلفة":"راتب"} — ${e.username}`, note:e.note, by:e.recordedBy, box:boxName(e.boxId)}); });
-  (state.purchases||[]).forEach(p=>{ if(p.payStatus==="paid"){ const su = state.suppliers.find(x=>x.id===p.supplierId); push("صرف", p.voucherNo, {date:p.date, amount:p.total, title:`فاتورة شراء ${p.invoiceNo||""}${su?" — "+su.name:""}`, by:p.recordedBy, box:boxName(p.sourceBoxId)}); } });
+  const seenPurch = new Set();
+  (state.purchases||[]).forEach(p=>{ if(p.payStatus!=="paid") return; const k = String(p.invoiceNo); if(seenPurch.has(k)) return; seenPurch.add(k);
+    const lines = state.purchases.filter(x=>String(x.invoiceNo)===k && x.payStatus==="paid");
+    const su = state.suppliers.find(x=>x.id===p.supplierId);
+    push("صرف", p.voucherNo, {date:p.date, amount: lines.reduce((a,x)=>a+x.total,0), title:`فاتورة شراء ${p.invoiceNo||""}${lines.length>1?` (${lines.length} أصناف)`:""}${su?" — "+su.name:""}`, by:p.recordedBy, box:boxName(p.sourceBoxId)}); });
   return out;
 }
 function renderVoucherLookup(){
