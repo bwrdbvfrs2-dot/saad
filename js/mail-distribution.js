@@ -290,9 +290,29 @@ function renderReturnsLog(){
     `</tbody></table></div>` : `<p class="sub">ما فيه فواتير محذوفة.</p>`;
   el.innerHTML = html;
 }
+// one invoice save at a time: on a slow connection the save took a while with the form still filled in,
+// and pressing «حفظ» again saved the same invoice a second time under the next number
+let invoiceSaveRunning = false;
+function setInvoiceSaveButtonsBusy(busy){
+  ["saveInvoiceBtn","saveAndPrintBtn","saveAndSendBtn"].forEach(id=>{ const b = $(id); if(!b) return;
+    if(busy){ if(b.dataset.label===undefined) b.dataset.label = b.textContent; b.textContent = "جاري الحفظ…"; b.disabled = true; b.style.opacity = "0.7"; }
+    else { if(b.dataset.label!==undefined){ b.textContent = b.dataset.label; delete b.dataset.label; } b.disabled = false; b.style.opacity = ""; }
+  });
+}
 async function saveInvoice(){
+  if(invoiceSaveRunning){ showToast("الفاتورة جاري حفظها — انتظر لين تطلع «تم حفظ الفاتورة»"); return null; }
+  invoiceSaveRunning = true; setInvoiceSaveButtonsBusy(true);
+  try{ return await saveInvoiceOnce(); }
+  finally{ invoiceSaveRunning = false; setInvoiceSaveButtonsBusy(false); }
+}
+async function saveInvoiceOnce(){
   if(measOnlyEdit && editingId) return saveInvoiceMeasurementsOnly();
   const isNewInvoice = !editingId;
+  if(isNewInvoice){
+    if(!invoiceFormToken) invoiceFormToken = newId();
+    const already = state.invoices.find(i=> i.formToken && i.formToken===invoiceFormToken);
+    if(already){ resetForm(); renderAll(); showToast(`هذي الفاتورة انحفظت قبل — رقم ${already.number}. ما انحفظت مرة ثانية`); return null; }
+  }
   // the number box is read-only and auto-filled; take the live counter for a new invoice so a number
   // another device used after this form was opened isn't reused (it'd be rejected as a duplicate)
   if(isNewInvoice) $("invNumber").value = state.settings.nextInvoiceNumber;
@@ -463,6 +483,7 @@ async function saveInvoice(){
   }
   const invData = {
     id: editingId || (newId()),
+    ...(isNewInvoice ? {formToken: invoiceFormToken} : {}),
     number, date, originMonth,
     customerName: custName, customerMobile: custMobile,
     payments: JSON.parse(JSON.stringify(paymentsListTemp)),

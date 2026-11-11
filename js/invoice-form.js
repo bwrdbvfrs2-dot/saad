@@ -1044,6 +1044,7 @@ function computeExpectedDeliveryDate(newGarmentsCount){
 function resetForm(){
   if(typeof setMeasOnlyEdit==="function" && measOnlyEdit) setMeasOnlyEdit(false);
   fetchedHeldId = null; autoFilledMeas = null;
+  invoiceFormToken = newId(); // a fresh new-invoice form: its own token, so it can only ever be saved once
   editingId=null; paymentsListTemp=[]; editingPaymentIdx=null; selectedOfferIds=[]; appliedPromoCode=null;
   $("formTitle").textContent="فاتورة جديدة";
   $("invNumber").value = state.settings.nextInvoiceNumber;
@@ -1184,12 +1185,15 @@ function saveInvoiceDraftSoon(){
   clearTimeout(invoiceDraftTimer);
   invoiceDraftTimer = setTimeout(saveInvoiceDraftNow, 800);
 }
+// identifies the new-invoice form on screen: saved with the invoice, and a second save of the same form
+// (a second press while a slow save was still going, or a save whose answer got lost) is refused
+let invoiceFormToken = "";
 function saveInvoiceDraftNow(){
   if(!currentUser || editingId || measOnlyEdit || !$("tab-invoice")) return;
   if(!(typeof isInvoiceFormDirty==="function" && isInvoiceFormDirty())) return;
   const draft = { savedAt: serverNowIso(), customerName: $("custName").value.trim(), customerMobile: $("custMobile").value.trim(),
     notes: $("invNotes").value.trim(), expectedDeliveryDate: $("invDeliveryDate").value || null,
-    garments: garmentsFromForm(), selectedOfferIds: [...selectedOfferIds], fetchedHeldId };
+    garments: garmentsFromForm(), selectedOfferIds: [...selectedOfferIds], fetchedHeldId, formToken: invoiceFormToken };
   try{ localStorage.setItem(invoiceDraftKey(), JSON.stringify(draft)); }catch(e){}
   renderInvoiceDraftBanner();
 }
@@ -1217,6 +1221,12 @@ function restoreInvoiceDraft(){
   if(d.expectedDeliveryDate) $("invDeliveryDate").value = d.expectedDeliveryDate;
   selectedOfferIds = [...(d.selectedOfferIds||[])];
   if(d.fetchedHeldId && heldInvoicesLive().some(h=>h.id===d.fetchedHeldId)) fetchedHeldId = d.fetchedHeldId;
+  if(d.formToken){
+    // that draft was in fact saved (its save went through but the answer never came back) — don't bring it back
+    const done = state.invoices.find(i=>i.formToken===d.formToken);
+    if(done){ clearInvoiceDraft(); showToast(`هذي الفاتورة انحفظت قبل — رقم ${done.number}. ما رجّعتها عشان ما تتكرر`); return; }
+    invoiceFormToken = d.formToken;
+  }
   renderGarmentFields(d.garments);
   ["input","change"].forEach(ev=> $("custMobile").dispatchEvent(new Event(ev)));
   updateLiveTotals(); renderInvoiceDraftBanner();
