@@ -378,10 +378,16 @@ function assignVoucherNumbers(){
   (state.salesReturns||[]).forEach(r=>{ if((r.refundAmount||0)>0) out(r); });
   (state.suppliers||[]).forEach(s=> (s.payments||[]).forEach(sp=> out(sp)));
   (state.payrollLedger||[]).forEach(e=>{ if(e.type==="payment"||e.type==="advance") out(e); });
-  (state.purchases||[]).forEach(p=>{ if(p.payStatus==="paid") out(p); });
+  // a purchase invoice with several items is paid with one voucher: its first paid item gets the
+  // number, the others share it (set right after numbering, below)
+  const purchFirstPaid = {};
+  (state.purchases||[]).forEach(p=>{ if(p.payStatus!=="paid") return; const k = String(p.invoiceNo);
+    if(!purchFirstPaid[k]){ purchFirstPaid[k] = p; out(p); } });
   const byDate = (a,b)=> a.date<b.date ? -1 : a.date>b.date ? 1 : 0; // stable: same-day records keep their order
   ins.sort(byDate).forEach(x=> x.set(nextVoucherNo()));
   outs.sort(byDate).forEach(x=> x.set(nextPaymentVoucherNo()));
+  (state.purchases||[]).forEach(p=>{ if(p.payStatus!=="paid") return; const f = purchFirstPaid[String(p.invoiceNo)];
+    if(f && f!==p && f.voucherNo && p.voucherNo!==f.voucherNo) p.voucherNo = f.voucherNo; });
   st.nextReceiptVoucherNumber = st.nextVoucherNumber;
 }
 // Every save writes the WHOLE shop document, so two devices saving around the same moment used to
