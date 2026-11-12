@@ -575,7 +575,16 @@ function updateSaveIndicator(){
   el.style.display=""; el.style.color="var(--profit)"; el.textContent = "✓ انحفظ";
   saveIndicatorTimer = setTimeout(()=>{ el.style.display="none"; }, 2500);
 }
+// ---- app version: a change to how the data is stored raises state.settings.minAppVersion; a device still
+// running an older copy of the app then can't save (it would write the data the old way) until it reloads ----
+const APP_VERSION = 2;
+function appOutdated(){ return !!(state && state.settings && (state.settings.minAppVersion||0) > APP_VERSION); }
+function updateAppVersionBanner(){
+  const b = typeof document!=="undefined" && document.getElementById("updateBanner"); if(!b) return;
+  b.style.display = appOutdated() ? "" : "none";
+}
 function saveState(){
+  if(appOutdated()){ updateAppVersionBanner(); if(typeof showToast==="function") showToast("ما انحفظ — فيه تحديث للبرنامج، حدّث الصفحة (F5) وأعد الخطوة"); return Promise.resolve(false); }
   if(!fbAuth.currentUser) return Promise.resolve(false); // signed out — a write would only be refused
   if(isOffline()){ updateOfflineBanner(); if(typeof showToast==="function") showToast(OFFLINE_SAVE_MSG); return Promise.resolve(false); }
   // captured now, so a later in-memory change can't leak into this save; queued so this device's
@@ -800,6 +809,7 @@ async function applyServerSnapshot(snap, isFirstLoad){
   // an older copy than this device's own latest save (its snapshot is on the way) is skipped
   if(!isFirstLoad && ((snap.data()._rev||0) < latestOwnRev)) return;
   state = mergeCatalogInto(snap.data());
+  updateAppVersionBanner(); // an outdated copy still shows the data; its saves are refused in saveState
   typeLibrariesReseeded = false;
   addonSnapshotsBackfilled = false;
   normalizeState();
