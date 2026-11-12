@@ -1337,7 +1337,12 @@
 
 <div class="tab-panel" id="tab-invoicesList">
 <div class="panel">
-  <h2>سجل الفواتير — الشهر الحالي</h2>
+  <h2>سجل الفواتير</h2>
+  <div class="row-3" style="align-items:end;">
+    <div class="field" style="grid-column:span 2;"><label>ابحث عن فاتورة — رقم الفاتورة، اسم العميل، الجوال، أو رقم السند</label><input type="search" id="invLogSearch" placeholder="مثلاً: 125 أو محمد أو 05…" autocomplete="off"></div>
+    <div class="field"><label>البحث في</label><select id="invLogScope"><option value="month">الشهر الحالي</option><option value="all">كل الأشهر (مع المؤرشف)</option></select></div>
+  </div>
+  <p class="sub" id="invLogHint" style="margin:-4px 0 10px;"></p>
   <div class="actions-row" style="margin-top:0;margin-bottom:16px;">
     <button class="btn btn-ghost btn-sm" id="exportCsvBtn">تصدير Excel (CSV)</button>
     <button class="btn btn-danger btn-sm adminOnly" id="closeMonthBtn">إقفال الشهر الحالي وبدء شهر جديد</button>
