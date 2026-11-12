@@ -1423,33 +1423,49 @@ function renderQuickMenuBar(){
   }).join("");
   refreshLucideIcons();
 }
+// the quick menu editor, laid out like the permissions editor: one role at a time (buttons on top), the
+// screens that role may open grouped in boxes like the menu, a search box, and the chosen shortcuts in order
+let qmEditorRole = "", qmEditorQuery = "";
+const QUICK_MENU_MAX = 8;
 function renderQuickMenuEditor(){
   const el = $("quickMenuEditor");
   if(!el || !currentUser || currentUser.role!=="مدير") return;
-  const flat = allNavItemsFlat();
-  el.innerHTML = EDITABLE_ROLES.map(role=>{
-    const allowedTabs = (state.permissions[role]?.tabs)||[];
-    const picks = state.quickMenus[role]||[];
-    const itemsHtml = allowedTabs.map(t=>{
-      const item = flat.find(i=>i.tab===t);
-      if(!item) return "";
-      const checked = picks.includes(t);
-      return `<div class="embro-toggle" style="margin:4px 0;"><input type="checkbox" class="qm-pick" data-role="${role}" data-tab="${t}" ${checked?"checked":""}><label style="margin:0;font-size:13px;"><i data-lucide="${navIcon(item.tab)}" style="width:14px;height:14px;vertical-align:middle;"></i> ${item.label}</label></div>`;
-    }).join("");
-    return `<div class="garment-card"><span class="tag">${role} (${picks.length} اختصار محدد)</span><div style="margin-top:8px;">${itemsHtml||`<p class="sub">هذا الدور ما عنده أي تبويبات مفعّلة بالصلاحيات أصلاً.</p>`}</div></div>`;
-  }).join("");
+  if(!EDITABLE_ROLES.includes(qmEditorRole)) qmEditorRole = EDITABLE_ROLES[0];
+  const role = qmEditorRole, allowed = (state.permissions[role]?.tabs)||[];
+  const picks = (state.quickMenus[role]||[]).filter(t=> allowed.includes(t));
+  const flat = allNavItemsFlat(), full = picks.length >= QUICK_MENU_MAX, q = qmEditorQuery.trim();
+  const roleBtns = EDITABLE_ROLES.map(r=>{ const n = ((state.quickMenus[r]||[]).filter(t=> ((state.permissions[r]?.tabs)||[]).includes(t))).length;
+    return `<button class="btn btn-sm ${r===role?"btn-gold":"btn-ghost"}" onclick="qmEditorRole='${r}'; renderQuickMenuEditor();">${r} <span style="opacity:.75;font-size:11px;">(${n}/${QUICK_MENU_MAX})</span></button>`; }).join(" ");
+  const chosen = picks.map((t,i)=>{ const it = flat.find(x=>x.tab===t); return it ? `<span class="payroll-chip" style="cursor:default;padding:4px 10px;"><b style="font-size:11px;opacity:.6;">${i+1}</b> <i data-lucide="${navIcon(t)}" style="width:14px;height:14px;"></i> ${esc(it.label)} <button type="button" class="icon-btn" title="شيل" style="padding:0 4px;" onclick="toggleQuickPick('${role}','${t}',false)">✕</button></span>` : ""; }).join("");
+  const groupsHtml = NAV_GROUPS.map(group=>{
+    const items = group.items.filter(it=> allowed.includes(it.tab) && (!q || it.label.includes(q)));
+    if(!items.length) return "";
+    const on = items.filter(it=> picks.includes(it.tab)).length;
+    return `<div class="garment-card" style="margin:0;padding:10px 12px;">
+      <div style="margin-bottom:6px;"><b style="font-size:13px;">${group.title} <span class="sub" style="font-size:11px;font-weight:400;">${on}/${items.length}</span></b></div>
+      ${items.map(it=>{ const checked = picks.includes(it.tab), off = !checked && full;
+        return `<label style="display:flex;align-items:center;gap:6px;margin:4px 0;font-size:13px;cursor:${off?"not-allowed":"pointer"};opacity:${off?.5:1};"><input type="checkbox" class="qm-pick" data-role="${role}" data-tab="${it.tab}" ${checked?"checked":""} ${off?"disabled":""} style="width:16px;height:16px;flex:0 0 auto;margin:0;padding:0;"><i data-lucide="${navIcon(it.tab)}" style="width:14px;height:14px;flex:0 0 auto;"></i> <span style="flex:1;">${it.label}</span></label>`; }).join("")}
+    </div>`; }).join("");
+  el.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px;">${roleBtns}
+      <input type="text" id="qmEditorSearch" placeholder="ابحث عن شاشة…" value="${esc(qmEditorQuery)}" style="flex:1;min-width:140px;max-width:260px;margin-inline-start:auto;"></div>
+    <p class="sub" style="margin:0 0 6px;">اختصارات <b>${role}</b> بالترتيب (${picks.length}/${QUICK_MENU_MAX})${full?` — <b style="color:var(--loss);">وصلت الحد، شيل واحد عشان تضيف غيره</b>`:""}:</p>
+    <div class="payroll-chips" style="margin-bottom:10px;">${chosen || `<span class="sub">ما فيه اختصارات — اختر من تحت.</span>`}</div>
+    <p class="sub" style="margin:0 0 8px;">الشاشات المتاحة لدور <b>${role}</b> حسب صلاحياته:</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;">${groupsHtml || `<p class="sub">${q?"ما فيه شاشة بهذا الاسم.":"هذا الدور ما عنده أي شاشات مفعّلة بالصلاحيات."}</p>`}</div>`;
   refreshLucideIcons();
-  document.querySelectorAll(".qm-pick").forEach(cb=> cb.addEventListener("change", ()=>{
-    const role = cb.dataset.role, tab = cb.dataset.tab;
-    const list = state.quickMenus[role]||(state.quickMenus[role]=[]);
-    if(cb.checked){
-      if(list.length>=8){ showToast("أقصى 8 اختصارات بالقائمة السريعة"); cb.checked=false; return; }
-      if(!list.includes(tab)) list.push(tab);
-    } else {
-      state.quickMenus[role] = list.filter(t=>t!==tab);
-    }
-    saveState(); renderAll();
-  }));
+  const search = $("qmEditorSearch");
+  search.addEventListener("input", ()=>{ qmEditorQuery = search.value; const pos = search.selectionStart; renderQuickMenuEditor(); const s2 = $("qmEditorSearch"); s2.focus(); s2.setSelectionRange(pos,pos); });
+  document.querySelectorAll(".qm-pick").forEach(cb=> cb.addEventListener("change", ()=> toggleQuickPick(cb.dataset.role, cb.dataset.tab, cb.checked)));
+}
+function toggleQuickPick(role, tab, on){
+  const allowed = (state.permissions[role]?.tabs)||[];
+  const list = (state.quickMenus[role]||[]).filter(t=> allowed.includes(t));
+  if(on){
+    if(list.length >= QUICK_MENU_MAX){ showToast(`أقصى ${QUICK_MENU_MAX} اختصارات بالقائمة السريعة`); renderQuickMenuEditor(); return; }
+    if(!list.includes(tab)) list.push(tab);
+  }
+  state.quickMenus[role] = on ? list : list.filter(t=> t!==tab);
+  saveState(); renderAll(); renderQuickMenuEditor();
 }
 let navDrawerActiveGroup = null;
 function renderNavDrawer(){
