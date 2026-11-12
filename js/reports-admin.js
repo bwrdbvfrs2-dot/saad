@@ -193,7 +193,7 @@ function showCustomerReport(mobile, filterName){
   const invs = state.invoices.filter(i=>(i.customerMobile||"").trim()===mobile && (!filterName || i.customerName===filterName));
   if(!invs.length){ $("customerReportView").innerHTML=`<p class="sub">ما فيه فواتير لهذا العميل.</p>`; return; }
   const name = filterName || invs.find(i=>i.customerName)?.customerName || "—";
-  let totalSale=0, totalPaid=0, totalDiscount=0;
+  let totalSale=0, totalPaid=0, totalDiscount=0, totalRemaining=0;
   const cust = findCustomerByMobile(mobile);
   const lastInvDate = invs.reduce((max,i)=> (i.date||"")>max ? i.date : max, "");
   const lastGarment = findLastGarmentDataForCustomer(mobile, filterName);
@@ -222,7 +222,8 @@ function showCustomerReport(mobile, filterName){
   html += `<div class="stitch"></div><h3 style="font-size:14px;margin:0 0 10px;">الطلبات السابقة</h3>`;
   invs.slice().sort((a,b)=> (a.date||"").localeCompare(b.date||"")).forEach(inv=>{
     const s=invoiceSaleTotal(inv), paid=invoicePaid(inv), disc=invoiceDiscountTotal(inv);
-    totalSale+=s; totalPaid+=paid; totalDiscount+=disc;
+    // a returned invoice: what was refunded isn't "paid", and what it still owes is settled (invoiceRemaining)
+    totalSale+=s; totalPaid+=paid-invoiceRefunded(inv); totalDiscount+=disc; totalRemaining+=Math.max(0, invoiceRemaining(inv));
     html += `<div class="garment-card"><span class="tag">فاتورة ${esc(inv.number)} — ${inv.date||"—"} (${monthDisplay(inv.originMonth)})</span>
       <table style="margin-top:8px;"><thead><tr><th>نوع القماش</th><th>السعر</th><th>الحالة</th></tr></thead><tbody>
       ${inv.garments.map(g=>`<tr><td>${esc(g.fabricType)}</td><td>${netPriceCell(g, inv)}</td><td>${STATUSES.find(x=>x.v===g.status)?.label||g.status}</td></tr>`).join("")}
@@ -234,7 +235,7 @@ function showCustomerReport(mobile, filterName){
       <p class="sub" style="margin-top:6px;">إجمالي الفاتورة: ${s.toFixed(0)} ﷼ — المدفوع: ${paid.toFixed(0)} ﷼${disc?` — خصم: ${disc.toFixed(0)} ﷼`:""} — المتبقي: ${invoiceRemaining(inv).toFixed(0)} ﷼</p>
     </div>`;
   });
-  html += `<div class="remaining-box"><span>إجمالي كل الفواتير: ${totalSale.toFixed(0)} ﷼ — إجمالي المدفوع: ${totalPaid.toFixed(0)} ﷼${totalDiscount?` — إجمالي الخصم: ${totalDiscount.toFixed(0)} ﷼`:""}</span><span class="amt">إجمالي المتبقي: ${(totalSale-totalPaid-totalDiscount).toFixed(0)} ﷼</span></div>`;
+  html += `<div class="remaining-box"><span>إجمالي كل الفواتير: ${totalSale.toFixed(0)} ﷼ — إجمالي المدفوع: ${totalPaid.toFixed(0)} ﷼${totalDiscount?` — إجمالي الخصم: ${totalDiscount.toFixed(0)} ﷼`:""}</span><span class="amt">إجمالي المتبقي: ${totalRemaining.toFixed(0)} ﷼</span></div>`;
   html += notesHtml;
   $("customerReportView").innerHTML = html;
   refreshLucideIcons();

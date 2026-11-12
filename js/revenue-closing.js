@@ -420,12 +420,16 @@ function readyForSaleReport(){
   return { all, thisMonth, allTotal: all.reduce((a,w)=>a+w.amount,0), thisMonthTotal: thisMonth.reduce((a,w)=>a+w.amount,0) };
 }
 function computeIssuedInvoicesStats(monthLabel){
-  let total=0, paid=0;
+  // remaining = what customers still actually owe, invoice by invoice (discounts and returns included):
+  // it was total − paid, so a returned invoice's payment (its total drops to 0) and every discount
+  // made the month's remaining look smaller than the real debt
+  let total=0, paid=0, remaining=0;
   state.invoices.filter(i=>i.originMonth===monthLabel).forEach(inv=>{
     total += invoiceSaleTotal(inv);
-    paid += invoicePaid(inv);
+    paid += invoicePaid(inv) - invoiceRefunded(inv);
+    remaining += Math.max(0, invoiceRemaining(inv));
   });
-  return {total, paid, remaining: total-paid};
+  return {total, paid, remaining};
 }
 // where a month's cost figure comes from, item by item — the same pieces computeMonthlyFinancials adds up
 function monthlyCostBreakdown(monthLabel){
