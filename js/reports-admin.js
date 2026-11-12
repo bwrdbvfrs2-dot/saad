@@ -1746,6 +1746,8 @@ $("purchPayStatus").addEventListener("change", ()=>{
   $("purchSourceBoxWrap").style.display = $("purchPayStatus").value==="paid" ? "" : "none";
 });
 $("addPurchaseBtn").addEventListener("click", addPurchase);
+$("invLogSearch").addEventListener("input", ()=> renderInvoiceLog());
+$("invLogScope").addEventListener("change", ()=> renderInvoiceLog());
 $("addPurchLineBtn").addEventListener("click", addPurchLine);
 $("cancelPurchEditBtn").addEventListener("click", cancelPurchaseEdit);
 $("returnCard").addEventListener("change", refreshReturnForm);

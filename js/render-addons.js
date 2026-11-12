@@ -90,10 +90,34 @@ function renderAll(){
 }
 
 // the invoice log of the current month (its own function so it can wait until its tab is opened)
+// the search box on top: an invoice number, a customer's name or mobile, or a voucher/receipt number —
+// in this month or in every month (the archive included). Each result row has the same buttons as the log,
+// plus «فتح» (the distribution screen: stages, payments, delivery)
+function invoiceLogMatches(inv, q){
+  if(!q) return true;
+  const qd = q.replace(/\s+/g,"");
+  if(String(inv.number)===q) return true;
+  if((inv.customerName||"").includes(q)) return true;
+  if(qd.length>=3 && /^\d+$/.test(qd) && (inv.customerMobile||"").includes(qd)) return true;
+  if(/^\d+$/.test(qd) && (inv.payments||[]).some(p=> [p.voucherNo,p.cashReceiptNo,p.networkReceiptNo].some(v=> v!=null && String(v)===qd))) return true;
+  return false;
+}
 function renderInvoiceLog(curInvoices){
-  curInvoices = curInvoices || state.invoices.filter(i=>i.originMonth===state.settings.currentMonth);
+  const q = (($("invLogSearch")||{}).value||"").trim(), scope = (($("invLogScope")||{}).value)||"month";
+  const searching = !!q || scope==="all";
+  if(searching){
+    const pool = scope==="all" ? state.invoices : state.invoices.filter(i=>i.originMonth===state.settings.currentMonth);
+    // the exact invoice number first, then the newest
+    const found = pool.filter(i=> invoiceLogMatches(i, q)).sort((a,b)=> (String(b.number)===q) - (String(a.number)===q) || (b.date||"").localeCompare(a.date||"") || String(b.number).localeCompare(String(a.number), undefined, {numeric:true}));
+    curInvoices = found.slice(0, 100);
+    if($("invLogHint")) $("invLogHint").innerHTML = q ? `نتيجة البحث: <b>${found.length}</b> فاتورة${found.length>100?" — يعرض أول 100، دقّق البحث":""}${scope==="all"?" (كل الأشهر)":" (الشهر الحالي)"}` : `كل الأشهر: ${found.length} فاتورة${found.length>100?" — يعرض أحدث 100، ابحث عشان تلقى غيرها":""}`;
+  } else {
+    curInvoices = curInvoices || state.invoices.filter(i=>i.originMonth===state.settings.currentMonth);
+    if($("invLogHint")) $("invLogHint").textContent = `فواتير الشهر الحالي (${monthDisplay(state.settings.currentMonth)}): ${curInvoices.length}`;
+  }
   const body=$("invoicesBody"); body.innerHTML="";
   $("emptyState").style.display = curInvoices.length?"none":"block";
+  $("emptyState").querySelector("div:last-child").textContent = searching ? "ما فيه فاتورة تطابق البحث." : "ما فيه فواتير بهذا الشهر بعد.";
   const isAdmin = currentUser && currentUser.role==="مدير";
   // an invoice's profit is for the manager and the accountant — the cashier doesn't see it
   const showProfit = !!currentUser && (currentUser.role==="مدير" || currentUser.role==="محاسب");
@@ -109,16 +133,22 @@ function renderInvoiceLog(curInvoices){
         // before delivery the figure follows the payments, so a price edit doesn't move it — the expected one does
         + (profitData.mode!=="expected" && profitData.expected!==undefined ? `<br><span class="sub" style="font-size:10px;">المتوقع بعد التسليم: <b class="${profitData.expected>=0?'profit-pos':'profit-neg'}">${fmtSar(profitData.expected)} ﷼</b></span>` : "");
     const byLine = `<br><span class="sub" style="font-size:10px;">سجّلها: ${esc(inv.createdBy||"—")}${inv.lastEditedBy?` — آخر تعديل: ${esc(inv.lastEditedBy)}${inv.lastEditedAt?" "+inv.lastEditedAt.slice(0,10):""}`:""}</span>`;
-    tr.innerHTML = `<td><b>${esc(inv.number)}</b></td><td>${esc(inv.customerName||"—")}${byLine}</td><td>${inv.date}</td>
+    const otherMonth = inv.originMonth!==state.settings.currentMonth ? `<br><span class="sub" style="font-size:10px;">${monthDisplay(inv.originMonth)}${isMonthClosed(inv.originMonth)?" (مقفل)":""}</span>` : "";
+    tr.innerHTML = `<td><b>${esc(inv.number)}</b>${otherMonth}</td><td>${esc(inv.customerName||"—")}${inv.customerMobile?`<br><span class="sub" style="font-size:10.5px;">${esc(inv.customerMobile)}</span>`:""}${byLine}</td><td>${inv.date}</td>
       <td>${fmtSar(s)} ﷼${disc>0.004?`<br><span class="sub" style="font-size:10px;">قبل الخصم ${fmtSar(gross)} — خصم ${fmtSar(disc)}</span>`:""}</td><td>${fmtSar(paid)} ﷼</td><td>${fmtSar(rem)} ﷼</td>
       ${showProfit ? `<td>${profitCell}</td>` : ""}
-      <td style="white-space:nowrap;">${isAdmin?`<button class="btn btn-ghost btn-sm" style="color:var(--gold-soft);border-color:var(--gold-soft);" onclick="editInvoice('${inv.id}')" title="تعديل الفاتورة">تعديل</button> <button class="btn btn-ghost btn-sm" onclick="createInvoiceReturn('${inv.id}')" title="تسجيل مرتجع">مرتجع</button>`:""}<button class="icon-btn" onclick="editInvoiceMeasurements('${inv.id}')" title="تعديل المقاس"><i data-lucide="ruler"></i></button><button class="icon-btn" onclick="printCustomerReceipt('${inv.id}')" title="طباعة فاتورة العميل"><i data-lucide="printer"></i></button><button class="icon-btn" onclick="shareReceiptViaWhatsApp('${inv.id}')" title="إرسال الفاتورة واتساب"><i data-lucide="send"></i></button>${inv.einvoice?`<button class="icon-btn" onclick="showEinvoiceDetails('${inv.id}')" title="بيانات الفوترة الإلكترونية"><i data-lucide="receipt"></i></button>`:""}</td>`;
+      <td style="white-space:nowrap;"><button class="btn btn-gold btn-sm" onclick="openInvoiceFromLog('${inv.id}')" title="فتح الفاتورة: المراحل والدفعات والتسليم">فتح</button> ${isAdmin?`<button class="btn btn-ghost btn-sm" style="color:var(--gold-soft);border-color:var(--gold-soft);" onclick="editInvoice('${inv.id}')" title="تعديل الفاتورة">تعديل</button> <button class="btn btn-ghost btn-sm" onclick="createInvoiceReturn('${inv.id}')" title="تسجيل مرتجع">مرتجع</button>`:""}<button class="icon-btn" onclick="editInvoiceMeasurements('${inv.id}')" title="تعديل المقاس"><i data-lucide="ruler"></i></button><button class="icon-btn" onclick="printCustomerReceipt('${inv.id}')" title="طباعة فاتورة العميل"><i data-lucide="printer"></i></button><button class="icon-btn" onclick="shareReceiptViaWhatsApp('${inv.id}')" title="إرسال الفاتورة واتساب"><i data-lucide="send"></i></button>${inv.einvoice?`<button class="icon-btn" onclick="showEinvoiceDetails('${inv.id}')" title="بيانات الفوترة الإلكترونية"><i data-lucide="receipt"></i></button>`:""}</td>`;
     body.appendChild(tr);
     const badges = inv.garments.map(g=>{const st=STATUSES.find(x=>x.v===g.status);return `<span class="badge ${st.cls}">${st.label}${esc(g.tailor?" — "+g.tailor:"")}</span>`;}).join(" ");
     const tr2=document.createElement("tr"); tr2.innerHTML=`<td colspan="${showProfit?8:7}" style="padding-top:0;padding-bottom:14px;">${badges}</td>`; body.appendChild(tr2);
   });
 
   refreshLucideIcons();
+}
+function openInvoiceFromLog(id){
+  const inv = state.invoices.find(i=>i.id===id); if(!inv) return;
+  switchTab("distribution");
+  setTimeout(()=>{ const cur = state.invoices.find(i=>i.id===id) || inv; openDistributionInvoice(cur); }, 150);
 }
 // a screen nobody is looking at isn't redrawn on every renderAll (on an older shop computer one full
 // pass took 1.5 s, and it runs after every save): it is marked and drawn when its tab is opened
