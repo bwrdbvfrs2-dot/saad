@@ -14,6 +14,7 @@ const { computeDailyList } = require("./lib/eligibility");
 const { sendTemplate, sendText, validSignature } = require("./lib/whatsapp");
 const { isOptOut } = require("./lib/optout");
 const { buildCustomerContext } = require("./lib/customerContext");
+const { loadShopState } = require("./lib/shopState");
 const { draftReply, MODEL } = require("./lib/ai");
 
 initializeApp();
@@ -60,9 +61,9 @@ async function runOutreach({ manual = false, by = "schedule" } = {}){
     targets = (settings.testNumbers || []).map(normalizeSaudiMobile).filter(Boolean).slice(0, settings.dailyCap)
       .map(mobile=>({ kind:"test", mobile, name:"" }));
   }else{
-    const [stateSnap, leadsSnap, contactsSnap] = await Promise.all([ db.doc("shop/state").get(), db.collection("leads").get(), db.collection("bot_contacts").get() ]);
+    const [shop, leadsSnap, contactsSnap] = await Promise.all([ loadShopState(db), db.collection("leads").get(), db.collection("bot_contacts").get() ]);
     const contacts = {}; contactsSnap.forEach(d=>{ contacts[d.id] = d.data(); });
-    targets = computeDailyList({ state:stateSnap.exists ? stateSnap.data() : {}, leads:leadsSnap.docs.map(d=> d.data()), contacts, settings, today }).list;
+    targets = computeDailyList({ state:shop, leads:leadsSnap.docs.map(d=> d.data()), contacts, settings, today }).list;
   }
 
   for(const t of targets){
@@ -142,11 +143,11 @@ async function handleInbound(msg, contactName, settings){
 
   let draft = null;
   try{
-    const [stateSnap, histSnap] = await Promise.all([
-      db.doc("shop/state").get(),
+    const [shop, histSnap] = await Promise.all([
+      loadShopState(db),
       db.collection("bot_conversations").doc(mobile).collection("messages").orderBy("at", "desc").limit(12).get(),
     ]);
-    const ctx = buildCustomerContext(stateSnap.exists ? stateSnap.data() : {}, mobile);
+    const ctx = buildCustomerContext(shop, mobile);
     const history = histSnap.docs.map(d=> d.data()).reverse().filter(m=> m.text).map(m=>({ direction:m.direction, text:m.text }));
     draft = await draftReply({ apiKey:ANTHROPIC_API_KEY.value(), ctx, history });
   }catch(e){ logger.error("AI reply failed", { mobile, error:String(e.message) }); }
