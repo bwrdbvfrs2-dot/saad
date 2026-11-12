@@ -1351,7 +1351,7 @@ async function renderBackupsList(){
   el.innerHTML = `<p class="sub">جاري التحميل...</p>`;
   try{
     const snap = await BACKUPS_COL.get();
-    const dates = snap.docs.map(d=>d.id).sort().reverse();
+    const dates = snap.docs.map(d=>d.id).filter(id=> !id.includes("__")).sort().reverse(); // "__" = a part of a backup
     if(!dates.length){ el.innerHTML = `<p class="sub">ما فيه نسخ محفوظة بعد.</p>`; return; }
     el.innerHTML = dates.map(d=>`<div class="garment-card" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
       <span>${d}</span>
