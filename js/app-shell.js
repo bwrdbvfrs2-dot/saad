@@ -454,6 +454,14 @@ function startListeningToCatalog(){
           if(!first && state && state.settings && pendingSaves===0){ items.forEach(it=> setPath(state.settings, it.path.split("."), it.value)); changedHere = true; }
           return;
         }
+        if(isShardDocId(k) && Array.isArray(items)){
+          const json = stableJson(items);
+          if(shardSaved[k] && shardSaved[k].json===json) return;
+          shardSaved[k] = {json, items};
+          // another device changed customers/invoices: take its version (not a union, so a removal sticks)
+          if(!first && state && pendingSaves===0 && serverUpdateHolds===0){ state = mergeCatalogInto(state, {leftovers:false}); changedHere = true; }
+          return;
+        }
         if((isArchiveDocId(k) || isNotifArchiveDocId(k)) && Array.isArray(items)){
           const json = stableJson(items);
           if(archiveSaved[k] && archiveSaved[k].json===json) return;
@@ -491,6 +499,33 @@ const archiveSaved = {};   // docId -> {json, items}: the version stored in cata
 let archiveIndex = {};     // invoiceId -> docId, for every archived invoice
 let notifArchiveIndex = {}; // notification (state.decisions) id -> docId, for every archived notification
 function isArchiveDocId(k){ return /^archive-\d{4}-\d{2}(-\d+)?$/.test(k); }
+// ---- shards: the customers and the live (not archived) invoices are kept in their own documents
+// instead of shop/state, so no single document comes near Firestore's 1 MiB. Customers spread over 8
+// documents (cust-0…cust-7); live invoices over two documents per month (inv-YYYY-MM-0/1) ----
+function hashStr(t){ let h = 0; t = String(t||""); for(let i=0;i<t.length;i++){ h = (h*31 + t.charCodeAt(i)) | 0; } return Math.abs(h); }
+const SHARD_SPECS = [
+  {key:"customers", re:/^cust-\d+$/, docOf: c=> "cust-" + (hashStr(c.id || c.mobile) % 8)},
+  {key:"invoices",  re:/^inv-(\d{4}-\d{2}|x)-\d+$/, docOf: i=> archiveIndex[i.id] ? null : "inv-" + (/^\d{4}-\d{2}$/.test(i.originMonth||"") ? i.originMonth : "x") + "-" + (hashStr(i.id) % 2)},
+];
+const shardSaved = {};      // docId -> {json, items}: the version stored in catalog/{docId}
+// after a refused save: the shard documents as they are on the server now
+async function refreshShardsFromServer(){
+  const ids = Object.keys(shardSaved);
+  await Promise.all(ids.map(async d=>{
+    try{ const sn = await CATALOG_COL.doc(d).get({source:"server"}); const items = sn.exists ? (sn.data().items||[]) : [];
+      shardSaved[d] = {json: stableJson(items), items}; }catch(e){ console.error("shard refresh failed", d, e); }
+  }));
+}
+function shardSpecOf(k){ return SHARD_SPECS.find(sp=> sp.re.test(k)) || null; }
+function isShardDocId(k){ return !!shardSpecOf(k); }
+function shardDocsOf(spec){ return Object.keys(shardSaved).filter(d=> spec.re.test(d)).sort(); }
+// what the payload's items look like split into their documents — every document the spec already has
+// is included (one that ends up empty is written empty, so a moved/removed item leaves it)
+function shardItemsOf(spec, list){
+  const out = {}; shardDocsOf(spec).forEach(d=> out[d] = []);
+  (list||[]).forEach(x=>{ const d = spec.docOf(x); if(d){ (out[d] = out[d] || []).push(x); } });
+  return out;
+}
 // old notifications live in their own archive documents (narchive-YYYY-MM), the same way invoices do
 function isNotifArchiveDocId(k){ return /^narchive-\d{4}-\d{2}(-\d+)?$/.test(k); }
 function getPath(o, path){ return path.reduce((a,k)=> a==null ? undefined : a[k], o); }
@@ -502,8 +537,24 @@ function rebuildArchiveIndex(){
 }
 // the catalog version wins over a copy still sitting inside shop/state (from before the move, or
 // written back by a device still running an older version of the app)
-function mergeCatalogInto(data){
+function mergeCatalogInto(data, opts){
   catalogKeys().forEach(k=>{ if(catalogSaved[k]) data[k] = JSON.parse(JSON.stringify(catalogSaved[k].items)); });
+  // customers and live invoices from their shard documents. Items still sitting in the main document
+  // (written by a device on an older version) are kept too — `leftovers:false` when re-merging the
+  // in-memory state after another device changed a shard, so an item it removed doesn't come back
+  const withLeftovers = !(opts && opts.leftovers===false);
+  if(!(opts && opts.shards===false)) SHARD_SPECS.forEach(spec=>{
+    const docs = shardDocsOf(spec); if(!docs.length) return;
+    const items = docs.flatMap(d=> JSON.parse(JSON.stringify(shardSaved[d].items||[])));
+    const ids = new Set(items.map(x=>x.id));
+    let left = withLeftovers ? (data[spec.key]||[]).filter(x=> x && !ids.has(x.id) && !(spec.key==="invoices" && archiveIndex[x.id])) : [];
+    if(spec.key==="customers" && left.length){
+      // the same customer added again on an older device: fold its names into the stored one
+      left = left.filter(c=>{ const twin = items.find(x=> x.mobile && x.mobile===c.mobile); if(!twin) return true;
+        (c.individuals||[]).forEach(ind=>{ if(!(twin.individuals||[]).some(t=>t.name===ind.name)) (twin.individuals = twin.individuals||[]).push(ind); }); return false; });
+    }
+    data[spec.key] = items.concat(left);
+  });
   if(catalogSaved[SETTINGS_IMAGES_DOC] && data.settings){
     catalogSaved[SETTINGS_IMAGES_DOC].items.forEach(it=> setPath(data.settings, it.path.split("."), it.value));
   }
@@ -528,6 +579,8 @@ function mainDocOf(src){
     if(catalogSaved[SETTINGS_IMAGES_DOC] && o.settings){ o.settings = JSON.parse(JSON.stringify(o.settings)); SETTINGS_IMAGE_PATHS.forEach(path=>{ if(getPath(o.settings, path)) setPath(o.settings, path, ""); }); }
     if(Array.isArray(o.invoices)) o.invoices = o.invoices.filter(i=> !archiveIndex[i.id]);
     if(Array.isArray(o.decisions)) o.decisions = o.decisions.filter(x=> !notifArchiveIndex[x.id]);
+    // left as an empty list (not removed) so a device on an older version still opens — and shows its update banner
+    SHARD_SPECS.forEach(spec=>{ if(shardDocsOf(spec).length) o[spec.key] = []; });
   }
   return o;
 }
@@ -577,7 +630,7 @@ function updateSaveIndicator(){
 }
 // ---- app version: a change to how the data is stored raises state.settings.minAppVersion; a device still
 // running an older copy of the app then can't save (it would write the data the old way) until it reloads ----
-const APP_VERSION = 2;
+const APP_VERSION = 3;
 function appOutdated(){ return !!(state && state.settings && (state.settings.minAppVersion||0) > APP_VERSION); }
 function updateAppVersionBanner(){
   const b = typeof document!=="undefined" && document.getElementById("updateBanner"); if(!b) return;
@@ -697,9 +750,25 @@ async function commitStatePayload(payload){
   invArchiveDocs.forEach(d=>{ archiveItems[d] = (payload.invoices||[]).filter(i=> archiveIndex[i.id]===d); });
   notifArchiveDocs.forEach(d=>{ archiveItems[d] = (payload.decisions||[]).filter(x=> notifArchiveIndex[x.id]===d); });
   const archiveWrites = archiveDocs.filter(d=> !archiveSaved[d] || archiveSaved[d].json!==stableJson(archiveItems[d]));
-  const sideWrites = catalogWrites.length + (imgWrite?1:0) + archiveWrites.length;
+  // customers and live invoices go to their shard documents (the first save of the new version moves them)
+  const shardItems = {};
+  SHARD_SPECS.forEach(spec=>{ if(Array.isArray(payload[spec.key])) Object.assign(shardItems, shardItemsOf(spec, payload[spec.key])); });
+  const shardWrites = Object.keys(shardItems).filter(d=> !shardSaved[d] || shardSaved[d].json!==stableJson(shardItems[d]));
+  // a device on the old way of storing must not save over this — it's told to reload
+  if(Object.keys(shardItems).length && payload.settings) payload.settings.minAppVersion = Math.max(payload.settings.minAppVersion||0, APP_VERSION);
+  const sideWrites = catalogWrites.length + (imgWrite?1:0) + archiveWrites.length + shardWrites.length;
   const runSave = (withLog, withCatalog) => db.runTransaction(async tx=>{
       const cur = await tx.get(STATE_DOC);
+      // a shard about to be overwritten must still be the version this device built on — another
+      // device may have changed it (its own main-document revision can't show that ordering reliably)
+      if(withCatalog && shardWrites.length){
+        const snaps = await Promise.all(shardWrites.map(d=> tx.get(CATALOG_COL.doc(d))));
+        snaps.forEach((sn, i)=>{
+          const d = shardWrites[i], base = shardSaved[d] ? shardSaved[d].json : null;
+          const now = sn.exists ? stableJson(sn.data().items||[]) : null;
+          if(now!==base){ const err = new Error("shard "+d+" changed since it was loaded"); err.code = "state-conflict"; throw err; }
+        });
+      }
       const curRev = (cur.exists && cur.data()._rev) || 0;
       if(curRev !== baseRev){ const err = new Error("shop/state changed since it was loaded"); err.code = "state-conflict"; throw err; }
       // only a manager may change users/permissions (the rules enforce it). Anyone else's copy can still
@@ -724,6 +793,8 @@ async function commitStatePayload(payload){
         archiveWrites.forEach(d=> tx.set(CATALOG_COL.doc(d), side(archiveItems[d])));
         if(invArchiveDocs.length && Array.isArray(mainDoc.invoices)) mainDoc.invoices = mainDoc.invoices.filter(i=> !archiveIndex[i.id]);
         if(notifArchiveDocs.length && Array.isArray(mainDoc.decisions)) mainDoc.decisions = mainDoc.decisions.filter(x=> !notifArchiveIndex[x.id]);
+        shardWrites.forEach(d=> tx.set(CATALOG_COL.doc(d), side(shardItems[d])));
+        SHARD_SPECS.forEach(spec=>{ if(Object.keys(shardItems).some(d=> spec.re.test(d))) mainDoc[spec.key] = []; });
       }
       tx.set(STATE_DOC, mainDoc);
       if(withLog) tx.set(WRITE_LOG_COL.doc(String(payload._rev)), {
@@ -757,6 +828,7 @@ async function commitStatePayload(payload){
       catalogWrites.forEach(k=>{ catalogSaved[k] = {json: stableJson(payload[k]), items: JSON.parse(JSON.stringify(payload[k]))}; });
       if(imgWrite) catalogSaved[SETTINGS_IMAGES_DOC] = {json: imgJson, items: JSON.parse(JSON.stringify(imgItems))};
       archiveWrites.forEach(d=>{ archiveSaved[d] = {json: stableJson(archiveItems[d]), items: JSON.parse(JSON.stringify(archiveItems[d]))}; });
+      shardWrites.forEach(d=>{ shardSaved[d] = {json: stableJson(shardItems[d]), items: JSON.parse(JSON.stringify(shardItems[d]))}; });
     }
     ownCommittedRevs.set(baseRev, payload._rev);
     latestOwnRev = Math.max(latestOwnRev, payload._rev);
@@ -768,6 +840,7 @@ async function commitStatePayload(payload){
       console.warn("save rejected — another device saved first; reloading latest data", e);
       try{
         const snap = await STATE_DOC.get({source:"server"});
+        await refreshShardsFromServer();
         if(snap.exists){ state = mergeCatalogInto(snap.data()); normalizeState(); }
       }catch(fetchErr){ console.error("reloading latest state after a save conflict failed", fetchErr); }
       if(currentUser) renderAll();
@@ -898,8 +971,18 @@ async function maybeBackupStateToday(){
     const ref = BACKUPS_COL.doc(today);
     const snap = await ref.get();
     if(snap.exists) return; // already have today's snapshot
-    // shop/state only — a full copy with the pictures and the archive outgrew a document's 1 MiB and failed
-    await ref.set({snapshot: JSON.parse(JSON.stringify(mainDocOf(state))), backedUpAt: firebase.firestore.FieldValue.serverTimestamp(), by: fbAuth.currentUser ? fbAuth.currentUser.uid : null});
+    // shop/state, plus one part per shard (customers, live invoices) — each its own document, since
+    // together they'd outgrow a document's 1 MiB. The parts go first; the main copy marks it complete.
+    const by = fbAuth.currentUser ? fbAuth.currentUser.uid : null;
+    for(const spec of SHARD_SPECS){
+      if(!shardDocsOf(spec).length) continue;
+      const parts = shardItemsOf(spec, state[spec.key]||[]);
+      for(const d of Object.keys(parts)){
+        if(!parts[d].length) continue;
+        await BACKUPS_COL.doc(today+"__"+d).set({snapshot:{key:spec.key, items: JSON.parse(JSON.stringify(parts[d]))}, backedUpAt: firebase.firestore.FieldValue.serverTimestamp(), by});
+      }
+    }
+    await ref.set({snapshot: JSON.parse(JSON.stringify(mainDocOf(state))), backedUpAt: firebase.firestore.FieldValue.serverTimestamp(), by});
     // removing old backups is the manager's (the rules allow no one else to delete one)
     if(currentUser && currentUser.role==="مدير") await pruneOldBackups();
   }catch(e){ console.error("automatic backup failed", e); } // never block normal app use over this
@@ -965,13 +1048,19 @@ async function restoreBackup(dateId){
     const snap = await BACKUPS_COL.doc(dateId).get();
     if(!snap.exists){ showToast("النسخة غير موجودة"); return; }
     const restoredState = snap.data().snapshot;
+    // the backup's parts (customers, live invoices) — a backup from before the split has none
+    const partsSnap = await BACKUPS_COL.where(firebase.firestore.FieldPath.documentId(), ">=", dateId+"__").where(firebase.firestore.FieldPath.documentId(), "<", dateId+"__\uf8ff").get();
+    const fromParts = {};
+    partsSnap.forEach(d=>{ const sn = d.data().snapshot||{}; if(sn.key) (fromParts[sn.key] = fromParts[sn.key]||[]).push(...(sn.items||[])); });
+    Object.keys(fromParts).forEach(k=>{ restoredState[k] = fromParts[k]; });
     // keep the CURRENT login-linked user records — restoring an old backup's users could lock
     // out whoever is doing the restore, or reinstate someone removed since then
     restoredState.users = state.users;
     // continue from the live revision, not the backup's old one, so the restore goes through the
     // same conflict-checked save as everything else
     restoredState._rev = state._rev;
-    state = mergeCatalogInto(restoredState); // a backup holds shop/state only — the pictures and archives come from catalog/
+    // the backup's own customers/invoices replace the current ones (shards:false), the pictures and archives come from catalog/
+    state = mergeCatalogInto(restoredState, {shards:false});
     normalizeState();
     if(!await saveState()) return;
     showToast("تم الاسترجاع بنجاح"); renderAll();
@@ -1420,13 +1509,26 @@ const STATE_DOC_LIMIT_BYTES = 1048576;
 function stateSizeBytes(obj){ try{ return new TextEncoder().encode(JSON.stringify(obj||state)).length; }catch(e){ return 0; } }
 // what goes into shop/state itself: the type libraries (with their pictures) live in catalog/ once it's in use
 function mainDocCopy(){ return mainDocOf(state); }
+// the fullest shard document (customers / live invoices), as {doc, bytes}
+function largestShard(){
+  let best = {doc:"", bytes:0};
+  SHARD_SPECS.forEach(spec=>{ if(!shardDocsOf(spec).length) return;
+    const parts = shardItemsOf(spec, state[spec.key]||[]);
+    Object.keys(parts).forEach(d=>{ const b = stateSizeBytes(parts[d]); if(b > best.bytes) best = {doc:d, bytes:b}; }); });
+  return best;
+}
+// how full the fullest document is (main or shard), in % of the limit
+function dataFullPct(){ return Math.max(stateSizeBytes(mainDocCopy()), largestShard().bytes) / STATE_DOC_LIMIT_BYTES * 100; }
 function renderStateSizeMeter(){
   const el = $("stateSizeMeter"); if(!el || !currentUser || currentUser.role!=="مدير") return;
-  const doc = mainDocCopy(), used = stateSizeBytes(doc), pct = used/STATE_DOC_LIMIT_BYTES*100;
+  const doc = mainDocCopy(), mainUsed = stateSizeBytes(doc), shard = largestShard();
+  const split = Object.keys(shardSaved).length > 0;
+  const used = Math.max(mainUsed, shard.bytes), pct = used/STATE_DOC_LIMIT_BYTES*100;
   const color = pct>=85 ? "var(--loss)" : pct>=70 ? "var(--warn)" : "var(--profit)";
   const parts = Object.keys(doc).map(k=>[k, stateSizeBytes(doc[k])]).sort((a,b)=>b[1]-a[1]).slice(0,5);
   const LABELS = {invoices:"فواتير التفصيل", customers:"العملاء والمقاسات", salesInvoices:"فواتير المبيعات", purchases:"المشتريات (مع صورها)", auditLog:"سجل التدقيق", itemCards:"الأصناف", settings:"الإعدادات (مع الشعار والصور)", payrollLedger:"الرواتب", expenses:"المصروفات", decisions:"الإشعارات", mailRequests:"طلبات البريد", deletedInvoicesLog:"الفواتير المحذوفة", garmentTypes:"أنواع الثياب (مع صورها)", collarTypes:"أنواع الياقة (مع صورها)", cufflinkTypes:"أنواع الكبك (مع صورها)"};
-  el.innerHTML = `<p style="margin:0 0 6px;">مستخدم <b style="color:${color};">${(used/1024).toFixed(0)} كيلوبايت</b> من ${(STATE_DOC_LIMIT_BYTES/1024).toFixed(0)} (${pct.toFixed(0)}%)</p>
+  el.innerHTML = `<p style="margin:0 0 6px;">${split ? `أكبر سجل مستخدم <b style="color:${color};">${(used/1024).toFixed(0)} كيلوبايت</b> من ${(STATE_DOC_LIMIT_BYTES/1024).toFixed(0)} (${pct.toFixed(0)}%)` : `مستخدم <b style="color:${color};">${(used/1024).toFixed(0)} كيلوبايت</b> من ${(STATE_DOC_LIMIT_BYTES/1024).toFixed(0)} (${pct.toFixed(0)}%)`}</p>
+    ${split ? `<p class="sub" style="margin:0 0 6px;">البيانات مقسّمة على أكثر من سجل، وكل سجل له حده: السجل الرئيسي ${(mainUsed/1024).toFixed(0)} ك.ب، وأكبر سجل للعملاء أو الفواتير ${(shard.bytes/1024).toFixed(0)} ك.ب. العملاء على ${shardDocsOf(SHARD_SPECS[0]).length} سجلات، والفواتير الشغالة سجلين لكل شهر.</p>` : ""}
     <div style="height:10px;background:var(--surface3);border-radius:6px;overflow:hidden;"><div style="height:100%;width:${Math.min(100,pct).toFixed(1)}%;background:${color};"></div></div>
     <p class="sub" style="margin:6px 0 2px;">أكبر الأجزاء: ${parts.map(([k,b])=>`${LABELS[k]||k} ${(b/1024).toFixed(0)} ك.ب`).join("، ")}</p>
     <p class="sub" style="margin:2px 0;">${pct>=70 ? `<b style="color:${color};">قربت البيانات من الحد — لما توصل 100% يوقف الحفظ. انقل الفواتير المنتهية للأرشيف من الزر تحت.</b>` : "كل بيانات المحل محفوظة بسجل واحد حده 1 ميجابايت تقريباً — تنبيه يطلع لك إذا وصلت 70%."}</p>
@@ -1492,7 +1594,7 @@ async function autoArchiveIfNeeded(){
 // once a day, a manager is told when the data is getting near the limit
 function warnStateSizeIfNeeded(){
   if(!currentUser || currentUser.role!=="مدير") return;
-  const pct = stateSizeBytes(mainDocCopy())/STATE_DOC_LIMIT_BYTES*100;
+  const pct = dataFullPct();
   if(pct < 70) return;
   const key = "stateSizeWarned:"+todayStr();
   try{ if(localStorage.getItem(key)) return; localStorage.setItem(key,"1"); }catch(e){}
