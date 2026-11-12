@@ -454,7 +454,7 @@ function startListeningToCatalog(){
           if(!first && state && state.settings && pendingSaves===0){ items.forEach(it=> setPath(state.settings, it.path.split("."), it.value)); changedHere = true; }
           return;
         }
-        if(isArchiveDocId(k) && Array.isArray(items)){
+        if((isArchiveDocId(k) || isNotifArchiveDocId(k)) && Array.isArray(items)){
           const json = stableJson(items);
           if(archiveSaved[k] && archiveSaved[k].json===json) return;
           archiveSaved[k] = {json, items};
@@ -489,11 +489,17 @@ const SETTINGS_IMAGES_DOC = "settingsImages";
 const SETTINGS_IMAGE_PATHS = [["shopLogo"],["takhaleesIcon"],["cuttingCardImages","front"],["cuttingCardImages","back"]];
 const archiveSaved = {};   // docId -> {json, items}: the version stored in catalog/{docId}
 let archiveIndex = {};     // invoiceId -> docId, for every archived invoice
+let notifArchiveIndex = {}; // notification (state.decisions) id -> docId, for every archived notification
 function isArchiveDocId(k){ return /^archive-\d{4}-\d{2}(-\d+)?$/.test(k); }
+// old notifications live in their own archive documents (narchive-YYYY-MM), the same way invoices do
+function isNotifArchiveDocId(k){ return /^narchive-\d{4}-\d{2}(-\d+)?$/.test(k); }
 function getPath(o, path){ return path.reduce((a,k)=> a==null ? undefined : a[k], o); }
 function setPath(o, path, v){ let t = o; path.slice(0,-1).forEach(k=>{ if(!t[k] || typeof t[k]!=="object") t[k] = {}; t = t[k]; }); t[path[path.length-1]] = v; }
 function settingsImagesOf(settings){ return SETTINGS_IMAGE_PATHS.map(path=>({path:path.join("."), value: getPath(settings||{}, path) || ""})); }
-function rebuildArchiveIndex(){ archiveIndex = {}; Object.keys(archiveSaved).forEach(d=> (archiveSaved[d].items||[]).forEach(inv=>{ archiveIndex[inv.id] = d; })); }
+function rebuildArchiveIndex(){
+  archiveIndex = {}; notifArchiveIndex = {};
+  Object.keys(archiveSaved).forEach(d=>{ const idx = isNotifArchiveDocId(d) ? notifArchiveIndex : archiveIndex; (archiveSaved[d].items||[]).forEach(x=>{ idx[x.id] = d; }); });
+}
 // the catalog version wins over a copy still sitting inside shop/state (from before the move, or
 // written back by a device still running an older version of the app)
 function mergeCatalogInto(data){
@@ -501,7 +507,12 @@ function mergeCatalogInto(data){
   if(catalogSaved[SETTINGS_IMAGES_DOC] && data.settings){
     catalogSaved[SETTINGS_IMAGES_DOC].items.forEach(it=> setPath(data.settings, it.path.split("."), it.value));
   }
-  const archived = Object.keys(archiveSaved).sort().flatMap(d=> JSON.parse(JSON.stringify(archiveSaved[d].items||[])));
+  const archived = Object.keys(archiveSaved).filter(isArchiveDocId).sort().flatMap(d=> JSON.parse(JSON.stringify(archiveSaved[d].items||[])));
+  const archivedNotifs = Object.keys(archiveSaved).filter(isNotifArchiveDocId).sort().flatMap(d=> JSON.parse(JSON.stringify(archiveSaved[d].items||[])));
+  if(archivedNotifs.length && Array.isArray(data.decisions)){
+    const ids = new Set(archivedNotifs.map(x=>x.id));
+    data.decisions = archivedNotifs.concat(data.decisions.filter(x=> !ids.has(x.id)));
+  }
   if(archived.length && Array.isArray(data.invoices)){
     const ids = new Set(archived.map(i=>i.id));
     // archived (older) first, then the live ones — an old copy of an archived invoice (a backup) is dropped
@@ -516,6 +527,7 @@ function mainDocOf(src){
     catalogKeys().forEach(k=>{ if(catalogSaved[k]) delete o[k]; });
     if(catalogSaved[SETTINGS_IMAGES_DOC] && o.settings){ o.settings = JSON.parse(JSON.stringify(o.settings)); SETTINGS_IMAGE_PATHS.forEach(path=>{ if(getPath(o.settings, path)) setPath(o.settings, path, ""); }); }
     if(Array.isArray(o.invoices)) o.invoices = o.invoices.filter(i=> !archiveIndex[i.id]);
+    if(Array.isArray(o.decisions)) o.decisions = o.decisions.filter(x=> !notifArchiveIndex[x.id]);
   }
   return o;
 }
@@ -670,8 +682,11 @@ async function commitStatePayload(payload){
   const imgJson = imgItems ? stableJson(imgItems) : null;
   const imgWrite = !!imgItems && (imgItems.some(it=>it.value) || !!catalogSaved[SETTINGS_IMAGES_DOC]) && (!catalogSaved[SETTINGS_IMAGES_DOC] || catalogSaved[SETTINGS_IMAGES_DOC].json!==imgJson);
   // each archive document holds what state.invoices has for it (an archived invoice can still get a return)
-  const archiveDocs = [...new Set(Object.values(archiveIndex))];
-  const archiveItems = {}; archiveDocs.forEach(d=>{ archiveItems[d] = (payload.invoices||[]).filter(i=> archiveIndex[i.id]===d); });
+  const invArchiveDocs = [...new Set(Object.values(archiveIndex))], notifArchiveDocs = [...new Set(Object.values(notifArchiveIndex))];
+  const archiveDocs = invArchiveDocs.concat(notifArchiveDocs);
+  const archiveItems = {};
+  invArchiveDocs.forEach(d=>{ archiveItems[d] = (payload.invoices||[]).filter(i=> archiveIndex[i.id]===d); });
+  notifArchiveDocs.forEach(d=>{ archiveItems[d] = (payload.decisions||[]).filter(x=> notifArchiveIndex[x.id]===d); });
   const archiveWrites = archiveDocs.filter(d=> !archiveSaved[d] || archiveSaved[d].json!==stableJson(archiveItems[d]));
   const sideWrites = catalogWrites.length + (imgWrite?1:0) + archiveWrites.length;
   const runSave = (withLog, withCatalog) => db.runTransaction(async tx=>{
@@ -698,7 +713,8 @@ async function commitStatePayload(payload){
           SETTINGS_IMAGE_PATHS.forEach(path=>{ if(getPath(mainDoc.settings, path)) setPath(mainDoc.settings, path, ""); });
         }
         archiveWrites.forEach(d=> tx.set(CATALOG_COL.doc(d), side(archiveItems[d])));
-        if(archiveDocs.length && Array.isArray(mainDoc.invoices)) mainDoc.invoices = mainDoc.invoices.filter(i=> !archiveIndex[i.id]);
+        if(invArchiveDocs.length && Array.isArray(mainDoc.invoices)) mainDoc.invoices = mainDoc.invoices.filter(i=> !archiveIndex[i.id]);
+        if(notifArchiveDocs.length && Array.isArray(mainDoc.decisions)) mainDoc.decisions = mainDoc.decisions.filter(x=> !notifArchiveIndex[x.id]);
       }
       tx.set(STATE_DOC, mainDoc);
       if(withLog) tx.set(WRITE_LOG_COL.doc(String(payload._rev)), {
@@ -859,6 +875,7 @@ async function afterSignedIn(){
   // after the app opens instead of holding up the login screen (the first login of each day was slow)
   setTimeout(maybeBackupStateToday, 5000);
   setTimeout(warnStateSizeIfNeeded, 3000);
+  setTimeout(()=>{ autoArchiveIfNeeded().catch(e=>console.error("auto archive failed", e)); }, 8000);
 }
 
 // ---------------- daily backups (disaster recovery — keeps the last 14 days) ----------------
@@ -1403,7 +1420,7 @@ function renderStateSizeMeter(){
     <div style="height:10px;background:var(--surface3);border-radius:6px;overflow:hidden;"><div style="height:100%;width:${Math.min(100,pct).toFixed(1)}%;background:${color};"></div></div>
     <p class="sub" style="margin:6px 0 2px;">أكبر الأجزاء: ${parts.map(([k,b])=>`${LABELS[k]||k} ${(b/1024).toFixed(0)} ك.ب`).join("، ")}</p>
     <p class="sub" style="margin:2px 0;">${pct>=70 ? `<b style="color:${color};">قربت البيانات من الحد — لما توصل 100% يوقف الحفظ. انقل الفواتير المنتهية للأرشيف من الزر تحت.</b>` : "كل بيانات المحل محفوظة بسجل واحد حده 1 ميجابايت تقريباً — تنبيه يطلع لك إذا وصلت 70%."}</p>
-    <p class="sub" style="margin:8px 0 4px;">الأرشيف: <b>${Object.keys(archiveIndex).length}</b> فاتورة محفوظة بسجلات منفصلة — تظهر بكل الشاشات والتقارير عادي. جاهز للأرشفة الحين: <b>${archivableInvoices().length}</b> فاتورة (أشهر مقفلة، كل ثيابها مسلّمة أو ملغية، وما عليها مبلغ).</p>
+    <p class="sub" style="margin:8px 0 4px;">الأرشيف: <b>${Object.keys(archiveIndex).length}</b> فاتورة و<b>${Object.keys(notifArchiveIndex).length}</b> إشعار محفوظة بسجلات منفصلة — تظهر بكل الشاشات والتقارير عادي، وتنتقل للأرشيف تلقائياً لما يفتح المدير البرنامج (الفواتير المنتهية بالأشهر المقفلة، والإشعارات الأقدم من ${NOTIF_ARCHIVE_DAYS} يوم). جاهز للأرشفة الحين: <b>${archivableInvoices().length}</b> فاتورة (أشهر مقفلة، كل ثيابها مسلّمة أو ملغية، وما عليها مبلغ).</p>
     <button class="btn btn-ghost btn-sm" onclick="archiveFinishedInvoices()" ${archivableInvoices().length?"":"disabled"}>نقل الفواتير المنتهية للأرشيف</button>`;
 }
 // invoices that can move to the archive: their month is closed and they are finished — every thobe
@@ -1422,21 +1439,45 @@ async function archiveFinishedInvoices(){
   const months = [...new Set(list.map(i=>i.originMonth))].sort();
   if(!await showConfirm(`نقل ${list.length} فاتورة منتهية (${months.map(monthDisplay).join("، ")}) للأرشيف؟ تبقى ظاهرة بكل الشاشات والتقارير والبحث مثل ما هي — بس تنحفظ بسجل منفصل عشان تفضى مساحة.`)) return;
   const prevIndex = {...archiveIndex};
-  // one document per month, split if a month is too big for one (Firestore's 1 MiB)
-  months.forEach(m=>{
-    const invs = list.filter(i=>i.originMonth===m);
-    const base = "archive-"+m; let part = 0, doc = base, size = stateSizeBytes(state.invoices.filter(i=>archiveIndex[i.id]===doc));
-    invs.forEach(inv=>{
-      const sz = stateSizeBytes(inv);
-      if(size + sz > 800*1024){ part++; doc = base+"-"+part; size = stateSizeBytes(state.invoices.filter(i=>archiveIndex[i.id]===doc)); }
-      archiveIndex[inv.id] = doc; size += sz;
-    });
-  });
+  assignToArchive(list, archiveIndex, state.invoices, "archive-", i=>i.originMonth);
   if(await saveState()){
     logAudit("invoices_archived", {count:list.length, months});
     showToast(`انتقلت ${list.length} فاتورة للأرشيف`);
   } else { archiveIndex = prevIndex; }
   renderStateSizeMeter();
+}
+// one archive document per month, split if a month is too big for one (Firestore's 1 MiB)
+function assignToArchive(items, index, all, prefix, monthOf){
+  const months = [...new Set(items.map(monthOf))].sort();
+  months.forEach(m=>{
+    const base = prefix+m; let part = 0, doc = base, size = stateSizeBytes(all.filter(x=>index[x.id]===doc));
+    items.filter(x=>monthOf(x)===m).forEach(x=>{
+      const sz = stateSizeBytes(x);
+      if(size + sz > 800*1024){ part++; doc = base+"-"+part; size = stateSizeBytes(all.filter(y=>index[y.id]===doc)); }
+      index[x.id] = doc; size += sz;
+    });
+  });
+}
+// notifications older than this many days move to the archive (they still show in the mail box)
+const NOTIF_ARCHIVE_DAYS = 45;
+function archivableNotifications(){
+  const cut = new Date(serverNowMs ? serverNowMs() : Date.now()); cut.setDate(cut.getDate()-NOTIF_ARCHIVE_DAYS);
+  const cutStr = cut.toISOString().slice(0,10);
+  return (state.decisions||[]).filter(x=> x.id && !notifArchiveIndex[x.id] && /^\d{4}-\d{2}-\d{2}/.test(x.date||"") && x.date < cutStr);
+}
+// runs by itself when a manager opens the app: finished invoices of closed months and old notifications
+// move to their archive documents, so the shop document keeps room without anyone remembering to do it
+async function autoArchiveIfNeeded(){
+  if(!currentUser || currentUser.role!=="مدير" || catalogDenied || pendingSaves>0) return;
+  const invs = archivableInvoices(), notifs = archivableNotifications();
+  if(!invs.length && !notifs.length) return;
+  const prevInv = {...archiveIndex}, prevNotif = {...notifArchiveIndex};
+  if(invs.length) assignToArchive(invs, archiveIndex, state.invoices, "archive-", i=>i.originMonth);
+  if(notifs.length) assignToArchive(notifs, notifArchiveIndex, state.decisions, "narchive-", x=>x.date.slice(0,7));
+  if(await saveState()){
+    logAudit("auto_archived", {invoices:invs.length, notifications:notifs.length});
+    renderStateSizeMeter();
+  } else { archiveIndex = prevInv; notifArchiveIndex = prevNotif; }
 }
 // once a day, a manager is told when the data is getting near the limit
 function warnStateSizeIfNeeded(){
