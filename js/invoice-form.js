@@ -172,6 +172,14 @@ async function removeSeason(i){
   if(!await showConfirm("متأكد تبي تحذف هذا الموسم؟")) return;
   state.seasons.splice(i,1); saveState(); renderAll();
 }
+// what the tailors can still sew from `day` to the end of its month: each one's daily target × the days left
+// (the selected day included) — the production screen's «القدرة المتبقية للمحل حتى نهاية الشهر»
+function shopRemainingCapacity(day){
+  day = day || todayStr();
+  const [y,m] = day.split("-").map(Number);
+  const remainingDays = new Date(y, m, 0).getDate() - new Date(day+"T00:00:00").getDate() + 1;
+  return state.users.filter(u=>u.role==="خياط").reduce((a,t)=> a + (t.dailyCapacity||0)*remainingDays, 0);
+}
 function renderProductionTracking(){
   const el = $("productionTrackingView");
   if(!el) return;

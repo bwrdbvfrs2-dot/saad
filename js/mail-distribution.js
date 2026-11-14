@@ -753,10 +753,20 @@ function renderDashboardKPIs(){
     kpi("c-sales","receipt","إجمالي فواتير اليوم", fmtSar(invoicedToday)+" ﷼") +
     kpi("c-count","file-text","فواتير اليوم", todaysInvoices.length + ` <span style="font-size:12px;font-weight:600;">فاتورة — ${todaysInvoices.reduce((a,inv)=>a+inv.garments.filter(g=>g.status!=="ملغي").length,0)} ثوب</span>` + (todaysSalesInvoices.length?` <span style="font-size:12px;font-weight:600;">+ ${todaysSalesInvoices.length} مبيعات</span>`:"")) +
     kpi("c-progress","loader","قيد التنفيذ", inProgressCount) +
+    capacityKpi(inProgressCount) +
     `<div class="kpi-card c-ready" style="cursor:pointer;" onclick="openReadyUndeliveredList()" title="اضغط للقائمة مع إرسال تذكير"><div class="kpi-top"><div class="kpi-icon"><i data-lucide="check-circle-2"></i></div></div><div class="kpi-lbl">جاهز ما انسلّم (كل الأشهر)</div><div class="kpi-val">${readyAll.length}${readyPrev?` <span style="font-size:12px;font-weight:600;">منها ${readyPrev} من أشهر سابقة</span>`:""}</div><div style="font-size:10.5px;color:var(--gold-soft);margin-top:2px;">اضغط للقائمة والتذكير</div></div>` +
     kpi("c-overdue","alert-triangle","متأخر", overdueCount) +
     kpi("c-due","wallet","مبالغ مستحقة", totalDue.toFixed(0)+" ﷼");
   refreshLucideIcons();
+}
+// how many more thobes the shop can take this month: the tailors' remaining capacity (production screen)
+// minus what is already in progress
+function capacityKpi(inProgressCount){
+  const cap = shopRemainingCapacity(todayStr());
+  const left = cap - inProgressCount;
+  const val = cap<=0 ? `<span style="font-size:12px;font-weight:600;">حدد الهدف اليومي للخياطين</span>`
+    : `<span style="color:${left<0?"var(--loss)":"inherit"};">${left<0?"متجاوز "+Math.abs(left):left} ثوب</span><br><span style="font-size:11px;font-weight:600;color:var(--muted);">قدرة باقي الشهر: ${cap}<br>ناقص قيد التنفيذ: ${inProgressCount}</span>`;
+  return `<div class="kpi-card c-count" style="cursor:pointer;" onclick="switchTab('production')" title="من شاشة الإنتاج: القدرة المتبقية حتى نهاية الشهر ناقص الثياب قيد التنفيذ"><div class="kpi-top"><div class="kpi-icon"><i data-lucide="gauge"></i></div></div><div class="kpi-lbl">القدرة المتبقية للاستقبال</div><div class="kpi-val">${val}</div></div>`;
 }
 function renderDashboardWorkDistribution(){
   const el = $("dashboardWorkDistribution");
