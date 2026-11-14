@@ -1039,18 +1039,29 @@ function addPaymentTemp(){
 
 // ---------------- form actions ----------------
 function formatDateInput(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+// expected delivery = 3 days for cutting + the days the tailors need to sew everything ahead of it and
+// this invoice: (thobes not sewn yet + the new ones) ÷ the tailors' daily capacity. Without any capacity
+// set, their actual output over the last 14 days is used; without either, «مدة الإنتاج الافتراضية».
+// It is only a suggestion — the date stays editable, and nothing is ever refused because of capacity.
+const CUTTING_DAYS = 3;
+function tailorsDailyRate(){
+  const cap = state.users.filter(u=>u.role==="خياط").reduce((a,t)=>a+(t.dailyCapacity||0),0);
+  if(cap>0) return cap;
+  const from = serverDate(); from.setDate(from.getDate()-14); const fromStr = formatDateInput(from);
+  let sewn = 0;
+  state.invoices.forEach(inv=> inv.garments.forEach(g=>{ if(g.tailorCompletedDate && g.tailorCompletedDate>=fromStr) sewn++; }));
+  return sewn/14;
+}
 function computeExpectedDeliveryDate(newGarmentsCount){
-  const tailors = state.users.filter(u=>u.role==="خياط" && (u.dailyCapacity||0)>0);
-  const totalCapacity = tailors.reduce((a,t)=>a+(t.dailyCapacity||0),0);
   const d = serverDate();
-  if(totalCapacity<=0){
-    d.setDate(d.getDate() + (state.settings.defaultDeliveryDays||3));
-    return d;
+  const rate = tailorsDailyRate();
+  let productionDays;
+  if(rate<=0) productionDays = state.settings.defaultDeliveryDays||3;
+  else {
+    const notSewn = state.invoices.reduce((a,inv)=> a + inv.garments.filter(g=>["جديد","قص","تفصيل"].includes(g.status) && !g.tailorCompletedDate).length, 0);
+    productionDays = Math.max(1, Math.ceil((notSewn + Math.max(1, newGarmentsCount||1)) / rate));
   }
-  const pendingCount = state.invoices.reduce((a,inv)=> a + inv.garments.filter(g=>g.status!=="تسليم" && g.status!=="ملغي").length, 0);
-  const totalToProcess = pendingCount + Math.max(1, newGarmentsCount||1);
-  const daysNeeded = Math.max(1, Math.ceil(totalToProcess / totalCapacity));
-  d.setDate(d.getDate() + daysNeeded);
+  d.setDate(d.getDate() + CUTTING_DAYS + productionDays);
   return d;
 }
 function resetForm(){
