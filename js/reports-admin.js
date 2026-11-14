@@ -392,13 +392,12 @@ function buildDailyReportHtml(day, r, username){
   // an invoice with both kinds shows up in each table with its own thobes only
   const groupNew = own=> r.newInvoices.map(inv=>{
     const gs = inv.garments.filter(g=> g.status!=="ملغي" && (!g.itemCardId)===own);
-    const kinds = {}; gs.forEach(g=>{ const k = g.category||"رجال"; kinds[k]=(kinds[k]||0)+1; });
-    const kind = Object.keys(kinds).length===1 ? Object.keys(kinds)[0] : Object.entries(kinds).map(([k,c])=>`${k} ${c}`).join("، ");
-    return gs.length ? {inv, n:gs.length, kind, total:gs.reduce((a,g)=>a+garmentSalePrice(g),0)} : null;
+    const kinds = {"رجال":0,"ولادي":0,"طفل":0}; gs.forEach(g=>{ const k = kinds[g.category]!==undefined ? g.category : "رجال"; kinds[k]++; });
+    return gs.length ? {inv, n:gs.length, kinds, total:gs.reduce((a,g)=>a+garmentSalePrice(g),0)} : null;
   }).filter(Boolean);
-  const newTable = (title, rows)=> dailySection(title, ["رقم","العميل","العدد","النوع","الإجمالي"],
-    rows.map(x=>`<tr><td>${esc(x.inv.number)}</td><td>${esc(x.inv.customerName||"—")}</td><td>${x.n}</td><td>${esc(x.kind)}</td><td>${sar(x.total)}</td></tr>`),
-    {foot:`<td colspan="2">الإجمالي</td><td>${rows.reduce((a,x)=>a+x.n,0)} ثوب</td><td></td><td>${sar(rows.reduce((a,x)=>a+x.total,0))}</td>`});
+  const newTable = (title, rows)=> dailySection(title, ["رقم","العميل","العدد","رجال","ولادي","طفل","الإجمالي"],
+    rows.map(x=>`<tr><td>${esc(x.inv.number)}</td><td>${esc(x.inv.customerName||"—")}</td><td>${x.n}</td>${["رجال","ولادي","طفل"].map(k=>`<td>${x.kinds[k]||""}</td>`).join("")}<td>${sar(x.total)}</td></tr>`),
+    {foot:`<td colspan="2">الإجمالي</td><td>${rows.reduce((a,x)=>a+x.n,0)} ثوب</td>${["رجال","ولادي","طفل"].map(k=>`<td>${rows.reduce((a,x)=>a+x.kinds[k],0)||""}</td>`).join("")}<td>${sar(rows.reduce((a,x)=>a+x.total,0))}</td>`});
   const shopRows = groupNew(false), ownRows = groupNew(true);
   parts.push(newTable("فواتير جديدة — قماش المحل", shopRows));
   parts.push(newTable("فواتير جديدة — قماش من خارج المحل", ownRows));
