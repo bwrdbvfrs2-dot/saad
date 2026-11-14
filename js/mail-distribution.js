@@ -749,30 +749,35 @@ function renderDashboardKPIs(){
   // what today's invoices are worth in full (after their discounts), not only what was paid on them
   const invoicedToday = todaysInvoices.reduce((a,inv)=> a + invoiceSaleTotal(inv) - invoiceDiscountTotal(inv), 0)
     + todaysSalesInvoices.reduce((a,x)=> a + saleNetTotal(x), 0);
-  const kpi = (cls, icon, lbl, val)=> `<div class="kpi-card ${cls}"><div class="kpi-top"><div class="kpi-icon"><i data-lucide="${icon}"></i></div></div><div class="kpi-lbl">${lbl}</div><div class="kpi-val">${val}</div></div>`;
+  // every card the same: label, one big number, and at most one short muted line under it.
+  // Two rows of four — money first, then the work on the floor
+  const garmentsToday = todaysInvoices.reduce((a,inv)=>a+inv.garments.filter(g=>g.status!=="ملغي").length,0);
   el.innerHTML =
-    kpi("c-sales","banknote","مبيعات اليوم (المقبوض)", salesToday.toFixed(0)+" ﷼") +
-    kpi("c-sales","receipt","إجمالي فواتير اليوم", fmtSar(invoicedToday)+" ﷼") +
-    kpi("c-count","file-text","فواتير اليوم", todaysInvoices.length + ` <span style="font-size:12px;font-weight:600;">فاتورة — ${todaysInvoices.reduce((a,inv)=>a+inv.garments.filter(g=>g.status!=="ملغي").length,0)} ثوب</span>` + (todaysSalesInvoices.length?` <span style="font-size:12px;font-weight:600;">+ ${todaysSalesInvoices.length} مبيعات</span>`:"")) +
-    kpi("c-progress","loader","قيد التنفيذ", inProgressCount) +
+    kpiCard("c-sales","banknote","مبيعات اليوم (المقبوض)", salesToday.toFixed(0)+" ﷼") +
+    kpiCard("c-sales","receipt","إجمالي فواتير اليوم", fmtSar(invoicedToday)+" ﷼") +
+    kpiCard("c-count","file-text","فواتير اليوم", `${todaysInvoices.length} فاتورة`, `${garmentsToday} ثوب`+(todaysSalesInvoices.length?` · ${todaysSalesInvoices.length} مبيعات`:"")) +
+    kpiCard("c-due","wallet","مبالغ مستحقة", totalDue.toFixed(0)+" ﷼") +
+    kpiCard("c-progress","loader","قيد التنفيذ", `${inProgressCount} ثوب`) +
     capacityKpi(garmentsNotSewnCount()) +
-    `<div class="kpi-card c-ready" style="cursor:pointer;" onclick="openReadyUndeliveredList()" title="اضغط للقائمة مع إرسال تذكير"><div class="kpi-top"><div class="kpi-icon"><i data-lucide="check-circle-2"></i></div></div><div class="kpi-lbl">جاهز ما انسلّم (كل الأشهر)</div><div class="kpi-val">${readyAll.length}${readyPrev?` <span style="font-size:12px;font-weight:600;">منها ${readyPrev} من أشهر سابقة</span>`:""}</div><div style="font-size:10.5px;color:var(--gold-soft);margin-top:2px;">اضغط للقائمة والتذكير</div></div>` +
-    kpi("c-overdue","alert-triangle","متأخر", overdueCount) +
-    kpi("c-due","wallet","مبالغ مستحقة", totalDue.toFixed(0)+" ﷼");
+    kpiCard("c-ready","check-circle-2","جاهز ما انسلّم (كل الأشهر)", `${readyAll.length} ثوب`, (readyPrev?`منها ${readyPrev} من أشهر سابقة · `:"")+"اضغط للقائمة والتذكير", {onclick:"openReadyUndeliveredList()", title:"اضغط للقائمة مع إرسال تذكير"}) +
+    kpiCard("c-overdue","alert-triangle","متأخر", `${overdueCount} ثوب`);
   refreshLucideIcons();
 }
-// how many more thobes the shop can take this month: the tailors' remaining capacity (production screen)
-// minus what is already in progress
 // thobes the tailors still have to sew (sewn ones waiting for quality check, and ready ones, don't count)
 function garmentsNotSewnCount(){
   return state.invoices.reduce((a,inv)=> a + inv.garments.filter(g=>["جديد","قص","تفصيل"].includes(g.status) && !g.tailorCompletedDate).length, 0);
 }
-function capacityKpi(inProgressCount){
+function kpiCard(cls, icon, lbl, val, sub, opt={}){
+  const click = opt.onclick ? ` style="cursor:pointer;" onclick="${opt.onclick}"` : "";
+  return `<div class="kpi-card ${cls}"${click}${opt.title?` title="${opt.title}"`:""}><div class="kpi-top"><div class="kpi-icon"><i data-lucide="${icon}"></i></div><div class="kpi-lbl">${lbl}</div></div><div class="kpi-val"${opt.valColor?` style="color:${opt.valColor};"`:""}>${val}</div>${sub?`<div class="kpi-sub">${sub}</div>`:""}</div>`;
+}
+function capacityKpi(notSewn){
   const cap = shopRemainingCapacity(todayStr());
-  const left = cap - inProgressCount;
-  const val = cap<=0 ? `<span style="font-size:12px;font-weight:600;">حدد الهدف اليومي للخياطين</span>`
-    : `<span style="color:${left<0?"var(--loss)":"inherit"};">${left<0?"متجاوز "+Math.abs(left):left} ثوب</span><br><span style="font-size:11px;font-weight:600;color:var(--muted);">قدرة باقي الشهر: ${cap}<br>ناقص اللي ما تفصّل: ${inProgressCount}</span>`;
-  return `<div class="kpi-card c-count" style="cursor:pointer;" onclick="switchTab('production')" title="من شاشة الإنتاج: القدرة المتبقية حتى نهاية الشهر ناقص الثياب اللي ما تفصّلت (الجاهزة ما تنحسب)"><div class="kpi-top"><div class="kpi-icon"><i data-lucide="gauge"></i></div></div><div class="kpi-lbl">القدرة المتبقية للاستقبال</div><div class="kpi-val">${val}</div></div>`;
+  const left = cap - notSewn;
+  const opt = {onclick:"switchTab('production')", title:"من شاشة الإنتاج: القدرة المتبقية حتى نهاية الشهر ناقص الثياب اللي ما تفصّلت (الجاهزة ما تنحسب)"};
+  if(cap<=0) return kpiCard("c-count","gauge","القدرة المتبقية للاستقبال", "—", "حدد الهدف اليومي للخياطين", opt);
+  return kpiCard("c-count","gauge","القدرة المتبقية للاستقبال", left<0 ? `متجاوز ${Math.abs(left)} ثوب` : `${left} ثوب`,
+    `قدرة الشهر ${cap} − ما تفصّل ${notSewn}`, {...opt, valColor: left<0 ? "var(--loss)" : ""});
 }
 function renderDashboardWorkDistribution(){
   const el = $("dashboardWorkDistribution");
