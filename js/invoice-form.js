@@ -1058,7 +1058,7 @@ function computeExpectedDeliveryDate(newGarmentsCount){
   let productionDays;
   if(rate<=0) productionDays = state.settings.defaultDeliveryDays||3;
   else {
-    const notSewn = state.invoices.reduce((a,inv)=> a + inv.garments.filter(g=>["جديد","قص","تفصيل"].includes(g.status) && !g.tailorCompletedDate).length, 0);
+    const notSewn = garmentsNotSewnCount(); // ready thobes waiting for pick-up don't count
     productionDays = Math.max(1, Math.ceil((notSewn + Math.max(1, newGarmentsCount||1)) / rate));
   }
   d.setDate(d.getDate() + CUTTING_DAYS + productionDays);
