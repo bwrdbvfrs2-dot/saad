@@ -708,7 +708,10 @@ function renderGarmentFields(prefill=null){
         <div class="field"><label>الكمية المستهلكة (${unitLabel()})</label><input type="number" class="g-qty" min="0" step="0.1" value="${g.qtyUsed?g.qtyUsed:""}"></div>
       </div>
       <div class="embro-toggle"><input type="checkbox" class="g-hasEmbro" ${g.hasEmbroidery?"checked":""}><label style="margin:0;">فيه تطريز</label></div>
-      <div class="field g-embro-wrap" style="${g.hasEmbroidery?"":"display:none;"}"><label>سعر التطريز (ريال)</label><input type="number" class="g-embroPrice" min="0" placeholder="0" value="${g.embroideryPrice?g.embroideryPrice:""}"></div>
+      <div class="row-2 g-embro-wrap" style="${g.hasEmbroidery?"":"display:none;"}">
+        <div class="field"><label>سعر التطريز (ريال)</label><input type="number" class="g-embroPrice" min="0" placeholder="0" value="${g.embroideryPrice?g.embroideryPrice:""}"></div>
+        <div class="field"><label>رقم التطريز</label><input type="text" class="g-embroNo" placeholder="مثلاً: 12" value="${esc(g.embroideryNo||"")}"></div>
+      </div>
       <button type="button" class="btn btn-ghost btn-sm meas-toggle-btn" data-idx="${i}">كرت المقاس (اضغط للفتح)</button>
       ${i>0 ? `<p class="sub" style="font-size:11px;margin:4px 0 0;">نفس مقاس الثوب اللي قبله؟ اترك كرته فاضي — ينسخ تلقائياً عند الحفظ (من نفس الفئة فقط)</p>` : ""}
       ${renderMeasurementPanelHtml(g, i)}
@@ -838,6 +841,7 @@ function readGarmentFields(existing){
     const qtyUsed = parseFloat(card.querySelector(".g-qty").value)||0;
     const hasEmbroidery = card.querySelector(".g-hasEmbro").checked;
     const embroideryPrice = parseFloat(card.querySelector(".g-embroPrice").value)||0;
+    const embroideryNo = hasEmbroidery && card.querySelector(".g-embroNo") ? card.querySelector(".g-embroNo").value.trim() : "";
     const addons = Array.from(card.querySelectorAll(".g-addon:checked")).map(cbx=>cbx.dataset.addon);
     const measurementNotes = card.querySelector(".meas-notes") ? card.querySelector(".meas-notes").value.trim() : "";
     const urgent = card.querySelector(".meas-urgent") ? card.querySelector(".meas-urgent").checked : false;
@@ -851,7 +855,7 @@ function readGarmentFields(existing){
     // and only overwrites what the form edits — it used to drop cutDate / readyDate / deliveredBy and the rest
     return {
       ...old,
-      fabricType, itemCardId, category, price, qtyUsed, hasEmbroidery, embroideryPrice, addons, measurementNotes,
+      fabricType, itemCardId, category, price, qtyUsed, hasEmbroidery, embroideryPrice, embroideryNo, addons, measurementNotes,
       measurements, urgent, sample, cutter,
       tailor: old.tailor||"", status: old.status||"جديد", deliveryReceipt: old.deliveryReceipt||"",
       deliveredDate: old.deliveredDate||null, costSnapshot: old.costSnapshot,
