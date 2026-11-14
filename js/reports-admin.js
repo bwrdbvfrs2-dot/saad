@@ -389,7 +389,13 @@ function buildDailyReportHtml(day, r, username){
   const parts = [];
   parts.push(dailySection("فواتير جديدة", ["رقم","العميل","عدد الثياب","الإجمالي"],
     r.newInvoices.map(inv=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${inv.garments.length}</td><td>${sar(invoiceSaleTotal(inv))}</td></tr>`),
-    {foot:`<td colspan="3">الإجمالي</td><td>${sar(r.newInvoices.reduce((a,i)=>a+invoiceSaleTotal(i),0))}</td>`}));
+    {foot:`<td colspan="2">الإجمالي</td><td>${r.newInvoices.reduce((a,i)=>a+i.garments.length,0)} ثوب</td><td>${sar(r.newInvoices.reduce((a,i)=>a+invoiceSaleTotal(i),0))}</td>`}));
+  // thobes whose fabric the customer brought (no fabric card) — in a table of their own
+  const ownFabric = [];
+  r.newInvoices.forEach(inv=> inv.garments.forEach(g=>{ if(!g.itemCardId && g.status!=="ملغي") ownFabric.push({inv,g}); }));
+  parts.push(dailySection("ثياب قماشها من خارج المحل", ["رقم الفاتورة","العميل","السعر"],
+    ownFabric.map(({inv,g})=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${sar(garmentNetSalePrice(g, inv))}</td></tr>`),
+    {foot:`<td colspan="2">الإجمالي — ${ownFabric.length} ثوب</td><td>${sar(ownFabric.reduce((a,x)=>a+garmentNetSalePrice(x.g, x.inv),0))}</td>`}));
   parts.push(dailySection("تسليمات — من الشهر الحالي", ["رقم الفاتورة","نوع القماش","السعر","رقم الإيصال"],
     r.deliveredThisMonth.map(({inv,g})=>`<tr><td>${esc(inv.number)}</td><td>${esc(g.fabricType)}</td><td>${sar(garmentNetSalePrice(g, inv))}</td><td>${esc(deliveryReceiptOf(inv,g))}</td></tr>`)));
   parts.push(dailySection("تسليمات — متعثرة من أشهر سابقة", ["رقم الفاتورة","الشهر الأصلي","نوع القماش","السعر","رقم الإيصال"],
