@@ -330,9 +330,12 @@ function buildMannequinPreviewHtml(m){
 }
 // a measurement as typed: Arabic digits and an Arabic / comma decimal separator count (17٫51, ١٧٫٥١, 17,51 → 17.51)
 // — a number field took none of them and dropped the whole measurement, so it never printed
+// A value with more than one point (17.51.1 — the cutters' own notation) is kept exactly as typed, as
+// text, and printed as is: parsed as a number it silently became 17.51
 function parseMeasureValue(raw){
   const t = String(raw==null?"":raw).trim().replace(/[٠-٩]/g, d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/[۰-۹]/g, d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)).replace(/[٫,،]/g, ".").replace(/[^0-9.\-]/g, "");
   if(!t) return null;
+  if((t.match(/\./g)||[]).length>1) return /\d/.test(t) ? t.replace(/^\.+|\.+$/g, "") : null;
   const v = parseFloat(t);
   return isNaN(v) ? null : Math.round(v*100)/100;
 }

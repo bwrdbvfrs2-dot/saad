@@ -620,7 +620,7 @@ function altMeasEditorHtml(g, key){
   return `<div class="alt-meas" data-key="${key}" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px;margin:8px 0;">
     <b style="font-size:13px;">كرت المقاسات — عدّل المقاس المطلوب مباشرة</b>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;margin-top:8px;">
-      ${MEASUREMENT_FIELDS.map(f=>`<div class="field" style="margin-bottom:0;"><label style="font-size:11px;">${esc(f.label)}</label><input type="number" step="0.01" class="am-field" data-key="${f.key}" value="${val(f.key)}" placeholder="—"></div>`).join("")}
+      ${MEASUREMENT_FIELDS.map(f=>`<div class="field" style="margin-bottom:0;"><label style="font-size:11px;">${esc(f.label)}</label><input type="text" inputmode="decimal" class="am-field" data-key="${f.key}" value="${val(f.key)}" placeholder="—"></div>`).join("")}
       ${MEASUREMENT_CHOICE_FIELDS.map(f=>{ const list = state[f.listKey]||[]; const cur = m[f.key]||"";
         return `<div class="field" style="margin-bottom:0;"><label style="font-size:11px;">${esc(f.label)}</label><select class="am-choice" data-key="${f.key}"><option value="">—</option>${list.map(o=>`<option value="${esc(o.code)}" ${o.code===cur?"selected":""}>${esc(o.code)} - ${esc(o.label)}</option>`).join("")}</select></div>`; }).join("")}
     </div>
@@ -634,9 +634,8 @@ function applyAltMeasEditor(g, key){
   const changes = [];
   const labelOf = k=> (MEASUREMENT_FIELDS.find(f=>f.key===k)||MEASUREMENT_CHOICE_FIELDS.find(f=>f.key===k)||{label:k}).label;
   box.querySelectorAll(".am-field").forEach(inp=>{
-    const k = inp.dataset.key, oldV = (m[k]!==undefined && m[k]!==null && m[k]!=="") ? +m[k] : null;
-    const newV = inp.value==="" ? null : (parseFloat(inp.value)||0);
-    if(oldV!==newV){ changes.push({key:k, label:labelOf(k), from:oldV, to:newV}); if(newV===null) delete m[k]; else m[k]=newV; }
+    const k = inp.dataset.key, oldV = parseMeasureValue(m[k]), newV = parseMeasureValue(inp.value); // 17.51.1 stays text
+    if(String(oldV)!==String(newV)){ changes.push({key:k, label:labelOf(k), from:oldV, to:newV}); if(newV===null) delete m[k]; else m[k]=newV; }
   });
   box.querySelectorAll(".am-choice").forEach(sel=>{
     const k = sel.dataset.key, oldV = m[k]||"", newV = sel.value;
