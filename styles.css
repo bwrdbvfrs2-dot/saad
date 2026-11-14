@@ -559,3 +559,31 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:#1F2328;box-sh
   .g-grid{grid-template-columns:1fr 1fr;}
   .g-grid .g-embro-check{grid-column:auto;}
 }
+
+/* ================= design (A) on every page: cards with titles, clean tables, quiet dividers ================= */
+.panel{padding:20px 22px;}
+.panel > h2{font-size:17px;font-weight:700;margin-bottom:6px;}
+.panel h3{font-size:14.5px;font-weight:700;color:var(--ivory);}
+.panel .sub{color:var(--muted);}
+.stitch{border-top:1px solid var(--border);margin:20px 0;}
+.stitch::before,.stitch::after{display:none !important;}
+.table-wrap{border:1px solid var(--border);border-radius:12px;background:#fff;}
+.table-wrap > table{border-collapse:separate;border-spacing:0;}
+th{background:var(--surface2);color:var(--muted);font-weight:600;font-size:12px;border-bottom:1px solid var(--border);}
+td{border-bottom:1px solid #EEF0F2;padding:10px 12px;}
+tbody tr:last-child td{border-bottom:none;}
+tbody tr:hover td{background:#FAFBFB;}
+tfoot td{background:var(--surface2);font-weight:700;}
+.garment-card{background:var(--surface2);border:1px solid var(--border);border-radius:14px;}
+.report-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px;}
+.report-card .st{color:var(--muted);font-size:12px;}
+.report-card .amt{font-size:18px;font-weight:700;color:var(--ivory);}
+.note-box{background:#F2F3F4;border:1px solid var(--border);color:var(--muted);border-radius:12px;}
+.modal-box{border-radius:16px;}
+.item-row{border-bottom:1px solid #EEF0F2;}
+.pay-seg-field .pay-seg{height:44px;}
+.pay-seg-field + .field .pay-amount{font-weight:600;}
+@media(max-width:700px){
+  .panel{padding:16px 14px;}
+  .pay-seg-field .pay-seg{height:48px;}
+}
