@@ -430,7 +430,7 @@ function buildDailyReportHtml(day, r, username){
   parts.push(dailySection("الصيانة الخارجية", ["الرقم","العميل","المطلوب","كاش","شبكة"], repairRows));
   parts.push(dailySection("سندات القبض والصرف", ["رقم السند","النوع","المبلغ","الطرف","السبب"],
     r.vouchersToday.map(v=>`<tr><td>${v.voucherNo}</td><td>${v.type==="receipt"?"قبض":"صرف"}</td><td>${sar(v.amount)}</td><td>${esc(v.party)}</td><td>${esc(v.reason)}</td></tr>`)));
-  parts.push(dailySection("المصروفات", ["البند","المبلغ","صُرف لـ","ملاحظات"],
+  parts.push(dailySection("المصروفات", ["البند","المبلغ","صُرف لـ","البيان"],
     r.expensesToday.map(e=>{ const cat = state.expenseCategories.find(c=>c.id===e.categoryId); return `<tr><td>${cat?esc(cat.label):"—"}${e.subItemLabel?" — "+esc(e.subItemLabel):""}</td><td>${sar(e.amount)}</td><td>${esc(e.paidTo||"—")}</td><td>${esc(e.notes||"—")}</td></tr>`; }),
     {foot:`<td>الإجمالي</td><td>${sar(r.expensesTotal)}</td><td colspan="2"></td>`}));
   parts.push(dailySection("المرتجعات والمبالغ المستردة", ["النوع","الفاتورة","المبلغ المسترد","السبب"],
@@ -476,7 +476,7 @@ function dailyExpenseAppendix(day, r, username){
   const rows = list.map(e=>`<tr>${range?`<td>${e.date||"—"}</td>`:""}<td>${e.voucherNo||"—"}</td><td>${esc(catOf(e))}</td><td>${esc(e.subItemLabel||"—")}</td><td>${esc([e.paidTo, e.storeName].filter(Boolean).join(" — ")||"—")}</td><td>${esc(e.notes||"—")}</td><td>${esc(boxOf(e))}</td><td>${esc(e.recordedBy||"—")}</td><td>${sar(e.amount)}</td></tr>`);
   const total = list.reduce((a,e)=>a+(e.amount||0),0);
   const byCat = {}; list.forEach(e=>{ const c = catOf(e); (byCat[c] = byCat[c]||{n:0,t:0}).n++; byCat[c].t += e.amount||0; });
-  const head = (range?["التاريخ"]:[]).concat(["سند الصرف","التصنيف","البند","المستفيد / المحل","ملاحظات","الصندوق","سجّله","المبلغ"]);
+  const head = (range?["التاريخ"]:[]).concat(["سند الصرف","التصنيف","البند","دفع لمن","البيان","الصندوق","سجّله","المبلغ"]);
   return `<div class="dr-appendix">
     <div class="dr-head"><div class="dr-name">ملحق — تفصيل المصروفات${username?` — ${esc(username)}`:""}</div><div class="dr-date">${range ? `من ${day} إلى ${r.to}` : day}</div></div>
     ${dailySection("المصروفات بالتفصيل", head, rows, {foot:`<td colspan="${head.length-1}">الإجمالي</td><td>${sar(total)}</td>`})}
@@ -973,7 +973,7 @@ function showExpenseDetailReport(fCat, fSub, includeOther){
   const title = `تقرير المصروفات التفصيلي — ${periodLabel("expSub")}${fCat?` — ${esc(fCat)}`:""}${fSub?` / ${esc(fSub)}`:""}`;
   let html = `<h2>${title}</h2>`;
   html += `<p>إجمالي المصروفات: <b>${fmtSar(total)} ﷼</b> — عددها: <b>${rows.length}</b></p>`;
-  html += `<table><thead><tr><th>التاريخ</th><th>سند صرف</th><th>التصنيف</th><th>البند</th><th>المستفيد / المحل</th><th>ملاحظات</th><th>الصندوق</th><th>سجّله</th><th>المبلغ</th></tr></thead><tbody>`;
+  html += `<table><thead><tr><th>التاريخ</th><th>سند صرف</th><th>التصنيف</th><th>البند</th><th>دفع لمن</th><th>البيان</th><th>الصندوق</th><th>سجّله</th><th>المبلغ</th></tr></thead><tbody>`;
   rows.forEach(e=> html += `<tr><td style="white-space:nowrap;">${e.date||"—"}</td><td>${e.no||"—"}</td><td>${esc(e.cat)}</td><td>${esc(e.sub)}</td><td>${esc(e.party||"—")}${e.invNo?`<br><span style="font-size:10.5px;">فاتورة ${esc(e.invNo)}</span>`:""}</td><td style="font-size:11.5px;">${esc(e.notes||"—")}</td><td style="font-size:11.5px;">${esc(e.box||"—")}</td><td>${esc(e.by||"—")}</td><td style="white-space:nowrap;">${fmtSar(e.amount)} ﷼</td></tr>`);
   if(!rows.length) html += `<tr><td colspan="9" style="text-align:center;">لا يوجد</td></tr>`;
   html += `</tbody>${rows.length?`<tfoot><tr style="font-weight:800;"><td colspan="8">الإجمالي (${rows.length})</td><td style="white-space:nowrap;">${fmtSar(total)} ﷼</td></tr></tfoot>`:""}</table>`;
