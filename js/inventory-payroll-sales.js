@@ -2177,8 +2177,8 @@ function renderBalancesTab(){
   expTbody.innerHTML = visibleExpenses.length ? visibleExpenses.map(e=>{
     const cat = state.expenseCategories.find(c=>c.id===e.categoryId);
     const box = findCashBox(e.sourceBoxId);
-    return `<tr><td>${e.voucherNo?`صرف ${e.voucherNo}`:"—"}</td><td>${e.date}</td><td>${cat?esc(cat.label):"—"}</td><td>${esc(e.subItemLabel||"—")}</td><td>${e.amount.toFixed(0)} ﷼</td><td>${esc(e.paidTo||"—")}</td><td>${esc(e.storeName||"—")}</td><td>${box?esc(box.name):"—"}</td><td>${canDeleteExpense(e) ? `<button class="icon-btn" title="حذف المصروف (مسجّل بالخطأ)" aria-label="حذف المصروف" onclick="deleteExpense('${e.id}')"><i data-lucide="trash-2"></i></button>` : ""}</td></tr>`;
-  }).join("") : `<tr><td colspan="9">${emptyStateHtml("receipt","ما فيه مصروفات مسجّلة بعد.")}</td></tr>`;
+    return `<tr><td>${e.voucherNo?`صرف ${e.voucherNo}`:"—"}</td><td>${e.date}</td><td>${cat?esc(cat.label):"—"}</td><td>${esc(e.subItemLabel||"—")}</td><td>${e.amount.toFixed(0)} ﷼</td><td>${esc([e.paidTo, e.storeName].filter(Boolean).join(" — ")||"—")}</td><td>${box?esc(box.name):"—"}</td><td>${canDeleteExpense(e) ? `<button class="icon-btn" title="حذف المصروف (مسجّل بالخطأ)" aria-label="حذف المصروف" onclick="deleteExpense('${e.id}')"><i data-lucide="trash-2"></i></button>` : ""}</td></tr>`;
+  }).join("") : `<tr><td colspan="8">${emptyStateHtml("receipt","ما فيه مصروفات مسجّلة بعد.")}</td></tr>`;
   // deleted expenses: the manager and the accountant see all of them, anyone else the ones they deleted
   const delEl = $("deletedExpensesView");
   if(delEl){

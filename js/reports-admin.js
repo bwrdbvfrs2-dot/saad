@@ -1710,7 +1710,7 @@ $("addExpenseBtn").addEventListener("click", ()=>{
   const subItemId = $("expSubItem").value;
   const amount = parseFloat($("expAmount").value)||0;
   const paidTo = $("expPaidTo").value.trim();
-  const storeName = $("expStoreName").value.trim();
+  const storeName = ""; // «اسم المحل» was the same as «دفع لمن» — one field now (older expenses keep theirs)
   const notes = $("expNotes").value.trim();
   const sourceBoxId = $("expSourceBox").value;
   const vatStatus = $("expVatStatus").value;
@@ -1721,7 +1721,7 @@ $("addExpenseBtn").addEventListener("click", ()=>{
   if(!result.ok){ showToast(result.msg); return; }
   saveStateWithRollback(expenseSnapshot).then(saved=>{
     if(!saved) return;
-    $("expInvNumber").value=""; $("expTaxNumber").value=""; $("expAmount").value=""; $("expPaidTo").value=""; $("expStoreName").value=""; $("expNotes").value=""; $("expSubItem").value="";
+    $("expInvNumber").value=""; $("expTaxNumber").value=""; $("expAmount").value=""; $("expPaidTo").value=""; $("expNotes").value=""; $("expSubItem").value="";
     showToast(`تم حفظ المصروف — سند صرف رقم ${result.voucherNo}`);
   });
 });
