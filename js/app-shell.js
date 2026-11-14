@@ -1377,7 +1377,9 @@ function renderSidebar(){
   }));
   refreshLucideIcons();
 }
-const BOTTOM_NAV_TABS = ["dashboard","invoice","distribution","customerDebts"];
+const BOTTOM_NAV_TABS = ["invoice","invoicesList","distribution"];
+const BOTTOM_NAV_SHORT = {invoice:"فاتورة", invoicesList:"السجل", distribution:"التوزيع"};
+// «التقارير»: opens the menu straight on the reports group — only the reports this user may open
 function renderBottomNav(){
   const nav = $("bottomNav");
   if(!nav || !currentUser) return;
@@ -1393,9 +1395,14 @@ function renderBottomNav(){
   }).filter(Boolean);
   const itemsHtml = items.map(it=>{
     const isActive = it.tab===activeTab;
-    return `<button type="button" class="bottom-nav-item${isActive?" active":""}" data-tab="${it.tab}"><i data-lucide="${navIcon(it.tab)}"></i><span>${esc(it.label)}</span></button>`;
+    return `<button type="button" class="bottom-nav-item${isActive?" active":""}" data-tab="${it.tab}"><i data-lucide="${navIcon(it.tab)}"></i><span>${esc(BOTTOM_NAV_SHORT[it.tab]||it.label)}</span></button>`;
   }).join("");
-  nav.innerHTML = itemsHtml + `<button type="button" class="bottom-nav-item more-btn" id="bottomNavMoreBtn"><i data-lucide="menu"></i><span>المزيد</span></button>`;
+  const reportsGroup = NAV_GROUPS.find(g=>g.title==="التقارير");
+  const reportTabs = (isTailor || currentUser.role==="فاحص جودة" || !reportsGroup) ? [] : reportsGroup.items.filter(it=>{ const b = document.querySelector(`.tab-btn[data-tab="${it.tab}"]`); return b && b.style.display!=="none"; });
+  const reportsActive = reportTabs.some(it=> it.tab===activeTab);
+  const reportsBtn = reportTabs.length ? `<button type="button" class="bottom-nav-item${reportsActive?" active":""}" id="bottomNavReportsBtn"><i data-lucide="bar-chart-3"></i><span>التقارير</span></button>` : "";
+  nav.innerHTML = itemsHtml + reportsBtn + `<button type="button" class="bottom-nav-item more-btn" id="bottomNavMoreBtn"><i data-lucide="menu"></i><span>المزيد</span></button>`;
+  if($("bottomNavReportsBtn")) $("bottomNavReportsBtn").addEventListener("click", ()=>{ navDrawerActiveGroup = "التقارير"; renderNavDrawer(); $("navDrawerOverlay").classList.remove("hidden"); });
   nav.querySelectorAll(".bottom-nav-item[data-tab]").forEach(btn=> btn.addEventListener("click", ()=> switchTab(btn.dataset.tab)));
   $("bottomNavMoreBtn").addEventListener("click", openNavDrawer);
   refreshLucideIcons();

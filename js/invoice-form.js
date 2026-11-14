@@ -896,6 +896,7 @@ function updateLiveTotals(){
   $("liveInvoiceTotal").textContent = prices.toFixed(0)+" ﷼";
   $("livePaid").textContent = paid.toFixed(0)+" ﷼";
   $("liveRemaining").textContent = (prices-paid-totalDiscount).toFixed(0)+" ﷼";
+  if($("issTotal")){ $("issTotal").textContent = $("liveInvoiceTotal").textContent; $("issPaid").textContent = $("livePaid").textContent; $("issRemaining").textContent = $("liveRemaining").textContent; $("issCount").textContent = document.querySelectorAll("#garmentsHolder > .garment-card").length; }
   if(totalDiscount>0.01){
     const parts = [];
     if(loyaltyDiscount>0.01) parts.push(`نقاط ولاء: ${loyaltyDiscount.toFixed(0)} ﷼`);
