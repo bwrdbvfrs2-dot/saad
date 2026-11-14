@@ -453,7 +453,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:#1F2328;box-sh
 .bottom-nav-item{min-height:44px;font-size:11px;}
 .bottom-nav-item.active{color:#1F2328;font-weight:800;}
 /* the invoice summary beside the form (wide screens); under it the usual box keeps the same figures */
-#invSideSummary{display:none;background:#fff;border:1px solid var(--border);border-radius:16px;padding:18px;}
+#invSideSummary{display:block;background:#fff;border:1px solid var(--border);border-radius:16px;padding:18px;}
 #invSideSummary h3{margin:0 0 12px;font-size:15px;}
 #invSideSummary .iss-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #EEF0F2;font-size:14px;}
 #invSideSummary .iss-rem{margin-top:12px;background:var(--due-bg);color:var(--due-text);border-radius:12px;padding:14px;text-align:center;font-weight:600;}
@@ -495,6 +495,67 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:#1F2328;box-sh
 .g-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px;}
 .g-addons-field{margin-top:10px;}
 @media(max-width:900px){ .g-grid{grid-template-columns:1fr 1fr;} .g-grid .g-fabric{grid-column:span 2;} }
-@media(min-width:1180px){ #tab-invoice .remaining-box{display:none;} }
 #invSideSummary .iss-sub{font-size:12.5px;color:var(--muted);}
 #invSideSummary .iss-sep{border-top:1px solid var(--border);margin-top:4px;}
+
+/* ---- invoice screen, design A ---- */
+#tab-invoice .remaining-box, #tab-invoice .actions-row{display:none !important;} /* their figures and buttons live in the summary */
+.inv-cust-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px 12px;}
+.inv-cust-grid .inv-num-field{display:none;} /* the number is shown at the top */
+.inv-disc-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.3fr);gap:4px 12px;align-items:end;}
+.inv-disc-grid > .row-2{display:flex;gap:8px;align-items:flex-end;margin:0;}
+.inv-disc-grid > .row-2 .field{flex:1;}
+.inv-disc-grid > .row-2 .btn{height:44px;margin:0 0 8px !important;}
+.inv-disc-grid textarea{min-height:44px;height:44px;resize:vertical;}
+.g-grid{grid-template-columns:52px minmax(0,1.6fr) minmax(0,1fr) minmax(0,.9fr) minmax(0,.9fr) auto minmax(0,.9fr) minmax(0,.9fr) minmax(0,.9fr);}
+.g-no{font-weight:800;align-self:center;padding-top:16px;white-space:nowrap;}
+.g-embro-check .embro-toggle{display:flex;align-items:center;gap:7px;min-height:44px;cursor:pointer;font-size:13px;color:var(--ivory);margin:0;}
+.g-grid input:disabled{background:#F2F3F4 !important;color:#9CA3A9;}
+#tab-invoice .garment-card{padding:14px 16px 12px;}
+#tab-invoice .garment-card > .tag{display:none;}
+.g-actions .meas-toggle-btn{order:1;} .g-actions .sub{order:3;}
+/* payments: one line each */
+.pay-line{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);gap:4px 12px;align-items:end;}
+.pay-entry{padding-top:6px;}
+.pay-entry.pay-m-cash .pay-net-only, .pay-entry.pay-m-network .pay-cash-only{display:none;}
+.pay-entry.pay-m-cash{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);}
+.pay-seg{display:flex;border:1px solid var(--field-border);border-radius:10px;overflow:hidden;height:44px;background:#fff;}
+.pay-seg button,.pay-seg span{flex:1;display:flex;align-items:center;justify-content:center;border:none;background:none;font-family:inherit;font-size:13.5px;color:var(--muted);cursor:pointer;min-height:0;}
+.pay-seg .on{background:var(--selected-bg);color:var(--ivory);font-weight:800;}
+.pay-seg-ro span{cursor:default;}
+.pay-auto{color:var(--muted) !important;background:#F2F3F4 !important;}
+.pay-val{min-height:44px;display:flex;align-items:center;padding:0 12px;border:1px solid var(--border);border-radius:10px;background:#fff;font-weight:600;}
+.pay-muted{color:var(--muted);font-weight:400;font-size:12.5px;}
+.payment-row.pay-group{display:block;border-bottom:1px dashed var(--border);padding:8px 0;font-size:inherit;}
+.pay-group .pay-line + .pay-line{margin-top:6px;}
+.pay-actions{display:flex;gap:6px;justify-content:flex-end;margin-top:6px;}
+.pay-actions:empty{display:none;}
+.iss-small{display:flex;gap:6px;margin-top:8px;}
+.iss-small .btn{flex:1;padding:0 6px;}
+@media(max-width:1179px){
+  #invSideSummary{margin-top:4px;}
+}
+@media(max-width:900px){
+  .inv-cust-grid{grid-template-columns:1fr 1fr;}
+  .inv-disc-grid{grid-template-columns:1fr;}
+  .g-grid{grid-template-columns:1fr 1fr;}
+  .g-no{grid-column:1/-1;padding-top:0;}
+  .g-grid .g-fabric{grid-column:1/-1;}
+  .pay-line,.pay-entry.pay-m-cash{grid-template-columns:1fr 1fr;}
+  .pay-line > .field:first-child{grid-column:1/-1;}
+}
+/* the thobe on two tidy rows: (fabric, category, price, quantity) then (embroidery, its price, its number, total) — one row only on very wide screens */
+.g-grid{grid-template-columns:52px minmax(0,1.8fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);}
+.g-grid .g-embro-check{grid-column:2;}
+@media(min-width:1700px){
+  .g-grid{grid-template-columns:52px minmax(0,1.6fr) minmax(0,1fr) minmax(0,.9fr) minmax(0,.9fr) auto minmax(0,.9fr) minmax(0,.9fr) minmax(0,.9fr);}
+  .g-grid .g-embro-check{grid-column:auto;}
+}
+.inv-disc-grid{grid-template-columns:1fr 1fr;}
+.inv-disc-grid > .field:has(#invNotes){grid-column:1/-1;}
+.inv-cust-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+@media(min-width:1500px){ .inv-cust-grid{grid-template-columns:repeat(4,minmax(0,1fr));} }
+@media(max-width:900px){
+  .g-grid{grid-template-columns:1fr 1fr;}
+  .g-grid .g-embro-check{grid-column:auto;}
+}
