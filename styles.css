@@ -314,6 +314,7 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 .daily-report .dr-table tbody tr:nth-child(even) td{background:var(--surface2);}
 .daily-report .dr-table tfoot td{font-weight:800;background:var(--surface3);border-top:2px solid var(--gold);}
 .daily-report .dr-grand{margin:8px 0 0;padding:8px 10px;border:2px solid var(--gold);border-radius:6px;font-size:13.5px;}
+.daily-report .dr-appendix{margin-top:22px;padding-top:6px;border-top:2px dashed var(--border);}
 .daily-report .dr-empty{text-align:center;color:var(--muted);padding:18px;border:1px dashed var(--border);border-radius:6px;}
 .daily-report .dr-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px;}
 .daily-report .dr-box{border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center;background:var(--surface2);}
@@ -339,7 +340,8 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
   #printArea table.print-frame, #printArea table.print-frame > * > tr > td{border:none !important;padding:0 !important;background:none !important;}
   #printArea table.print-frame > tbody > tr{page-break-inside:auto !important;break-inside:auto !important;}
   #printArea table.print-frame td.pf-space{height:12mm;}
-  #printArea .daily-report table.dr-table tfoot{display:table-row-group;} /* the total once, at the end — not repeated on every page */
+  #printArea .daily-report table.dr-table tfoot{display:table-row-group;}
+  #printArea .daily-report .dr-appendix{break-before:page;page-break-before:always;border-top:none;margin-top:0;padding-top:0;} /* the total once, at the end — not repeated on every page */
   #printArea .daily-report table.dr-table th{background:#d9d9d9 !important;}
   #printArea .daily-report table.dr-table tbody tr:nth-child(even) td{background:#f3f3f3 !important;}
   #printArea .daily-report table.dr-table tfoot td{background:#e6e6e6 !important;font-weight:800;border-top:2px solid #000 !important;}

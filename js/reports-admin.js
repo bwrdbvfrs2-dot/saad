@@ -460,8 +460,30 @@ function buildDailyReportHtml(day, r, username){
       {foot:`<td colspan="3">الإجمالي</td><td class="dr-out">${sar(outs.reduce((a,m)=>a-m.amount,0))}</td>`}); })()}
   ${r.cardFees ? `<p class="dr-note">الشبكة كاملة (مثل جهاز الشبكة): <b>${fmtSar(r.cardGross)} ﷼</b> — عمولة البنك: <b>${fmtSar(r.cardFees)} ﷼</b> — الصافي: <b>${fmtSar(r.cardGross-r.cardFees)} ﷼</b></p>` : ""}
   <p class="dr-note">يشمل كل الحركات المسجّلة — الخارج: التحويلات للمدير/المحاسب، المصروفات، المرتجعات، المشتريات، الموردين، الرواتب.</p>
+  ${dailyExpenseAppendix(day, r, username)}
   </div>`;
   return html;
+}
+// the appendix printed under the daily report, on a page of its own: every expense of the report's
+// day(s) (the same ones its «المصروفات» section counts) in full, then a total per category
+function dailyExpenseAppendix(day, r, username){
+  const list = (r.expensesToday||[]).slice().sort((a,b)=> (a.date||"").localeCompare(b.date||"") || (a.voucherNo||0)-(b.voucherNo||0));
+  if(!list.length) return "";
+  const sar = n=> `${fmtSar(n||0)} ﷼`;
+  const range = r.to && r.to!==day;
+  const catOf = e=>{ const c = state.expenseCategories.find(x=>x.id===e.categoryId); return c ? c.label : "بدون تصنيف"; };
+  const boxOf = e=>{ const b = e.sourceBoxId ? findCashBox(e.sourceBoxId) : null; return b ? `${b.owner} — ${b.type==="network"?"شبكة":"كاش"}` : "—"; };
+  const rows = list.map(e=>`<tr>${range?`<td>${e.date||"—"}</td>`:""}<td>${e.voucherNo||"—"}</td><td>${esc(catOf(e))}</td><td>${esc(e.subItemLabel||"—")}</td><td>${esc([e.paidTo, e.storeName].filter(Boolean).join(" — ")||"—")}</td><td>${esc(e.notes||"—")}</td><td>${esc(boxOf(e))}</td><td>${esc(e.recordedBy||"—")}</td><td>${sar(e.amount)}</td></tr>`);
+  const total = list.reduce((a,e)=>a+(e.amount||0),0);
+  const byCat = {}; list.forEach(e=>{ const c = catOf(e); (byCat[c] = byCat[c]||{n:0,t:0}).n++; byCat[c].t += e.amount||0; });
+  const head = (range?["التاريخ"]:[]).concat(["سند الصرف","التصنيف","البند","المستفيد / المحل","ملاحظات","الصندوق","سجّله","المبلغ"]);
+  return `<div class="dr-appendix">
+    <div class="dr-head"><div class="dr-name">ملحق — تفصيل المصروفات${username?` — ${esc(username)}`:""}</div><div class="dr-date">${range ? `من ${day} إلى ${r.to}` : day}</div></div>
+    ${dailySection("المصروفات بالتفصيل", head, rows, {foot:`<td colspan="${head.length-1}">الإجمالي</td><td>${sar(total)}</td>`})}
+    ${dailySection("المجموع حسب التصنيف", ["التصنيف","العدد","المبلغ"],
+      Object.entries(byCat).sort((a,b)=>b[1].t-a[1].t).map(([c,v])=>`<tr><td>${esc(c)}</td><td>${v.n}</td><td>${sar(v.t)}</td></tr>`),
+      {foot:`<td>الإجمالي</td><td>${list.length}</td><td>${sar(total)}</td>`})}
+  </div>`;
 }
 // ---- sending a daily report by WhatsApp: to a manager or an accountant, picked from a list ----
 function reportRecipients(){ return state.users.filter(u=> u.role==="مدير" || u.role==="محاسب"); }
