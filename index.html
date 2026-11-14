@@ -661,16 +661,17 @@
 
 
 <div class="tab-panel" id="tab-invoice">
-<div class="panel">
-  <h2><span id="formTitle">فاتورة جديدة</span></h2>
+<div class="panel inv-form">
+  <div class="inv-head"><h2><span id="formTitle">فاتورة جديدة</span></h2><span class="inv-num-pill">رقم الفاتورة <b id="invNumPill"></b></span></div>
   <div id="invoiceDraftWrap" style="display:none;margin-bottom:12px;"></div>
   <div id="heldInvoicesWrap" style="display:none;margin-bottom:12px;"></div>
   <div id="measOnlyNote" class="note-box" style="display:none;margin-bottom:10px;">تعديل المقاسات فقط — افتح «كرت المقاس» لكل ثوب وعدّل، ثم اضغط <b>حفظ</b>. باقي الفاتورة (الأسعار، الدفعات، العميل) ما يتغيّر. للخروج اضغط <b>إلغاء</b>.</div>
-  <p class="sub">أدخل بيانات الفاتورة والعميل. اسم الخياط والحالة يُحدّدان لاحقاً من "توزيع العمل والمتعثرة".</p>
-  <div class="row-3">
+  <section class="inv-card">
+    <h3 class="inv-card-title">بيانات العميل والفاتورة</h3>
+    <p class="sub">أدخل بيانات الفاتورة والعميل. اسم الخياط والحالة يُحدّدان لاحقاً من "توزيع العمل والمتعثرة".</p>
+  <div class="row-2">
     <div class="field"><label>رقم الفاتورة (تلقائي — غير قابل للتعديل)</label><input type="text" id="invNumber" readonly style="opacity:0.75;cursor:not-allowed;"></div>
     <div class="field"><label>التاريخ (تلقائي — ما يتغيّر)</label><input type="date" id="invDate" readonly tabindex="-1" style="opacity:.75;cursor:not-allowed;"></div>
-    <div class="field"><label>عدد الثياب</label><input type="number" id="invCount" min="1" value="1"></div>
   </div>
   <div class="row-2">
     <div class="field"><label>تاريخ التسليم المتوقع</label><input type="date" id="invDeliveryDate"><p class="sub" style="margin:4px 0 0;">يُحسب تلقائياً حسب طاقة الخياطين وطابور العمل الحالي — تقدر تعدّله يدوياً لو احتجت.</p></div>
@@ -683,22 +684,28 @@
   <div id="custPickerWrap" style="display:none;margin-bottom:12px;"></div>
   <div id="loyaltyInfoWrap" style="display:none;margin-bottom:12px;"></div>
   <div id="customerAlertWrap" style="display:none;margin-bottom:12px;"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">تفاصيل الثياب</h3>
+  </section>
+  <section class="inv-card">
+    <div class="inv-card-head"><h3 class="inv-card-title">الثياب</h3>
+      <div class="inv-stepper"><label for="invCount">عدد الثياب</label><button type="button" class="step-btn" onclick="stepInvCount(-1)" aria-label="أقل">−</button><input type="number" id="invCount" min="1" value="1"><button type="button" class="step-btn" onclick="stepInvCount(1)" aria-label="أكثر">+</button></div>
+    </div>
   <div id="priceLockNote" style="display:none;color:var(--gold-soft);font-weight:700;font-size:12px;margin-bottom:8px;">الأسعار مقفلة حالياً — يوجد كود خصم أو باقة عرض مفعّلة، وما يمكن تعديل السعر يدوياً حتى تُزال</div>
   <div id="garmentsHolder"></div>
   <datalist id="fabricDatalist"></datalist>
   <div id="invoiceOffersWrap" style="margin-top:10px;"></div>
-  <div class="stitch"></div>
+  </section>
+  <section class="inv-card">
+    <h3 class="inv-card-title">الخصم والملاحظات</h3>
   <div class="field"><label>ملاحظات على الفاتورة (اختياري)</label><textarea id="invNotes" rows="2" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 11px;color:var(--ivory);font-family:inherit;font-size:14px;" placeholder="أي ملاحظة عامة على الفاتورة كاملة..."></textarea></div>
-  <div class="stitch"></div>
   <div class="row-2" style="align-items:flex-end;">
     <div class="field" style="margin-bottom:0;"><label>كود خصم / هدية (اختياري)</label><input type="text" id="promoCodeInput" placeholder="اكتب الكود..." style="text-transform:uppercase;"></div>
     <button type="button" class="btn btn-ghost btn-sm" id="applyPromoCodeBtn" style="margin-bottom:2px;">تطبيق</button>
   </div>
   <div id="appliedPromoBanner" style="display:none;margin:8px 0;"></div>
   <div class="field"><label id="directDiscountLabel">خصم مباشر (ريال) — اختياري، منفصل عن الكود والعرض</label><input type="number" id="directDiscountInput" min="0" step="1" placeholder="0"></div>
-  <div class="stitch"></div>
-  <h3 style="margin:0 0 10px;font-size:14px;">الدفعات</h3>
+  </section>
+  <section class="inv-card">
+    <div class="inv-card-head"><h3 class="inv-card-title">الدفعات</h3><button class="btn btn-ghost btn-sm" id="addPaymentBtn">إضافة دفعة</button></div>
   <div id="paymentsList"></div>
   <div class="row-3">
     <div class="field"><label>كاش (ريال)</label><input type="number" id="newPayCash" min="0" placeholder="0"></div>
@@ -706,12 +713,12 @@
     <div class="field"><label>رقم سند الشبكة (إلزامي لو فيه شبكة)</label><input type="text" id="newPayReceipt"></div>
   </div>
   <div class="row-3"><div class="field"><label>نوع البطاقة</label><select id="newPayCardType" class="card-type-select"></select></div></div>
-  <button class="btn btn-ghost btn-sm" id="addPaymentBtn">إضافة دفعة</button>
   <div class="remaining-box">
     <span>إجمالي الفاتورة: <b id="liveInvoiceTotal">0 ﷼</b> — المدفوع: <b id="livePaid">0 ﷼</b></span>
     <span class="amt">المتبقي: <span id="liveRemaining">0 ﷼</span></span>
   </div>
   <div id="liveDiscountNote" style="display:none;color:var(--gold-soft);font-weight:700;font-size:12px;margin-top:-8px;margin-bottom:8px;"></div>
+  </section>
   <div class="actions-row">
     <button class="btn btn-gold" id="saveInvoiceBtn">حفظ</button>
     <button class="btn btn-ghost" id="saveAndPrintBtn">حفظ وطباعة</button>
@@ -726,10 +733,14 @@
 <aside id="invSideSummary">
   <h3>ملخص الفاتورة</h3>
   <div class="iss-row"><span>عدد الثياب</span><b id="issCount">0</b></div>
-  <div class="iss-row"><span>إجمالي الفاتورة</span><b id="issTotal">0 ﷼</b></div>
-  <div class="iss-row"><span>المدفوع</span><b id="issPaid">0 ﷼</b></div>
+  <div class="iss-row"><span>إجمالي البيع</span><b id="issTotal">0 ﷼</b></div>
+  <div class="iss-row iss-sub" id="issEmbroRow"><span>منه تطريز</span><b id="issEmbro">0 ﷼</b></div>
+  <div class="iss-row iss-sub" id="issDiscRow"><span>الخصم</span><b id="issDisc">0 ﷼</b></div>
+  <div class="iss-row iss-sep"><span>مدفوع كاش</span><b id="issCash">0 ﷼</b></div>
+  <div class="iss-row"><span>مدفوع شبكة</span><b id="issNet">0 ﷼</b></div>
   <div class="iss-rem">المتبقي على العميل<b id="issRemaining">0 ﷼</b></div>
   <button type="button" class="btn btn-gold" id="issSaveBtn" style="width:100%;margin-top:14px;" onclick="$('saveInvoiceBtn').click()">حفظ الفاتورة</button>
+  <button type="button" class="btn btn-ghost" id="issPrintBtn" style="width:100%;margin-top:8px;" onclick="$('saveAndPrintBtn').click()">حفظ وطباعة</button>
 </aside>
 </div>
 

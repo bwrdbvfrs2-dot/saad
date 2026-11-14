@@ -469,3 +469,32 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:#1F2328;box-sh
   .btn-sm{min-height:44px;}
 }
 @media print{ #invSideSummary{display:none !important;} }
+/* ---- the invoice screen in cards: customer / thobes / discount & notes / payments (every field kept) ---- */
+#tab-invoice .panel.inv-form{background:transparent;border:none;box-shadow:none;padding:0;}
+.inv-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:16px 0 10px;flex-wrap:wrap;}
+.inv-head h2{margin:0;font-size:20px;}
+.inv-num-pill{background:#fff;border:1px solid var(--border);border-radius:10px;padding:6px 12px;font-size:12px;color:var(--muted);}
+.inv-num-pill b{color:var(--ivory);font-size:15px;margin-inline-start:6px;}
+.inv-card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:18px 20px;margin-bottom:14px;}
+.inv-card-title{margin:0 0 12px;font-size:15px;font-weight:700;}
+.inv-card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
+.inv-card-head .inv-card-title{margin:0;}
+.inv-stepper{display:flex;align-items:center;gap:8px;}
+.inv-stepper label{font-size:12px;color:var(--muted);margin:0;}
+.inv-stepper input{width:64px;text-align:center;font-weight:700;padding:0 4px;-moz-appearance:textfield;}
+.inv-stepper input::-webkit-outer-spin-button,.inv-stepper input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+.step-btn{width:44px;height:44px;border-radius:10px;border:1px solid var(--field-border);background:#fff;font-size:20px;line-height:1;cursor:pointer;color:var(--ivory);font-family:inherit;}
+.step-btn:active{background:var(--selected-bg);}
+#tab-invoice .garment-card{padding:20px 16px 14px;margin-bottom:12px;}
+.g-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:4px 12px;align-items:end;margin-top:6px;}
+.g-grid .field{margin-bottom:8px;}
+.g-grid .g-fabric{grid-column:span 1;}
+.g-embro-check .embro-toggle{display:flex;align-items:center;gap:8px;min-height:44px;}
+.g-embro-check .embro-toggle input{width:20px;height:20px;min-height:0;}
+.g-total-cell b{display:flex;align-items:center;min-height:44px;font-size:16px;}
+.g-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px;}
+.g-addons-field{margin-top:10px;}
+@media(max-width:900px){ .g-grid{grid-template-columns:1fr 1fr;} .g-grid .g-fabric{grid-column:span 2;} }
+@media(min-width:1180px){ #tab-invoice .remaining-box{display:none;} }
+#invSideSummary .iss-sub{font-size:12.5px;color:var(--muted);}
+#invSideSummary .iss-sep{border-top:1px solid var(--border);margin-top:4px;}
