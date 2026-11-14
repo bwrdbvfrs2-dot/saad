@@ -43,9 +43,10 @@ function renderMailTab(){
   const pending = all.filter(r=>r.status==="pending" && visible(r));
   const resolved = all.filter(r=>r.status==="decided" && visible(r)).slice(0,30);
 
-  const typeLabel = t=> t==="invoice_return_defect"?"فاتورة مرتجعة (خلل)" : t==="advance"?"طلب سلفة" : t==="payment_edit"?"تعديل دفعة فاتورة" : "طلب إجازة";
+  const typeLabel = t=> t==="invoice_return_defect"?"فاتورة مرتجعة (خلل)" : t==="invoice_return"?"مرتجع فاتورة" : t==="advance"?"طلب سلفة" : t==="payment_edit"?"تعديل دفعة فاتورة" : "طلب إجازة";
   const detailLine = r=>{
     if(r.type==="invoice_return_defect") return `فاتورة ${esc(r.invoiceNumber)} — ${r.amount.toFixed(0)} ﷼ — المتسبّب: ${esc(r.responsibleUsername)} — السبب: ${esc(r.reason)}`;
+    if(r.type==="invoice_return") return `فاتورة ${esc(r.invoiceNumber)} — يرجع للعميل ${fmtSar(r.amount)} ﷼${r.amount>0?` من ${esc(r.boxLabel||"—")}`:""} — طلبها ${esc(r.createdBy)} — السبب: ${esc(r.reason)}`;
     if(r.type==="advance") return `${esc(r.employeeUsername)} — ${r.amount.toFixed(0)} ﷼ — ${esc(r.reason||"—")}`;
     if(r.type==="payment_edit") return `فاتورة ${esc(r.invoiceNumber)} — الدفعة: كاش ${fmtSar(r.cash)} / شبكة ${fmtSar(r.network)} ﷼ (${r.payDate||"—"}) — طلبها ${esc(r.createdBy)} — السبب: ${esc(r.reason||"—")}${r.usedAt?` — عُدّلت ${r.usedAt}`:""}`;
     if(r.type==="leave") return `${esc(r.employeeUsername)} — من ${r.fromDate} إلى ${r.toDate} — ${esc(r.reason||"—")}`;
@@ -60,6 +61,7 @@ function renderMailTab(){
       actions = `<span class="badge b-pending">قيد الانتظار</span>`;
     } else if(isAdmin){
       if(r.type==="invoice_return_defect") actions = `<button class="btn btn-gold btn-sm" onclick="openMailDecisionModal('${r.id}')">اتخاذ قرار</button>`;
+      else if(r.type==="invoice_return") actions = `<button class="btn btn-gold btn-sm" onclick="decideInvoiceReturnRequest('${r.id}', true)">موافقة</button> <button class="btn btn-danger btn-sm" onclick="decideInvoiceReturnRequest('${r.id}', false)">رفض</button>`;
       else actions = `<button class="btn btn-gold btn-sm" onclick="decideSimpleMailRequest('${r.id}', true)">موافقة</button> <button class="btn btn-danger btn-sm" onclick="decideSimpleMailRequest('${r.id}', false)">رفض</button>`;
     } else {
       actions = `<span class="badge b-pending">قيد الانتظار</span>`;
@@ -98,6 +100,90 @@ function submitMailReturnRequest(){
   saveState(); renderAll();
   $("mailReturnInvNumber").value=""; $("mailReturnReason").value=""; switchMailComposeForm(null);
   showToast("تم إرسال الطلب للمدير");
+}
+// ---- a customer return filed by an employee from the invoice log, approved by the manager ----
+// the refund leaves the employee's own box (cash or network, their pick) once the manager approves
+function pendingReturnRequestOf(inv){ return state.mailRequests.find(m=> m.type==="invoice_return" && m.invoiceId===inv.id && m.status==="pending"); }
+function returnRequestButtonHtml(inv){
+  if(state.invoiceReturns.some(r=>r.invoiceId===inv.id)) return `<span class="badge b-cancel" style="margin-inline-end:4px;">مرتجعة</span>`;
+  if(pendingReturnRequestOf(inv)) return `<span class="badge b-pending" style="margin-inline-end:4px;" title="طلب المرتجع ينتظر موافقة المدير">مرتجع بانتظار المدير</span>`;
+  return `<button class="btn btn-ghost btn-sm" onclick="openReturnRequestModal('${inv.id}')" title="طلب مرتجع — يروح للمدير">مرتجع</button> `;
+}
+let returnReqInvId = null;
+function openReturnRequestModal(invId){
+  const inv = state.invoices.find(i=>i.id===invId); if(!inv) return;
+  if(state.invoiceReturns.some(r=>r.invoiceId===inv.id)){ showToast(`الفاتورة ${inv.number} مسجّل لها مرتجع مسبقاً`); return; }
+  if(pendingReturnRequestOf(inv)){ showToast(`فيه طلب مرتجع لفاتورة ${inv.number} ينتظر موافقة المدير`); return; }
+  const boxes = userBoxes(currentUser.username);
+  const refundable = Math.max(0, invoicePaid(inv) - invoiceRefunded(inv));
+  returnReqInvId = invId;
+  $("returnReqSummary").textContent = `فاتورة ${inv.number} — ${inv.customerName||"—"} — دفع العميل ${fmtSar(refundable)} ريال`;
+  $("returnReqAmount").value = refundable ? String(+refundable.toFixed(2)) : "0";
+  $("returnReqAmount").max = String(refundable);
+  $("returnReqBox").innerHTML = boxes.map(b=>`<option value="${b.id}">${esc(b.name)} (${typeLabel(b.type)}) — ${fmtSar(boxTotal(b))} ﷼</option>`).join("");
+  $("returnReqBoxWrap").style.display = boxes.length ? "" : "none";
+  $("returnReqReason").value = "";
+  $("returnReqModalOverlay").classList.remove("hidden");
+}
+function closeReturnRequestModal(){ $("returnReqModalOverlay").classList.add("hidden"); returnReqInvId = null; }
+async function submitReturnRequest(){
+  const inv = state.invoices.find(i=>i.id===returnReqInvId); if(!inv){ closeReturnRequestModal(); return; }
+  const amount = parseFloat($("returnReqAmount").value)||0;
+  const reason = $("returnReqReason").value.trim();
+  const refundable = Math.max(0, invoicePaid(inv) - invoiceRefunded(inv));
+  if(!reason){ showToast("اكتب سبب المرتجع"); return; }
+  if(amount<0 || amount - refundable > 0.01){ showToast(`المبلغ لازم يكون بين 0 و${fmtSar(refundable)} ريال (اللي دفعه العميل)`); return; }
+  const box = amount>0 ? findCashBox($("returnReqBox").value) : null;
+  if(amount>0 && (!box || box.owner!==currentUser.username)){ showToast("اختر صندوقك اللي يطلع منه المبلغ"); return; }
+  if(state.invoiceReturns.some(r=>r.invoiceId===inv.id) || pendingReturnRequestOf(inv)){ showToast("هذي الفاتورة عليها مرتجع أو طلب مرتجع مسبقاً"); closeReturnRequestModal(); return; }
+  const snapshot = JSON.parse(JSON.stringify(state));
+  const seq = nextMailRequestNo();
+  state.mailRequests.push({id:newId(), seq, type:"invoice_return", invoiceId:inv.id, invoiceNumber:inv.number, amount, reason,
+    boxId: box ? box.id : "", boxLabel: box ? `${box.name} (${typeLabel(box.type)})` : "", status:"pending", createdBy:currentUser.username, date:todayStr()});
+  if(!await saveStateWithRollback(snapshot)) return;
+  logAudit("invoice_return_requested", {seq, invoiceNumber:inv.number, amount, boxId: box ? box.id : null});
+  closeReturnRequestModal(); renderAll();
+  showToast(`انرسل طلب المرتجع للمدير (طلب #${seq})`);
+}
+async function decideInvoiceReturnRequest(reqId, approved){
+  const r = state.mailRequests.find(x=>x.id===reqId);
+  if(!r || r.type!=="invoice_return") return;
+  if(currentUser.role!=="مدير"){ showToast("الموافقة على المرتجع للمدير فقط"); return; }
+  if(r.status!=="pending"){ showToast("هذا الطلب تم البت فيه مسبقاً"); return; }
+  const inv = state.invoices.find(i=>i.id===r.invoiceId);
+  if(approved){
+    if(!inv){ showToast("الفاتورة ما عادت موجودة"); return; }
+    if(state.invoiceReturns.some(x=>x.invoiceId===inv.id)){ showToast(`الفاتورة ${inv.number} مسجّل لها مرتجع مسبقاً — ارفض الطلب`); return; }
+    const refundable = Math.max(0, invoicePaid(inv) - invoiceRefunded(inv));
+    if(r.amount - refundable > 0.01){ showToast(`المبلغ أكبر من اللي دفعه العميل (${fmtSar(refundable)} ريال) — ارفض الطلب`); return; }
+    const box = r.amount>0 ? findCashBox(r.boxId) : null;
+    if(r.amount>0 && !box){ showToast("صندوق الموظف ما عاد موجود — ارفض الطلب"); return; }
+    if(box && boxTotal(box) < r.amount){ showToast(`رصيد صندوق ${r.createdBy} (${fmtSar(boxTotal(box))} ريال) أقل من مبلغ المرتجع`); return; }
+    if(!await showConfirm(`الموافقة على مرتجع فاتورة ${inv.number}؟\nيرجع للعميل ${fmtSar(r.amount)} ريال${box?` من صندوق ${r.createdBy} — ${r.boxLabel}`:""}، والثياب اللي ما انسلّمت تنلغي.`)) return;
+  }
+  // re-read after the confirm box (another device may have changed things meanwhile)
+  const req = state.mailRequests.find(x=>x.id===reqId);
+  if(!req || req.status!=="pending"){ showToast("هذا الطلب تم البت فيه مسبقاً"); return; }
+  const inv2 = state.invoices.find(i=>i.id===req.invoiceId);
+  const snapshot = JSON.parse(JSON.stringify(state));
+  const seq = nextDecisionNo();
+  if(approved){
+    const box = req.amount>0 ? findCashBox(req.boxId) : null;
+    if(!inv2 || state.invoiceReturns.some(x=>x.invoiceId===inv2.id) || (box && boxTotal(box) < req.amount)){ showToast("تغيّرت البيانات — افتح الطلب مرة ثانية"); return; }
+    if(box) box.balance -= req.amount;
+    applyInvoiceReturn(inv2, {reason:`مرتجع بطلب ${req.createdBy}: ${req.reason}`, refundAmount:req.amount, boxId: box ? box.id : "", responsibleUsername:null, loyaltyNote:"مرتجع فاتورة"});
+    req.decisionLabel = `قرار رقم ${seq} — تمت الموافقة (${currentUser.username})${req.amount>0?` — انخصم ${fmtSar(req.amount)} ﷼ من ${req.boxLabel}`:""}`;
+  } else {
+    req.decisionLabel = `قرار رقم ${seq} — مرفوض (${currentUser.username})`;
+  }
+  req.status = "decided"; req.approved = !!approved; req.decidedBy = currentUser.username; req.decidedAt = todayStr();
+  state.decisions.push({id:newId(), seq, type:"invoice_return", recipientUsername:req.createdBy, amount: approved ? req.amount : 0, reason:req.reason,
+    message: approved ? `وافق ${currentUser.username} على مرتجع فاتورة #${req.invoiceNumber}${req.amount>0?` — انخصم ${fmtSar(req.amount)} ريال من صندوقك (${req.boxLabel}) وارجعه للعميل`:""}.`
+                      : `رفض ${currentUser.username} طلب مرتجع فاتورة #${req.invoiceNumber} — ما انخصم شي.`,
+    decidedBy:currentUser.username, date:todayStr()});
+  if(!await saveStateWithRollback(snapshot)) return;
+  logAudit("invoice_return_decided", {seq:req.seq, invoiceNumber:req.invoiceNumber, approved:!!approved, amount:req.amount, requestedBy:req.createdBy});
+  showToast(approved ? `تم المرتجع — انخصم ${fmtSar(req.amount)} ريال من صندوق ${req.createdBy}` : "تم رفض طلب المرتجع");
 }
 function submitMailAdvanceRequest(){
   const employeeUsername = $("mailAdvanceEmployee").value;
