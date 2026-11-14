@@ -387,15 +387,25 @@ function buildDailyReportHtml(day, r, username){
       <div class="dr-name">${username ? `التقرير اليومي — ${esc(username)}` : "التقرير اليومي الشامل"}</div>
       <div class="dr-date">${r.to && r.to!==day ? `من ${day} إلى ${r.to}` : day}</div></div>`;
   const parts = [];
-  parts.push(dailySection("فواتير جديدة", ["رقم","العميل","عدد الثياب","الإجمالي"],
-    r.newInvoices.map(inv=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${inv.garments.length}</td><td>${sar(invoiceSaleTotal(inv))}</td></tr>`),
-    {foot:`<td colspan="2">الإجمالي</td><td>${r.newInvoices.reduce((a,i)=>a+i.garments.length,0)} ثوب</td><td>${sar(r.newInvoices.reduce((a,i)=>a+invoiceSaleTotal(i),0))}</td>`}));
-  // thobes whose fabric the customer brought (no fabric card) — in a table of their own
-  const ownFabric = [];
-  r.newInvoices.forEach(inv=> inv.garments.forEach(g=>{ if(!g.itemCardId && g.status!=="ملغي") ownFabric.push({inv,g}); }));
-  parts.push(dailySection("ثياب قماشها من خارج المحل", ["رقم الفاتورة","العميل","السعر"],
-    ownFabric.map(({inv,g})=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${sar(garmentNetSalePrice(g, inv))}</td></tr>`),
-    {foot:`<td colspan="2">الإجمالي — ${ownFabric.length} ثوب</td><td>${sar(ownFabric.reduce((a,x)=>a+garmentNetSalePrice(x.g, x.inv),0))}</td>`}));
+  // new invoices in two tables that never repeat a thobe: the shop's fabric, and the customer's own fabric
+  // (no fabric card). One row per invoice, with the thobe price(s) between the count and the total;
+  // an invoice with both kinds shows up in each table with its own thobes only
+  const groupNew = own=> r.newInvoices.map(inv=>{
+    const gs = inv.garments.filter(g=> g.status!=="ملغي" && (!g.itemCardId)===own);
+    const kinds = {}; gs.forEach(g=>{ const k = g.category||"رجال"; kinds[k]=(kinds[k]||0)+1; });
+    const kind = Object.keys(kinds).length===1 ? Object.keys(kinds)[0] : Object.entries(kinds).map(([k,c])=>`${k} ${c}`).join("، ");
+    return gs.length ? {inv, n:gs.length, kind, prices:[...new Set(gs.map(g=>garmentSalePrice(g)))], total:gs.reduce((a,g)=>a+garmentSalePrice(g),0)} : null;
+  }).filter(Boolean);
+  const newTable = (title, rows)=> dailySection(title, ["رقم","العميل","عدد الثياب","النوع","سعر الثوب","الإجمالي"],
+    rows.map(x=>`<tr><td>${esc(x.inv.number)}</td><td>${esc(x.inv.customerName||"—")}</td><td>${x.n}</td><td>${esc(x.kind)}</td><td>${x.prices.map(v=>fmtSar(v)).join(" / ")} ﷼</td><td>${sar(x.total)}</td></tr>`),
+    {foot:`<td colspan="2">الإجمالي</td><td>${rows.reduce((a,x)=>a+x.n,0)} ثوب</td><td></td><td></td><td>${sar(rows.reduce((a,x)=>a+x.total,0))}</td>`});
+  const shopRows = groupNew(false), ownRows = groupNew(true);
+  parts.push(newTable("فواتير جديدة — قماش المحل", shopRows));
+  parts.push(newTable("فواتير جديدة — قماش من خارج المحل", ownRows));
+  if(shopRows.length && ownRows.length){
+    const all = shopRows.concat(ownRows);
+    parts.push(`<p class="dr-grand">مجموع الفواتير الجديدة: <b>${r.newInvoices.length}</b> فاتورة — <b>${all.reduce((a,x)=>a+x.n,0)}</b> ثوب — <b>${sar(all.reduce((a,x)=>a+x.total,0))}</b></p>`);
+  }
   parts.push(dailySection("تسليمات — من الشهر الحالي", ["رقم الفاتورة","نوع القماش","السعر","رقم الإيصال"],
     r.deliveredThisMonth.map(({inv,g})=>`<tr><td>${esc(inv.number)}</td><td>${esc(g.fabricType)}</td><td>${sar(garmentNetSalePrice(g, inv))}</td><td>${esc(deliveryReceiptOf(inv,g))}</td></tr>`)));
   parts.push(dailySection("تسليمات — متعثرة من أشهر سابقة", ["رقم الفاتورة","الشهر الأصلي","نوع القماش","السعر","رقم الإيصال"],
@@ -450,8 +460,30 @@ function buildDailyReportHtml(day, r, username){
       {foot:`<td colspan="3">الإجمالي</td><td class="dr-out">${sar(outs.reduce((a,m)=>a-m.amount,0))}</td>`}); })()}
   ${r.cardFees ? `<p class="dr-note">الشبكة كاملة (مثل جهاز الشبكة): <b>${fmtSar(r.cardGross)} ﷼</b> — عمولة البنك: <b>${fmtSar(r.cardFees)} ﷼</b> — الصافي: <b>${fmtSar(r.cardGross-r.cardFees)} ﷼</b></p>` : ""}
   <p class="dr-note">يشمل كل الحركات المسجّلة — الخارج: التحويلات للمدير/المحاسب، المصروفات، المرتجعات، المشتريات، الموردين، الرواتب.</p>
+  ${dailyExpenseAppendix(day, r, username)}
   </div>`;
   return html;
+}
+// the appendix printed under the daily report, on a page of its own: every expense of the report's
+// day(s) (the same ones its «المصروفات» section counts) in full, then a total per category
+function dailyExpenseAppendix(day, r, username){
+  const list = (r.expensesToday||[]).slice().sort((a,b)=> (a.date||"").localeCompare(b.date||"") || (a.voucherNo||0)-(b.voucherNo||0));
+  if(!list.length) return "";
+  const sar = n=> `${fmtSar(n||0)} ﷼`;
+  const range = r.to && r.to!==day;
+  const catOf = e=>{ const c = state.expenseCategories.find(x=>x.id===e.categoryId); return c ? c.label : "بدون تصنيف"; };
+  const boxOf = e=>{ const b = e.sourceBoxId ? findCashBox(e.sourceBoxId) : null; return b ? `${b.owner} — ${b.type==="network"?"شبكة":"كاش"}` : "—"; };
+  const rows = list.map(e=>`<tr>${range?`<td>${e.date||"—"}</td>`:""}<td>${e.voucherNo||"—"}</td><td>${esc(catOf(e))}</td><td>${esc(e.subItemLabel||"—")}</td><td>${esc([e.paidTo, e.storeName].filter(Boolean).join(" — ")||"—")}</td><td>${esc(e.notes||"—")}</td><td>${esc(boxOf(e))}</td><td>${esc(e.recordedBy||"—")}</td><td>${sar(e.amount)}</td></tr>`);
+  const total = list.reduce((a,e)=>a+(e.amount||0),0);
+  const byCat = {}; list.forEach(e=>{ const c = catOf(e); (byCat[c] = byCat[c]||{n:0,t:0}).n++; byCat[c].t += e.amount||0; });
+  const head = (range?["التاريخ"]:[]).concat(["سند الصرف","التصنيف","البند","المستفيد / المحل","ملاحظات","الصندوق","سجّله","المبلغ"]);
+  return `<div class="dr-appendix">
+    <div class="dr-head"><div class="dr-name">ملحق — تفصيل المصروفات${username?` — ${esc(username)}`:""}</div><div class="dr-date">${range ? `من ${day} إلى ${r.to}` : day}</div></div>
+    ${dailySection("المصروفات بالتفصيل", head, rows, {foot:`<td colspan="${head.length-1}">الإجمالي</td><td>${sar(total)}</td>`})}
+    ${dailySection("المجموع حسب التصنيف", ["التصنيف","العدد","المبلغ"],
+      Object.entries(byCat).sort((a,b)=>b[1].t-a[1].t).map(([c,v])=>`<tr><td>${esc(c)}</td><td>${v.n}</td><td>${sar(v.t)}</td></tr>`),
+      {foot:`<td>الإجمالي</td><td>${list.length}</td><td>${sar(total)}</td>`})}
+  </div>`;
 }
 // ---- sending a daily report by WhatsApp: to a manager or an accountant, picked from a list ----
 function reportRecipients(){ return state.users.filter(u=> u.role==="مدير" || u.role==="محاسب"); }
@@ -553,14 +585,14 @@ function renderMyDaily(){
 }
 function printMyDaily(){
   renderMyDaily();
-  printHtml($("myDailyView").innerHTML);
+  printHtml($("myDailyView").innerHTML, {noBrowserHeaders:true});
 }
 function printDaily(){
   const day = $("dailyDate").value || todayStr();
   const r = buildDailyReport(day, null, ($("dailyDateTo")||{}).value);
   const html = buildDailyReportHtml(day, r);
   $("dailyReportView").innerHTML = html;
-  printHtml(html);
+  printHtml(html, {noBrowserHeaders:true});
 }
 function findMissingReceiptInvoices(){
   const rows=[];
@@ -582,7 +614,15 @@ function findMissingReceiptInvoices(){
 
 function isStandalone(){ return window.navigator.standalone===true || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches); }
 function safePrint(){ try{ window.print(); }catch(e){} }
-function printHtml(html){ $("dynamicPageSize").textContent = ""; $("printArea").innerHTML = html; safePrint(); }
+function printHtml(html, opt={}){
+  if(opt.noBrowserHeaders){
+    // the browser prints its date/URL/page number inside the page margin — with no top/bottom margin it
+    // has nowhere to put them; the frame's repeated head/foot rows give every page its space back
+    $("dynamicPageSize").textContent = "@page{ margin:0 10mm; }";
+    $("printArea").innerHTML = `<table class="print-frame"><thead><tr><td class="pf-space"></td></tr></thead><tbody><tr><td>${html}</td></tr></tbody><tfoot><tr><td class="pf-space"></td></tr></tfoot></table>`;
+  } else { $("dynamicPageSize").textContent = ""; $("printArea").innerHTML = html; }
+  safePrint();
+}
 // ---------------- reusable period filter (this month / all / custom range) ----------------
 // ---------------- comprehensive activity log (all sections, extended periods) ----------------
 function extendedPeriodPickerHtml(prefix){
