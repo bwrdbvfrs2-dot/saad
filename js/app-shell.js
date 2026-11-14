@@ -537,6 +537,11 @@ function rebuildArchiveIndex(){
 }
 // the catalog version wins over a copy still sitting inside shop/state (from before the move, or
 // written back by a device still running an older version of the app)
+const numPart = v=>{ const m = String(v==null?"":v).match(/\d+/); return m ? +m[0] : Infinity; };
+function compareInvoicesByAge(a, b){
+  return String(a.date||"").localeCompare(String(b.date||"")) || numPart(a.number)-numPart(b.number) || String(a.number).localeCompare(String(b.number));
+}
+function compareCustomersByCode(a, b){ return numPart(a.code)-numPart(b.code) || String(a.code||"").localeCompare(String(b.code||"")); }
 function mergeCatalogInto(data, opts){
   catalogKeys().forEach(k=>{ if(catalogSaved[k]) data[k] = JSON.parse(JSON.stringify(catalogSaved[k].items)); });
   // customers and live invoices from their shard documents. Items still sitting in the main document
@@ -553,7 +558,10 @@ function mergeCatalogInto(data, opts){
       left = left.filter(c=>{ const twin = items.find(x=> x.mobile && x.mobile===c.mobile); if(!twin) return true;
         (c.individuals||[]).forEach(ind=>{ if(!(twin.individuals||[]).some(t=>t.name===ind.name)) (twin.individuals = twin.individuals||[]).push(ind); }); return false; });
     }
-    data[spec.key] = items.concat(left);
+    // shard documents are read one after another, so their items came back grouped by document, not
+    // in the order they were made — today's invoices showed up in the middle of «كل الثياب غير المسلّمة».
+    // Back in creation order: invoices by date then number, customers by their code
+    data[spec.key] = items.concat(left).sort(spec.key==="invoices" ? compareInvoicesByAge : compareCustomersByCode);
   });
   if(catalogSaved[SETTINGS_IMAGES_DOC] && data.settings){
     catalogSaved[SETTINGS_IMAGES_DOC].items.forEach(it=> setPath(data.settings, it.path.split("."), it.value));

@@ -288,14 +288,14 @@ function buildCuttingCardHtml(inv, gIdx){
     <div style="display:flex;gap:6px;align-items:flex-start;">
       <div style="flex:1.1;">${diagramParts.front}<div style="text-align:center;font-size:9px;color:#666;">أمام</div></div>
       <div style="flex:1.1;">${diagramParts.back}<div style="text-align:center;font-size:9px;color:#666;">خلف</div></div>
-      <div style="width:108px;flex-shrink:0;">${leftBoxesHtml}</div>
+      <div style="width:128px;flex-shrink:0;">${leftBoxesHtml}</div>
     </div>
     ${extraTypesRowHtml}
     ${unmappedTableHtml}
   </div>` : `<div>
     <div style="display:flex;gap:6px;align-items:flex-start;">
       <div style="flex:1;">${buildFallbackDiagramSvg(val)}</div>
-      <div style="width:108px;flex-shrink:0;">${leftBoxesHtml}</div>
+      <div style="width:128px;flex-shrink:0;">${leftBoxesHtml}</div>
     </div>
     ${extraTypesRowHtml}
     ${unmappedTableHtml}
@@ -310,8 +310,8 @@ function buildCuttingCardHtml(inv, gIdx){
         ${s.shopLogo?`<img src="${s.shopLogo}" style="max-height:30px;margin-top:2px;">`:""}
       </div>
       <div style="font-size:9.5px;">
-        <p style="margin:1px 0;">تاريخ الفاتورة: ${inv.date}</p>
-        <p style="margin:1px 0;">تاريخ التسليم المتوقع: ${inv.expectedDeliveryDate||"—"}</p>
+        <p style="margin:1px 0;">تاريخ الفاتورة: <span style="white-space:nowrap;">${inv.date}</span></p>
+        <p style="margin:1px 0;">تاريخ التسليم المتوقع: <span style="white-space:nowrap;">${inv.expectedDeliveryDate||"—"}</span></p>
         <p style="margin:1px 0;">اسم العميل: ${esc(inv.customerName||"—")}</p>
       </div>
       <div style="font-size:9.5px;">
@@ -328,14 +328,14 @@ function buildCuttingCardHtml(inv, gIdx){
     <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;margin-top:4px;font-size:9.5px;">
       <span>عدد الأثواب: ${garmentCount}</span><span>اسم القماش: ${esc(g.fabricType)}</span>
       <span>اسم الخياط: ${esc(g.tailor||"—")}</span><span>نوع التفصيل: ${garmentTypeItem?esc(garmentTypeItem.label):"—"}</span>
-      <span>الفئة: ${esc(g.category||"—")}</span><span>الكمية المستهلكة: ${g.qtyUsed?g.qtyUsed+" "+unitLabel():"—"}</span>
+      <span>الفئة: ${esc(g.category||"—")}</span>${g.hasEmbroidery?`<span style="font-weight:700;">تطريز${g.embroideryNo?` رقم ${esc(g.embroideryNo)}`:""}</span>`:""}<span>الكمية المستهلكة: ${g.qtyUsed?g.qtyUsed+" "+unitLabel():"—"}</span>
     </div>
     ${extraTypesLine ? `<p style="margin:3px 0;font-size:9.5px;">${extraTypesLine}</p>` : ""}
     <hr style="margin:4px 0;">
     ${bodyHtml}
     <hr style="margin:4px 0;">
     <div style="border-top:2px dashed #000;padding-top:4px;">
-      <p style="margin:2px 0;font-size:10px;">${g.urgent?"مستعجل &nbsp;&nbsp;":""}${g.sample?"عينة &nbsp;&nbsp;":""}<b>ملاحظات / شغل خاص:</b> ${esc(g.measurementNotes||"—")}</p>
+      <p style="margin:2px 0;font-size:10px;">${g.urgent?"مستعجل &nbsp;&nbsp;":""}${g.sample?"عينة &nbsp;&nbsp;":""}${g.hasEmbroidery?`<b style="border:1.5px solid #000;padding:0 5px;border-radius:3px;">تطريز${g.embroideryNo?` رقم ${esc(g.embroideryNo)}`:""}</b> &nbsp;&nbsp;`:""}<b>ملاحظات / شغل خاص:</b> ${esc(g.measurementNotes||"—")}</p>
     </div>
     <div style="display:flex;border-top:2px dashed #000;margin-top:6px;">
       <div style="flex:1;padding:6px 8px;border-left:2px dashed #000;text-align:center;">
@@ -404,6 +404,23 @@ function buildFallbackDiagramSvg(val){
     <text x="600" y="140" text-anchor="start" font-size="12">طول الكم: ${val('sleeveLength')}</text>
   </svg>`;
 }
+const CUTTING_CARD_MAX_PX = 1040; // A4 (297mm) less the 8mm margins top and bottom ≈ 1062px at 96dpi, with a little room
+function cuttingCardWithFontBoost(html, add){ return html.replace(/font-size:\s*(\d+(?:\.\d+)?)px/g, (m,n)=>`font-size:${(+n+add)}px`); }
+async function fitCuttingCardHtml(html){
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:absolute;left:-10000px;top:0;width:740px;visibility:hidden;";
+  document.body.appendChild(probe);
+  try{
+    for(const add of [5,4,3,2]){
+      const candidate = cuttingCardWithFontBoost(html, add);
+      probe.innerHTML = candidate;
+      // the mannequin photos must be laid out before the height means anything
+      await Promise.all([...probe.querySelectorAll("img")].map(img=> img.complete ? null : new Promise(r=>{ img.onload = img.onerror = r; setTimeout(r, 1500); })));
+      if(probe.firstElementChild && probe.firstElementChild.getBoundingClientRect().height <= CUTTING_CARD_MAX_PX) return candidate;
+    }
+    return cuttingCardWithFontBoost(html, 1);
+  } finally { probe.remove(); }
+}
 async function printCuttingCard(invId, gIdx){
   const inv = state.invoices.find(i=>i.id===invId);
   if(!inv) return;
@@ -413,8 +430,9 @@ async function printCuttingCard(invId, gIdx){
   // margins it silently overflows onto a second page. An explicit, tight, predictable margin
   // removes that variable entirely and guarantees this always fits on one A4 page.
   $("dynamicPageSize").textContent = "@media print{ @page{ size:A4; margin:8mm; } }";
-  // printed one size larger than drawn (it read small on paper); the card still fits one A4 page
-  $("printArea").innerHTML = buildCuttingCardHtml(inv, gIdx).replace(/font-size:\s*(\d+(?:\.\d+)?)px/g, (m,n)=>`font-size:${(+n+1)}px`);
+  // the text as big as it can be while the card still fits one A4 page (it read small on paper):
+  // each candidate size is laid out off-screen and measured, the largest that fits is printed
+  $("printArea").innerHTML = await fitCuttingCardHtml(buildCuttingCardHtml(inv, gIdx));
   await loadBarcodeLib().catch(e=>{ console.error(e); });
   if(window.JsBarcode){
     const drawBarcode = (id, opts)=>{ try{ window.JsBarcode(id, inv.number, opts); }catch(e){ console.error("barcode render failed for "+id, e); } };

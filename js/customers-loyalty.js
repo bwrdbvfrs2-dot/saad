@@ -24,6 +24,7 @@ const MEASUREMENT_FIELDS = [
   {key:"chestPocketWidth", label:"ع-جيب الصدر"}, {key:"mobilePocketLength", label:"ط-جيب الجوال"},
   {key:"mobilePocketWidth", label:"ع-جيب الجوال"}, {key:"walletPocketLength", label:"ط-جيب المحفظة"},
   {key:"walletPocketWidth", label:"ع-جيب المحفظة"}, {key:"betweenChestPocketShoulder", label:"بين جيب الصدر والكتف"},
+  {key:"chestToShoulder", label:"بين الصدر والكتف"},
   {key:"sidePocket", label:"جيب الجنب"}, {key:"takhalees", label:"تخاليص"},
   {key:"expectedFabricMeters", label:"القماش المتوقع بالمتر"},
 ];
