@@ -78,7 +78,7 @@ const AUDIT_ACTION_LABELS = {
   ready_to_sale_days_changed:"أيام تحويل الجاهز للبيع", expense_category_fixed_toggled:"تصنيف مصروف ثابت", option_image_changed:"تغيير صورة خيار",
   invoices_archived:"أرشفة فواتير", auto_archived:"أرشفة تلقائية", shop_reset_for_go_live:"تصفير للتشغيل", login_account_relinked:"إعادة ربط حساب",
   daily_report_sent_whatsapp:"إرسال التقرير اليومي", broadcast_list_imported:"استيراد قائمة بث", leads_imported:"استيراد عملاء محتملين",
-  bot_settings_changed:"إعدادات البوت", bot_run_now:"تشغيل البوت", bot_conversation_handled:"محادثة بوت", reserved_fixed:"تصحيح المحجوز",
+  bot_settings_changed:"إعدادات البوت", bot_run_now:"تشغيل البوت", bot_conversation_handled:"محادثة بوت", reserved_fixed:"تصحيح المحجوز", theme_color_changed:"لون البرنامج",
 };
 const AUDIT_KEY_LABELS = {
   amount:"المبلغ", refundAmount:"المبلغ المرتجع", reason:"السبب", invoiceNumber:"فاتورة", number:"رقم", invoiceNo:"رقم الفاتورة", seq:"رقم الطلب",
