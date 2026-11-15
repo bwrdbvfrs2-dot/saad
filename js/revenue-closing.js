@@ -57,6 +57,81 @@ function generalExpensesForMonth(monthLabel){
     .filter(e=>(e.date||"").slice(0,7)===monthLabel)
     .reduce((sum,e)=>sum+(e.amount||0),0);
 }
+// the audit log in plain sentences: what was done, to what (name + code), from what to what, by whom
+const AUDIT_ACTION_LABELS = {
+  expense_recorded:"مصروف", expense_deleted:"حذف مصروف", month_closed:"إقفال شهر", price_changed:"تعديل سعر", funds_transferred:"تحويل أموال",
+  transfer_accepted:"استلام تحويل", transfer_rejected:"رفض تحويل", invoice_returned:"مرتجع فاتورة", invoice_return_requested:"طلب مرتجع فاتورة",
+  invoice_return_decided:"قرار طلب مرتجع", sale_invoice_returned:"مرتجع فاتورة مبيعات", sale_invoice_recorded:"فاتورة مبيعات",
+  user_added:"إضافة مستخدم", user_removed:"حذف مستخدم", permission_changed:"تغيير صلاحية", opening_balance_changed:"تعديل رصيد أول المدة",
+  fabric_width_changed:"تعديل عرض القماش", item_written_off:"إتلاف صنف", item_card_deleted:"حذف صنف", items_imported:"استيراد أصناف",
+  purchase_recorded:"فاتورة شراء", purchase_edited:"تعديل فاتورة شراء", purchase_return_recorded:"مرتجع مشتريات",
+  supplier_paid:"تسديد مورد", supplier_opening_debt:"رصيد افتتاحي لمورد", supplier_opening_debt_deleted:"حذف رصيد افتتاحي لمورد", supplier_debt_written_off:"إسقاط مستحق مورد",
+  shift_closing_saved:"إقفال وردية", voucher_recorded:"سند", payment_edit_requested:"طلب تعديل دفعة", payment_edit_decided:"قرار تعديل دفعة",
+  payment_edited:"تعديل دفعة", payment_removed:"حذف دفعة", deposit_bypassed:"تجاوز العربون", deposit_bypass_code_set:"كود تجاوز العربون", deposit_bypass_code_cleared:"إلغاء كود تجاوز العربون",
+  invoice_measurements_edited:"تعديل مقاسات فاتورة", invoice_held:"تعليق فاتورة", held_invoice_deleted:"حذف فاتورة معلقة", sale_held:"تعليق فاتورة مبيعات", held_sale_deleted:"حذف فاتورة مبيعات معلقة",
+  mail_request_decided:"قرار طلب بريد", mail_decision_resolved:"قرار مرتجع خلل", bonus_or_deduction:"مكافأة/خصم", garment_credit_delivered:"تسليم بدين",
+  customer_debt_settled:"سداد دين عميل", credit_debt_settled:"سداد دين تسليم", credit_debt_written_off:"إسقاط دين تسليم",
+  opening_debt_added:"دين افتتاحي لعميل", opening_debt_edited:"تعديل دين افتتاحي", opening_debt_written_off:"إسقاط دين افتتاحي", opening_debt_deleted:"حذف دين افتتاحي", opening_debt_settled:"سداد دين افتتاحي",
+  sewn_date_approved:"اعتماد تاريخ تفصيل", qc_passed:"اجتياز فحص الجودة", qc_rejected:"رفض فحص الجودة", qc_setting_changed:"إعداد فحص الجودة",
+  alteration_received:"استلام تعديل", alteration_measurements_changed:"تعديل مقاسات (تعديلات)", legacy_item_delivered:"تسليم بضاعة قديمة",
+  repair_received:"استلام تصليح", repair_payment:"دفعة تصليح", repair_ready:"تصليح جاهز", repair_delivered:"تسليم تصليح", repair_cancelled:"إلغاء تصليح", repair_wage_percent_changed:"نسبة أجرة التصليح",
+  ready_to_sale_days_changed:"أيام تحويل الجاهز للبيع", expense_category_fixed_toggled:"تصنيف مصروف ثابت", option_image_changed:"تغيير صورة خيار",
+  invoices_archived:"أرشفة فواتير", auto_archived:"أرشفة تلقائية", shop_reset_for_go_live:"تصفير للتشغيل", login_account_relinked:"إعادة ربط حساب",
+  daily_report_sent_whatsapp:"إرسال التقرير اليومي", broadcast_list_imported:"استيراد قائمة بث", leads_imported:"استيراد عملاء محتملين",
+  bot_settings_changed:"إعدادات البوت", bot_run_now:"تشغيل البوت", bot_conversation_handled:"محادثة بوت", reserved_fixed:"تصحيح المحجوز",
+};
+const AUDIT_KEY_LABELS = {
+  amount:"المبلغ", refundAmount:"المبلغ المرتجع", reason:"السبب", invoiceNumber:"فاتورة", number:"رقم", invoiceNo:"رقم الفاتورة", seq:"رقم الطلب",
+  cash:"كاش", network:"شبكة", total:"الإجمالي", paidTo:"دفع لمن", date:"التاريخ", voucherNo:"رقم السند", voucherNumber:"رقم السند", category:"الفئة",
+  customerName:"العميل", customerMobile:"الجوال", mobile:"الجوال", customerCode:"كود العميل", supplierName:"المورد", username:"الموظف", employeeUsername:"الموظف",
+  requestedBy:"طلبه", recordedBy:"سجّله", responsibleUsername:"المسؤول", responsible:"المسؤول", tailor:"الخياط", approved:"القرار", garmentIdx:"ثوب",
+  qty:"الكمية", value:"القيمة", items:"الأصناف", count:"العدد", months:"الأشهر", monthLabel:"الشهر", profit:"الربح", from:"من", to:"إلى",
+  role:"الدور", tab:"الشاشة", group:"المجموعة", granted:"الحالة", newUsername:"المستخدم", removedUsername:"المستخدم", removedRole:"الدور",
+  fromOwner:"من", toOwner:"إلى", purpose:"الغرض", method:"الطريقة", oldAmount:"من", newAmount:"إلى", lostCost:"تكلفة ضائعة", payStatus:"الدفع",
+  type:"النوع", party:"الطرف", boxName:"الصندوق", note:"ملاحظة", kind:"النوع", price:"السعر", paid:"المدفوع", refunded:"المسترد", wage:"الأجرة",
+  label:"البند", code:"الكود", enabled:"مفعّل", fileName:"الملف", subItemLabel:"البند الفرعي", systemTotal:"حسب النظام", physicalTotal:"الفعلي", diff:"الفرق",
+};
+function auditFmtVal(k, v){
+  if(v===null || v===undefined || v==="") return "";
+  if(typeof v==="boolean") return k==="approved" ? (v?"موافقة":"رفض") : k==="granted" ? (v?"منح":"سحب") : (v?"نعم":"لا");
+  if(k==="garmentIdx" && typeof v==="number") return String(v+1);
+  if(k==="payStatus") return v==="paid" ? "مدفوع" : v==="deferred" ? "آجل" : String(v);
+  if(Array.isArray(v)) return v.map(x=> typeof x==="object" ? auditFmtObj(x) : String(x)).join("، ");
+  if(typeof v==="object") return auditFmtObj(v);
+  if(typeof v==="number") return /amount|Amount|cash|network|total|price|paid|refund|profit|Cost|wage|value|Total|diff/.test(k) ? `${fmtSar(v)} ﷼` : String(+v.toFixed(3));
+  return String(v);
+}
+function auditFmtObj(o){
+  return Object.keys(o||{}).filter(k=> !/Id$|^id$|^userId$/.test(k)).map(k=>{ const v = auditFmtVal(k, o[k]); return v ? `${AUDIT_KEY_LABELS[k]||k}: ${v}` : ""; }).filter(Boolean).join(" — ");
+}
+function auditCardRef(d){
+  const c = d.cardId ? findItemCard(d.cardId) : null;
+  const name = d.cardName || (c && c.name) || "صنف";
+  const code = d.code || (c && c.code);
+  const unit = c ? (c.type==="fabric" ? unitLabel() : "قطعة") : "";
+  return {label: `${name}${code?` (كود #${code})`:""}`, unit};
+}
+function describeAuditEntry(r){
+  const d = r.details || {};
+  const n = v=> (typeof v==="number" ? String(+v.toFixed(3)) : String(v==null?"—":v));
+  switch(r.action){
+    case "opening_balance_changed": { const c = auditCardRef(d); return `تعديل رصيد أول المدة — ${c.label}: من ${n(d.oldValue)} إلى ${n(d.newValue)}${c.unit?" "+c.unit:""}`; }
+    case "price_changed": { const c = auditCardRef(d); return `تعديل سعر ${c.label}${d.category?` (${d.category})`:""}${d.field?` — ${d.field}`:""}: من ${n(d.oldPrice)} إلى ${n(d.newPrice)} ﷼`; }
+    case "fabric_width_changed": { const c = auditCardRef(d); return `تعديل عرض القماش — ${c.label}: من ${n(d.from)} إلى ${n(d.to)}${d.qty!==undefined?` (الكمية ${n(d.qty)})`:""}`; }
+    case "item_written_off": { const c = auditCardRef(d); return `إتلاف/شطب ${n(d.qty)}${c.unit?" "+c.unit:""} من ${c.label}`; }
+    case "item_card_deleted": { const c = auditCardRef(d); return `حذف الصنف ${c.label}${d.openingBalance?` — رصيد أول المدة كان ${n(d.openingBalance)}`:""}`; }
+    case "purchase_return_recorded": { const c = auditCardRef(d); return `مرتجع مشتريات — ${c.label}: ${n(d.qty)} بقيمة ${fmtSar(d.value||0)} ﷼`; }
+    case "reserved_fixed": return `تصحيح المحجوز — ${(d.items||[]).join("، ")||"—"}${d.consumed?` — ثياب بعد القص صُرف قماشها: ${d.consumed}`:""}`;
+    case "invoice_returned": return `مرتجع فاتورة #${n(d.invoiceNumber)} — المبلغ المرتجع ${fmtSar(d.refundAmount||0)} ﷼${d.reason?` — السبب: ${d.reason}`:""}`;
+    case "funds_transferred": return `تحويل ${fmtSar(d.amount||0)} ﷼ من ${n(d.fromOwner)} إلى ${n(d.toOwner)}${d.purpose?` — ${d.purpose}`:""}`;
+    case "expense_recorded": return `مصروف ${fmtSar(d.amount||0)} ﷼${d.paidTo?` — دفع لـ ${d.paidTo}`:""}${d.subItemLabel?` — ${d.subItemLabel}`:""}${d.date?` — ${d.date}`:""}`;
+    case "payment_edited": return `تعديل دفعة فاتورة #${n(d.invoiceNumber)}: من كاش ${fmtSar(d.fromCash||0)} / شبكة ${fmtSar(d.fromNetwork||0)} إلى كاش ${fmtSar(d.toCash||0)} / شبكة ${fmtSar(d.toNetwork||0)} ﷼`;
+    case "opening_debt_edited": return `تعديل دين افتتاحي للعميل #${n(d.customerCode)}: من ${fmtSar(d.oldAmount||0)} إلى ${fmtSar(d.newAmount||0)} ﷼${d.reason?` — ${d.reason}`:""}`;
+    case "month_closed": return `إقفال شهر ${n(d.monthLabel)} — ${n(d.invoiceCount)} فاتورة، ${n(d.garmentCount)} ثوب، الربح ${fmtSar(d.profit||0)} ﷼`;
+  }
+  const rest = auditFmtObj(d);
+  return `${AUDIT_ACTION_LABELS[r.action]||r.action}${rest?` — ${rest}`:""}`;
+}
 async function loadAndRenderAuditLog(){
   const el = $("auditLogView");
   if(!el) return;
@@ -72,13 +147,12 @@ async function loadAndRenderAuditLog(){
     if(userFilter) rows = rows.filter(r=>r.username===userFilter);
     if(fromFilter) rows = rows.filter(r=>(r.clientDate||"")>=fromFilter);
     if(!rows.length){ el.innerHTML = `<p class="sub">ما فيه سجلات مطابقة.</p>`; return; }
-    const actionLabels = {expense_recorded:"مصروف", month_closed:"إقفال شهر", price_changed:"تعديل سعر", funds_transferred:"تحويل أموال", invoice_returned:"مرتجع فاتورة", sale_invoice_returned:"مرتجع فاتورة مبيعات", user_added:"إضافة مستخدم", user_removed:"حذف مستخدم", permission_changed:"تغيير صلاحية", opening_balance_changed:"تعديل رصيد أول المدة"};
     el.innerHTML = rows.map(r=>{
       const when = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate().toLocaleString("ar-SA") : (r.clientDate||"—");
       return `<div class="garment-card">
-        <span class="tag">${actionLabels[r.action]||r.action}</span>
-        <p style="margin:6px 0;font-weight:700;">${esc(r.username||"—")} — ${when}</p>
-        <p class="sub" style="font-size:11px;">${esc(JSON.stringify(r.details||{}))}</p>
+        <span class="tag">${esc(AUDIT_ACTION_LABELS[r.action]||r.action)}</span>
+        <p style="margin:6px 0;font-weight:700;">${esc(describeAuditEntry(r))}</p>
+        <p class="sub" style="font-size:11.5px;margin:0;">بواسطة ${esc(r.username||"—")} — ${when}</p>
       </div>`;
     }).join("");
   }catch(e){
@@ -160,6 +234,7 @@ function collectBoxMovements(){
   (state.boxTransfers||[]).forEach(t=>{ add(t.fromBoxId, -t.amount, "تحويل بين صناديقك", t.date, "internal"); add(t.toBoxId, t.amount, "تحويل بين صناديقك", t.date, "internal"); });
   return out;
 }
+const GARMENT_CUT_STAGES = ["قص","تفصيل","جاهز","تسليم","معلقة"];
 function computeIntegrityCheck(){
   const exp = {}; state.cashBoxes.forEach(b=> exp[b.id]=0);
   const untraceable = [];
@@ -200,7 +275,10 @@ function computeIntegrityCheck(){
   state.invoices.forEach(i=>{ if(seenNum[i.number]) dupNumbers.push(i.number); seenNum[i.number]=1; });
   const twins = [];
   state.invoices.forEach((a,ai)=> state.invoices.slice(ai+1).forEach(b=>{
+    // several family members share one mobile (a father and his sons, each with his own invoice the same
+    // day at the same price) — that is not a duplicate, so the customer's name must match as well
     if(a.customerMobile && a.customerMobile===b.customerMobile && a.date===b.date &&
+       String(a.customerName||"").trim()===String(b.customerName||"").trim() &&
        a.garments.map(g=>g.price||0).sort().join()===b.garments.map(g=>g.price||0).sort().join()) twins.push(`${a.number} و ${b.number}`);
   }));
   const deliveredUnpaid = [];
@@ -213,6 +291,37 @@ function computeIntegrityCheck(){
   const negativeStock = state.itemCards.filter(c=>cardAvailableQty(c) < -0.001);
   return {boxes, suppliers, stock, untraceable, dupPayroll, dupNumbers, twins, deliveredUnpaid, pendingTransfers, pendingRequests, negativeBoxes, negativeStock,
     openingAdjustments:(state.openingBalanceAdjustments||[]).length};
+}
+// «تصحيح المحجوز»: a thobe that already went past cutting while its fabric was still only reserved has its fabric
+// consumed now (available stays the same — the fabric just moves from "reserved" to "used"), then every card's
+// reserve is rebuilt from the thobes still waiting to be cut, so reserves left behind by older versions are released
+async function fixReservedStock(){
+  if(!currentUser || currentUser.role!=="مدير"){ showToast("تصحيح المحجوز للمدير فقط"); return; }
+  const stuck = [];
+  state.invoices.forEach(inv=> inv.garments.forEach(g=>{
+    if(g.itemCardId && g.stockApplied==="reserved" && GARMENT_CUT_STAGES.includes(g.status) && findItemCard(g.itemCardId)) stuck.push(g);
+  }));
+  const preview = JSON.parse(JSON.stringify(state.itemCards.map(c=>({id:c.id, name:c.name, code:c.code, reservedQty:c.reservedQty||0}))));
+  const rs = {}; preview.forEach(c=> rs[c.id]=0);
+  state.invoices.forEach(inv=> inv.garments.forEach(g=>{
+    if(g.itemCardId && g.stockApplied==="reserved" && !GARMENT_CUT_STAGES.includes(g.status) && rs[g.itemCardId]!==undefined) rs[g.itemCardId] += g.qtyUsed||0;
+  }));
+  const changes = preview.filter(c=> Math.abs(c.reservedQty - rs[c.id]) > 0.001)
+    .map(c=>({id:c.id, line:`${c.name}${c.code?` (كود #${c.code})`:""}: من ${+c.reservedQty.toFixed(3)} إلى ${+rs[c.id].toFixed(3)}`}));
+  if(!changes.length && !stuck.length){ showToast("المحجوز مطابق للفواتير — ما فيه شي يتصحح"); return; }
+  const msg = `تصحيح المحجوز:\n${changes.map(c=>"- "+c.line).join("\n")||"- (أرقام المحجوز ما تتغير)"}`
+    + (stuck.length ? `\n\n${stuck.length} ثوب تعدى القص وقماشه لسا محجوز — ينصرف قماشه من المخزون (المتاح ما يتغير).` : "")
+    + `\n\nأدخل كلمة مرورك للتأكيد.`;
+  if(!await confirmWithPassword(msg)) return;
+  const snapshot = JSON.parse(JSON.stringify(state));
+  stuck.forEach(g=>{ if(g.stockApplied==="reserved") consumeFabricForGarment(g, g.qtyUsed||0); });
+  const fresh = {}; state.itemCards.forEach(c=> fresh[c.id]=0);
+  state.invoices.forEach(inv=> inv.garments.forEach(g=>{ if(g.itemCardId && g.stockApplied==="reserved" && fresh[g.itemCardId]!==undefined) fresh[g.itemCardId] += g.qtyUsed||0; }));
+  state.itemCards.forEach(c=>{ c.reservedQty = +fresh[c.id].toFixed(3); });
+  if(!await saveStateWithRollback(snapshot)) return;
+  logAudit("reserved_fixed", {items: changes.map(c=>c.line), consumed: stuck.length});
+  showToast("تم تصحيح المحجوز");
+  renderIntegrityCheck();
 }
 function renderIntegrityCheck(){
   const el = $("integrityCheckView");
@@ -235,12 +344,14 @@ function renderIntegrityCheck(){
     table(["","المورد","الفعلي","من الحركات","الفرق"], r.suppliers.map(s=>`<tr><td>${mark(ok(s.diff))}</td><td>${esc(s.name)}</td><td>${fmtSar(s.actual)}</td><td>${fmtSar(s.rebuilt)}</td><td>${fmtSar(s.diff)}</td></tr>`));
   html += `<h4 style="margin:14px 0 6px;">3) المخزون — الرصيد والمحجوز مقابل الحركات</h4>` +
     table(["","الصنف","الرصيد","من الحركات","المحجوز","المحجوز من الفواتير","المتاح"], r.stock.map(s=>`<tr><td>${mark(ok(s.diff)&&ok(s.reservedDiff))}</td><td>${esc(s.name)}</td><td>${fmtSar(s.actual)}</td><td>${fmtSar(s.rebuilt)}</td><td>${fmtSar(s.reserved)}</td><td>${fmtSar(s.reservedRebuilt)}</td><td>${fmtSar(s.available)}</td></tr>`));
+  if(r.stock.some(s=>!ok(s.reservedDiff)) && currentUser && currentUser.role==="مدير")
+    html += `<p class="sub" style="margin:6px 0;">المحجوز المسجّل لبعض الأصناف ما يطابق الثياب اللي لسا تنتظر القص. <button class="btn btn-ghost btn-sm" onclick="fixReservedStock()">تصحيح المحجوز</button></p>`;
   html += list("أرصدة صناديق بالسالب", r.negativeBoxes.map(b=>`${b.owner} — ${b.name}: ${fmtSar(boxTotal(b))} ﷼`), "ما فيه صندوق بالسالب");
   html += list("أصناف رصيدها المتاح بالسالب", r.negativeStock.map(c=>`${c.name}: ${fmtSar(cardAvailableQty(c))}`), "ما فيه صنف بالسالب");
   html += list("استحقاق راتب مكرر لنفس الموظف ونفس الشهر", r.dupPayroll, "ما فيه تكرار");
   html += list("أرقام فواتير مكررة", r.dupNumbers, "ما فيه تكرار");
   html += `<h4 style="margin:14px 0 6px;">للمراجعة (ليست بالضرورة أخطاء)</h4>`;
-  html += list("فواتير محتملة الازدواجية (نفس العميل ونفس اليوم ونفس الأسعار)", r.twins, "ما فيه", true);
+  html += list("فواتير محتملة الازدواجية (نفس الاسم ونفس الجوال ونفس اليوم ونفس الأسعار)", r.twins, "ما فيه", true);
   html += list("ثياب مسلّمة وعليها مبلغ غير مسدد بدون تسجيلها كتسليم بدين", r.deliveredUnpaid, "ما فيه", true);
   html += list("مبالغ قيد التحويل (خصمت من المرسل ولم يستلمها أحد بعد)", r.pendingTransfers.map(t=>`${t.fromOwner} ← ${t.toOwner}: ${fmtSar(t.amount)} ﷼ منذ ${t.createdAt}`), "ما فيه", true);
   html += list("طلبات بريد معلقة بانتظار قرار", r.pendingRequests.map(q=>`طلب #${q.seq} (${q.type==="advance"?"سلفة":q.type==="leave"?"إجازة":"مرتجع خلل"})${q.amount?` — ${fmtSar(q.amount)} ﷼`:""}`), "ما فيه", true);
@@ -1166,8 +1277,13 @@ async function saveDistribution(inv){
     const newStatus = intents[i].newStatus;
     if(newStatus!==g.status){
       if(newStatus==="ملغي"){ reverseGarmentAdvisory(g); returnFabricForGarment(g); reverseAddonsStock(g); g.cancelledDate = todayStr(); }
-      else if(g.status==="ملغي") { applyGarmentAdvisory(g); if(g.itemCardId) reserveFabricForGarment(g); applyAddonsStock(g); }
-      if(newStatus==="قص" && g.itemCardId && g.stockApplied==="reserved") consumeFabricForGarment(g, g.qtyUsed||0);
+      else if(g.status==="ملغي") {
+        applyGarmentAdvisory(g); applyAddonsStock(g);
+        // fabric cut before the cancel stayed out of stock (never credited back) — it is in use again, not re-reserved
+        if(g.itemCardId){ if(g.cutDate && !g.stockApplied) g.stockApplied = "consumed"; else reserveFabricForGarment(g); }
+      }
+      // any stage from cutting on means the fabric is cut: it leaves the reserve and the stock, never stays reserved
+      if(GARMENT_CUT_STAGES.includes(newStatus) && g.itemCardId && g.stockApplied==="reserved") consumeFabricForGarment(g, g.qtyUsed||0);
     }
     g.status=newStatus; g.tailor=intents[i].newTailor;
     if(g.status==="قص" && !g.cutDate) g.cutDate = todayStr();
