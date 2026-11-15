@@ -53,7 +53,7 @@ function renderAll(){
   $("setLoyGoldMultiplier").value = state.settings.loyaltyGoldMultiplier;
   $("setLoyGoldDiscount").value = state.settings.loyaltyGoldDiscountPercent;
   $("setShopName").value = state.settings.shopName;
-  if($("setThemeMode")) $("setThemeMode").value = state.settings.themeMode==="light" ? "light" : "dark";
+  applyThemeMode(); renderThemeColorSettings(); // a colour changed on another device reaches this one too
   $("setShopNumber").value = state.settings.shopNumber;
   $("setCommercialReg").value = state.settings.commercialRegistration;
   $("setMunicipalLicense").value = state.settings.municipalLicense;

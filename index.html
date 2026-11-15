@@ -89,6 +89,7 @@
     </div>
     <div class="month-pill"><i data-lucide="calendar" style="width:13px;height:13px;"></i> <span>الشهر الحالي:</span> <b id="curMonthLbl">—</b></div>
     <span id="saveIndicator" class="sub" style="display:none;font-size:12px;font-weight:700;margin-inline-end:8px;white-space:nowrap;"></span>
+    <button class="icon-btn" id="themeModeBtn" type="button" title="الوضع النهاري — اضغط للتبديل">☀️</button>
     <div class="user-pill"><i data-lucide="user" style="width:13px;height:13px;"></i> <b id="curUserLbl">—</b> <button class="icon-btn" id="logoutBtn" title="خروج"><i data-lucide="log-out"></i></button></div>
   </div>
 </div>
@@ -306,7 +307,11 @@
         <input type="file" id="setShopLogoInput" accept="image/*">
         <div id="setShopLogoPreview" style="margin-top:8px;"></div>
       </div>
-      <div class="field"><label>مظهر النظام</label><select id="setThemeMode"><option value="dark">فاتح احترافي (الوضع الافتراضي)</option><option value="light">فاتح دافئ</option></select></div>
+      <div class="field"><label>لون البرنامج (لكل الأجهزة)</label>
+        <div id="themeSwatches" class="theme-swatches"></div>
+        <div class="theme-custom"><input type="color" id="setThemeColor" value="#1f2328"><span class="sub">أو اختر أي لون — إذا كان فاتح مرة يتغمّق شوي تلقائياً عشان تبقى الكتابة واضحة</span></div>
+        <p class="sub" style="margin:6px 0 0;">الوضع الليلي يتغيّر من زر 🌙 فوق، ولكل جهاز لحاله. الطباعة وصور الواتساب تبقى بيضاء دايماً.</p>
+      </div>
       <div class="stitch"></div>
       <h3 style="margin:0 0 8px;font-size:14px;">بنود إضافية مخصصة</h3>
       <p class="sub" style="margin-bottom:10px;">أضف أي بند حر تحتاجه (زي رقم شهادة قوى، ترخيص الدفاع المدني، أو أي شي ثاني) — وحدد بنفسك أي بند يظهر بالفاتورة المطبوعة.</p>

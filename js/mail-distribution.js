@@ -482,7 +482,8 @@ async function saveInvoiceOnce(){
   // legitimately order the same again) but it must be a conscious choice.
   if(isNewInvoice){
     const newPrices = cards.map(c=>parseFloat(c.querySelector(".g-price").value)||0).sort((a,b)=>a-b).join(",");
-    const twin = state.invoices.find(i=> i.customerMobile===custMobile && i.date===date &&
+    // family members share one mobile — a son's invoice next to his father's is not a duplicate
+    const twin = state.invoices.find(i=> i.customerMobile===custMobile && i.date===date && String(i.customerName||"").trim()===custName &&
       i.garments.map(g=>g.price||0).sort((a,b)=>a-b).join(",")===newPrices);
     if(twin && !await showConfirm(`تنبيه ازدواجية: فيه فاتورة لنفس العميل اليوم بنفس الثياب والأسعار (فاتورة رقم ${twin.number}).\nمتأكد إنها طلب جديد مختلف وتبي تحفظها؟`)) return;
   }
@@ -513,7 +514,11 @@ async function saveInvoiceOnce(){
   garments.forEach(g=>{
     if(g.status!=="ملغي"){
       applyGarmentAdvisory(g);
-      if(g.itemCardId) reserveFabricForGarment(g);
+      if(g.itemCardId){
+        reserveFabricForGarment(g);
+        // a thobe already past cutting uses its fabric — it must never sit in the reserve
+        if(GARMENT_CUT_STAGES.includes(g.status) && g.stockApplied==="reserved") consumeFabricForGarment(g, g.qtyUsed||0);
+      }
       applyAddonsStock(g);
     }
   });

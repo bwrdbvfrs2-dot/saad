@@ -1934,11 +1934,8 @@ $("setTakhaleesIconInput").addEventListener("change", ()=>{
   reader.onload = ()=>{ state.settings.takhaleesIcon = reader.result; saveState(); showToast("تم رفع أيقونة التخاليص"); };
   reader.readAsDataURL(file);
 });
-$("setThemeMode").addEventListener("change", ()=>{
-  state.settings.themeMode = $("setThemeMode").value;
-  applyThemeMode();
-  saveState();
-});
+$("setThemeColor").addEventListener("change", ()=> setThemeColor($("setThemeColor").value));
+$("themeModeBtn").addEventListener("click", cycleThemeMode);
 $("addCustomFieldBtn").addEventListener("click", addCustomShopField);
 $("addFabricOriginBtn").addEventListener("click", addFabricOrigin);
 $("addCustomMeasFieldBtn").addEventListener("click", addCustomMeasurementField);

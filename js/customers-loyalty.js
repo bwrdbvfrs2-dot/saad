@@ -61,8 +61,79 @@ function dimensionLineMarkup(x1,y1,x2,y2,strokeColor){
     <line x1="${x1-tx}" y1="${y1-ty}" x2="${x1+tx}" y2="${y1+ty}" stroke="${strokeColor}" stroke-width="0.35" vector-effect="non-scaling-stroke"/>
     <line x1="${x2-tx}" y1="${y2-ty}" x2="${x2+tx}" y2="${y2+ty}" stroke="${strokeColor}" stroke-width="0.35" vector-effect="non-scaling-stroke"/>`;
 }
+// ---------------- the shop's colour (settings, for the whole shop) + night mode (each device on its own) ----------------
+const THEME_PRESETS = [
+  {hex:"#1F2328", label:"أسود"}, {hex:"#1E2A44", label:"كحلي"}, {hex:"#1E4D3A", label:"أخضر غامق"},
+  {hex:"#5C1F2B", label:"عنابي"}, {hex:"#7A5A24", label:"بني ذهبي"},
+];
+const THEME_DEFAULT_COLOR = "#1F2328";
+const hexRgb = h=>{ const m = /^#?([0-9a-f]{6})$/i.exec(String(h||"").trim()); if(!m) return null; const n = parseInt(m[1],16); return [n>>16&255, n>>8&255, n&255]; };
+const rgbHex = c=> "#" + c.map(v=> Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,"0")).join("").toUpperCase();
+const mixRgb = (a,b,t)=> a.map((v,i)=> v + (b[i]-v)*t);
+function relLum(c){ const f = v=>{ v/=255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055, 2.4); }; return 0.2126*f(c[0]) + 0.7152*f(c[1]) + 0.0722*f(c[2]); }
+// white writing must stay readable on the shop's colour: a colour picked too light is darkened step by step;
+// at night a colour too dark to see on the dark screen is lightened instead
+function readableAccent(rgb, dark){
+  let c = rgb.slice();
+  for(let i=0;i<30 && !dark && relLum(c) > 0.16; i++) c = mixRgb(c, [0,0,0], 0.08);
+  for(let i=0;i<30 && dark && relLum(c) < 0.09; i++) c = mixRgb(c, [255,255,255], 0.08);
+  return c;
+}
+function themeColorOf(){ return hexRgb(state && state.settings && state.settings.themeColor) ? state.settings.themeColor.toUpperCase() : THEME_DEFAULT_COLOR; }
+function deviceThemeMode(){ try{ const v = localStorage.getItem("themeMode"); return v==="dark"||v==="auto" ? v : "light"; }catch(e){ return "light"; } }
+const THEME_MODE_ICONS = {light:"☀️", dark:"🌙", auto:"🌓"};
+const THEME_MODE_TITLES = {light:"الوضع النهاري — اضغط للتبديل", dark:"الوضع الليلي — اضغط للتبديل", auto:"تلقائي حسب الجهاز — اضغط للتبديل"};
 function applyThemeMode(){
-  document.documentElement.dataset.theme = state.settings.themeMode==="light" ? "light" : "dark";
+  const root = document.documentElement;
+  root.dataset.theme = "light";
+  const mode = deviceThemeMode();
+  const dark = mode==="dark" || (mode==="auto" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  root.dataset.mode = dark ? "dark" : "light";
+  const base = hexRgb(themeColorOf());
+  const acc = readableAccent(base, dark);
+  const navy = dark ? mixRgb(readableAccent(base,false), [14,16,19], 0.55) : readableAccent(base, false);
+  const surface = dark ? [26,29,33] : [255,255,255];
+  const vars = {
+    "--accent": rgbHex(acc),
+    "--accent-hover": rgbHex(mixRgb(acc, [255,255,255], dark ? 0.14 : 0.1)),
+    "--on-accent": relLum(acc) > 0.4 ? "#111" : "#fff",
+    "--focus-ring": `rgba(${acc.map(Math.round).join(",")},.2)`,
+    "--selected-bg": rgbHex(mixRgb(surface, acc, dark ? 0.3 : 0.12)),
+    "--navy": rgbHex(navy), "--navy-2": rgbHex(mixRgb(navy,[255,255,255],0.07)),
+    "--navy-3": rgbHex(mixRgb(navy,[255,255,255],0.14)), "--navy-border": rgbHex(mixRgb(navy,[255,255,255],0.14)),
+  };
+  Object.keys(vars).forEach(k=> root.style.setProperty(k, vars[k]));
+  const meta = document.querySelector('meta[name="theme-color"]'); if(meta) meta.setAttribute("content", rgbHex(navy));
+  const btn = document.getElementById("themeModeBtn");
+  if(btn){ btn.textContent = THEME_MODE_ICONS[mode]; btn.title = THEME_MODE_TITLES[mode]; }
+}
+function cycleThemeMode(){
+  const next = {light:"dark", dark:"auto", auto:"light"}[deviceThemeMode()];
+  try{ localStorage.setItem("themeMode", next); }catch(e){}
+  applyThemeMode();
+  showToast(next==="dark" ? "الوضع الليلي (لهذا الجهاز بس)" : next==="auto" ? "تلقائي حسب إعداد الجهاز" : "الوضع النهاري");
+}
+if(window.matchMedia){ const mq = window.matchMedia("(prefers-color-scheme: dark)"); const fn = ()=>{ if(deviceThemeMode()==="auto") applyThemeMode(); }; if(mq.addEventListener) mq.addEventListener("change", fn); else if(mq.addListener) mq.addListener(fn); }
+function renderThemeColorSettings(){
+  const el = document.getElementById("themeSwatches");
+  if(!el) return;
+  const cur = themeColorOf();
+  const isPreset = THEME_PRESETS.some(p=>p.hex===cur);
+  el.innerHTML = THEME_PRESETS.map(p=>`<button type="button" class="theme-swatch${p.hex===cur?" on":""}" onclick="setThemeColor('${p.hex}')"><i style="background:${p.hex}"></i>${p.label}</button>`).join("")
+    + (isPreset ? "" : `<button type="button" class="theme-swatch on"><i style="background:${cur}"></i>لون خاص</button>`);
+  const inp = document.getElementById("setThemeColor");
+  if(inp && document.activeElement!==inp) inp.value = cur.toLowerCase();
+}
+async function setThemeColor(hex){
+  if(!currentUser || currentUser.role!=="مدير"){ showToast("تغيير لون البرنامج للمدير فقط"); return; }
+  if(!hexRgb(hex)) return;
+  const old = themeColorOf();
+  hex = hex.toUpperCase();
+  if(hex===old) return;
+  state.settings.themeColor = hex;
+  applyThemeMode(); renderThemeColorSettings();
+  if(await saveState()){ logAudit("theme_color_changed", {from:old, to:hex}); showToast("تغيّر لون البرنامج لكل الأجهزة"); }
+  else { state.settings.themeColor = old; applyThemeMode(); renderThemeColorSettings(); }
 }
 function applyShopBranding(){
   const s = state.settings;
