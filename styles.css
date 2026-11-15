@@ -412,3 +412,178 @@ tr.invoice-row:hover, tbody tr:hover{background:var(--surface2);}
 
 /* on a phone the top bar is tall: pinning it (and the quick menu) would eat the screen, so it scrolls away */
 @media (max-width:700px){ .topbar{position:relative;} }
+
+/* ================= 2026-11 design: black & grey, clean (screens only — the logic and the prints are untouched) ================= */
+:root, html[data-theme="light"]{
+  --bg:#F2F3F4; --surface:#FFFFFF; --surface2:#F8F9FA; --surface3:#E3E5E8; --border:#DFE2E5;
+  --gold:#1F2328; --gold-soft:#1F2328; --muted:#5B625F; --ivory:#1B1F1E;
+  --navy:#1F2328; --navy-2:#2A2F35; --navy-3:#343A41; --navy-border:#343A41; --navy-text:#E4E7EA; --navy-text-dim:#9CA3A9;
+  --r-sm:10px; --r-md:16px; --r-lg:16px;
+  --font-main:'IBM Plex Sans Arabic','Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif;
+  --field-border:#CFD3D8; --selected-bg:#E3E5E8; --due-bg:#FBE9DD; --due-text:#7A2E0C;
+}
+/* printed pages and the pictures shared on WhatsApp keep the font their paper layouts were tuned with */
+#printArea, #receiptShareRoot, #labelShareRoot, .share-capture{--font-main:'Cairo','Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif;font-family:var(--font-main);}
+body{background:var(--bg);}
+.panel,.kpi-card,.report-card,.stat-card,.login-card{border-radius:16px;border:1px solid var(--border);box-shadow:0 1px 2px rgba(16,24,40,.04);}
+.garment-card{border-radius:16px;border:1px solid var(--border);background:var(--surface2);box-shadow:none;}
+.kpi-card::before{display:none;}
+.kpi-card .kpi-icon{background:#F2F3F4;color:#1F2328;}
+input,select,textarea{border:1px solid var(--field-border);border-radius:10px;background:#fff;font-family:var(--font-main);}
+input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=color]),select{min-height:44px;}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#1F2328;box-shadow:0 0 0 3px rgba(31,35,40,.12);}
+.btn{min-height:44px;border-radius:10px;font-weight:600;}
+.btn-sm{min-height:36px;}
+.btn-gold{background:#1F2328;color:#fff;box-shadow:none;}
+.btn-gold:hover{background:#2E343A;box-shadow:none;}
+.btn-ghost{background:#fff;border:1px solid var(--field-border);color:var(--ivory);}
+.icon-btn{min-width:36px;min-height:36px;}
+.tag{background:var(--selected-bg);color:var(--ivory);border:1px solid var(--field-border);font-weight:700;}
+.garment-card .tag{background:#1F2328;color:#fff;border:none;box-shadow:none;}
+.badge{border-radius:999px;}
+/* what's picked: grey background and bold text */
+.name-chip.active,.section-btn.active,.payroll-chip.active,.tab-btn.active,.qm-item.active,.drawer-item.active{background:var(--selected-bg);color:var(--ivory);font-weight:800;border-color:#1F2328;box-shadow:none;}
+/* what the customer still owes */
+.remaining-box{background:#fff;border:1px solid var(--border);border-radius:16px;}
+.remaining-box .amt{color:var(--due-text);}
+#tab-invoice .remaining-box .amt{background:var(--due-bg);padding:6px 12px;border-radius:10px;}
+#liveRemaining{color:var(--due-text);}
+/* the phone's bottom bar */
+.bottom-nav{height:64px;}
+.bottom-nav-item{min-height:44px;font-size:11px;}
+.bottom-nav-item.active{color:#1F2328;font-weight:800;}
+/* the invoice summary beside the form (wide screens); under it the usual box keeps the same figures */
+#invSideSummary{display:block;background:#fff;border:1px solid var(--border);border-radius:16px;padding:18px;}
+#invSideSummary h3{margin:0 0 12px;font-size:15px;}
+#invSideSummary .iss-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #EEF0F2;font-size:14px;}
+#invSideSummary .iss-rem{margin-top:12px;background:var(--due-bg);color:var(--due-text);border-radius:12px;padding:14px;text-align:center;font-weight:600;}
+#invSideSummary .iss-rem b{display:block;font-size:26px;margin-top:2px;}
+@media(min-width:1180px){
+  #tab-invoice.active{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start;}
+  #tab-invoice.active > .panel{grid-column:1;}
+  #invSideSummary{display:block;grid-column:2;grid-row:1;position:sticky;top:96px;margin-top:16px;}
+}
+@media(max-width:700px){
+  input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=color]),select{min-height:48px;}
+  .btn{min-height:48px;}
+  .btn-sm{min-height:44px;}
+}
+@media print{ #invSideSummary{display:none !important;} }
+/* ---- the invoice screen in cards: customer / thobes / discount & notes / payments (every field kept) ---- */
+#tab-invoice .panel.inv-form{background:transparent;border:none;box-shadow:none;padding:0;}
+.inv-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:16px 0 10px;flex-wrap:wrap;}
+.inv-head h2{margin:0;font-size:20px;}
+.inv-num-pill{background:#fff;border:1px solid var(--border);border-radius:10px;padding:6px 12px;font-size:12px;color:var(--muted);}
+.inv-num-pill b{color:var(--ivory);font-size:15px;margin-inline-start:6px;}
+.inv-card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:18px 20px;margin-bottom:14px;}
+.inv-card-title{margin:0 0 12px;font-size:15px;font-weight:700;}
+.inv-card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
+.inv-card-head .inv-card-title{margin:0;}
+.inv-stepper{display:flex;align-items:center;gap:8px;}
+.inv-stepper label{font-size:12px;color:var(--muted);margin:0;}
+.inv-stepper input{width:64px;text-align:center;font-weight:700;padding:0 4px;-moz-appearance:textfield;}
+.inv-stepper input::-webkit-outer-spin-button,.inv-stepper input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+.step-btn{width:44px;height:44px;border-radius:10px;border:1px solid var(--field-border);background:#fff;font-size:20px;line-height:1;cursor:pointer;color:var(--ivory);font-family:inherit;}
+.step-btn:active{background:var(--selected-bg);}
+#tab-invoice .garment-card{padding:20px 16px 14px;margin-bottom:12px;}
+.g-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:4px 12px;align-items:end;margin-top:6px;}
+.g-grid .field{margin-bottom:8px;}
+.g-grid .g-fabric{grid-column:span 1;}
+.g-embro-check .embro-toggle{display:flex;align-items:center;gap:8px;min-height:44px;}
+.g-embro-check .embro-toggle input{width:20px;height:20px;min-height:0;}
+.g-total-cell b{display:flex;align-items:center;min-height:44px;font-size:16px;}
+.g-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px;}
+.g-addons-field{margin-top:10px;}
+@media(max-width:900px){ .g-grid{grid-template-columns:1fr 1fr;} .g-grid .g-fabric{grid-column:span 2;} }
+#invSideSummary .iss-sub{font-size:12.5px;color:var(--muted);}
+#invSideSummary .iss-sep{border-top:1px solid var(--border);margin-top:4px;}
+
+/* ---- invoice screen, design A ---- */
+#tab-invoice .remaining-box, #tab-invoice .actions-row{display:none !important;} /* their figures and buttons live in the summary */
+.inv-cust-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px 12px;}
+.inv-cust-grid .inv-num-field{display:none;} /* the number is shown at the top */
+.inv-disc-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.3fr);gap:4px 12px;align-items:end;}
+.inv-disc-grid > .row-2{display:flex;gap:8px;align-items:flex-end;margin:0;}
+.inv-disc-grid > .row-2 .field{flex:1;}
+.inv-disc-grid > .row-2 .btn{height:44px;margin:0 0 8px !important;}
+.inv-disc-grid textarea{min-height:44px;height:44px;resize:vertical;}
+.g-grid{grid-template-columns:52px minmax(0,1.6fr) minmax(0,1fr) minmax(0,.9fr) minmax(0,.9fr) auto minmax(0,.9fr) minmax(0,.9fr) minmax(0,.9fr);}
+.g-no{font-weight:800;align-self:center;padding-top:16px;white-space:nowrap;}
+.g-embro-check .embro-toggle{display:flex;align-items:center;gap:7px;min-height:44px;cursor:pointer;font-size:13px;color:var(--ivory);margin:0;}
+.g-grid input:disabled{background:#F2F3F4 !important;color:#9CA3A9;}
+#tab-invoice .garment-card{padding:14px 16px 12px;}
+#tab-invoice .garment-card > .tag{display:none;}
+.g-actions .meas-toggle-btn{order:1;} .g-actions .sub{order:3;}
+/* payments: one line each */
+.pay-line{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);gap:4px 12px;align-items:end;}
+.pay-entry{padding-top:6px;}
+.pay-entry.pay-m-cash .pay-net-only, .pay-entry.pay-m-network .pay-cash-only{display:none;}
+.pay-entry.pay-m-cash{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);}
+.pay-seg{display:flex;border:1px solid var(--field-border);border-radius:10px;overflow:hidden;height:44px;background:#fff;}
+.pay-seg button,.pay-seg span{flex:1;display:flex;align-items:center;justify-content:center;border:none;background:none;font-family:inherit;font-size:13.5px;color:var(--muted);cursor:pointer;min-height:0;}
+.pay-seg .on{background:var(--selected-bg);color:var(--ivory);font-weight:800;}
+.pay-seg-ro span{cursor:default;}
+.pay-auto{color:var(--muted) !important;background:#F2F3F4 !important;}
+.pay-val{min-height:44px;display:flex;align-items:center;padding:0 12px;border:1px solid var(--border);border-radius:10px;background:#fff;font-weight:600;}
+.pay-muted{color:var(--muted);font-weight:400;font-size:12.5px;}
+.payment-row.pay-group{display:block;border-bottom:1px dashed var(--border);padding:8px 0;font-size:inherit;}
+.pay-group .pay-line + .pay-line{margin-top:6px;}
+.pay-actions{display:flex;gap:6px;justify-content:flex-end;margin-top:6px;}
+.pay-actions:empty{display:none;}
+.iss-small{display:flex;gap:6px;margin-top:8px;}
+.iss-small .btn{flex:1;padding:0 6px;}
+@media(max-width:1179px){
+  #invSideSummary{margin-top:4px;}
+}
+@media(max-width:900px){
+  .inv-cust-grid{grid-template-columns:1fr 1fr;}
+  .inv-disc-grid{grid-template-columns:1fr;}
+  .g-grid{grid-template-columns:1fr 1fr;}
+  .g-no{grid-column:1/-1;padding-top:0;}
+  .g-grid .g-fabric{grid-column:1/-1;}
+  .pay-line,.pay-entry.pay-m-cash{grid-template-columns:1fr 1fr;}
+  .pay-line > .field:first-child{grid-column:1/-1;}
+}
+/* the thobe on two tidy rows: (fabric, category, price, quantity) then (embroidery, its price, its number, total) — one row only on very wide screens */
+.g-grid{grid-template-columns:52px minmax(0,1.8fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);}
+.g-grid .g-embro-check{grid-column:2;}
+@media(min-width:1700px){
+  .g-grid{grid-template-columns:52px minmax(0,1.6fr) minmax(0,1fr) minmax(0,.9fr) minmax(0,.9fr) auto minmax(0,.9fr) minmax(0,.9fr) minmax(0,.9fr);}
+  .g-grid .g-embro-check{grid-column:auto;}
+}
+.inv-disc-grid{grid-template-columns:1fr 1fr;}
+.inv-disc-grid > .field:has(#invNotes){grid-column:1/-1;}
+.inv-cust-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+@media(min-width:1500px){ .inv-cust-grid{grid-template-columns:repeat(4,minmax(0,1fr));} }
+@media(max-width:900px){
+  .g-grid{grid-template-columns:1fr 1fr;}
+  .g-grid .g-embro-check{grid-column:auto;}
+}
+
+/* ================= design (A) on every page: cards with titles, clean tables, quiet dividers ================= */
+.panel{padding:20px 22px;}
+.panel > h2{font-size:17px;font-weight:700;margin-bottom:6px;}
+.panel h3{font-size:14.5px;font-weight:700;color:var(--ivory);}
+.panel .sub{color:var(--muted);}
+.stitch{border-top:1px solid var(--border);margin:20px 0;}
+.stitch::before,.stitch::after{display:none !important;}
+.table-wrap{border:1px solid var(--border);border-radius:12px;background:#fff;}
+.table-wrap > table{border-collapse:separate;border-spacing:0;}
+th{background:var(--surface2);color:var(--muted);font-weight:600;font-size:12px;border-bottom:1px solid var(--border);}
+td{border-bottom:1px solid #EEF0F2;padding:10px 12px;}
+tbody tr:last-child td{border-bottom:none;}
+tbody tr:hover td{background:#FAFBFB;}
+tfoot td{background:var(--surface2);font-weight:700;}
+.garment-card{background:var(--surface2);border:1px solid var(--border);border-radius:14px;}
+.report-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px;}
+.report-card .st{color:var(--muted);font-size:12px;}
+.report-card .amt{font-size:18px;font-weight:700;color:var(--ivory);}
+.note-box{background:#F2F3F4;border:1px solid var(--border);color:var(--muted);border-radius:12px;}
+.modal-box{border-radius:16px;}
+.item-row{border-bottom:1px solid #EEF0F2;}
+.pay-seg-field .pay-seg{height:44px;}
+.pay-seg-field + .field .pay-amount{font-weight:600;}
+@media(max-width:700px){
+  .panel{padding:16px 14px;}
+  .pay-seg-field .pay-seg{height:48px;}
+}

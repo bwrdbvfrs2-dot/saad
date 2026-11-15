@@ -404,11 +404,13 @@ function buildFallbackDiagramSvg(val){
     <text x="600" y="140" text-anchor="start" font-size="12">طول الكم: ${val('sleeveLength')}</text>
   </svg>`;
 }
+// everything printed keeps the font the paper layouts were tuned with (the screens use IBM Plex Sans Arabic)
+const PRINT_FONT = "'Cairo','Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif";
 const CUTTING_CARD_MAX_PX = 1040; // A4 (297mm) less the 8mm margins top and bottom ≈ 1062px at 96dpi, with a little room
 function cuttingCardWithFontBoost(html, add){ return html.replace(/font-size:\s*(\d+(?:\.\d+)?)px/g, (m,n)=>`font-size:${(+n+add)}px`); }
 async function fitCuttingCardHtml(html){
   const probe = document.createElement("div");
-  probe.style.cssText = "position:absolute;left:-10000px;top:0;width:740px;visibility:hidden;";
+  probe.style.cssText = "position:absolute;left:-10000px;top:0;width:740px;visibility:hidden;--font-main:"+PRINT_FONT+";";
   document.body.appendChild(probe);
   try{
     for(const add of [5,4,3,2]){

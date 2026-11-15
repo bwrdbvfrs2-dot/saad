@@ -466,7 +466,7 @@ function allVoucherEntries(){
   (state.vouchers||[]).forEach(v=> push(v.type==="receipt"?"قبض":"صرف", v.voucherNo, {date:v.date, amount:v.amount, title:`سند ${v.type==="receipt"?"قبض":"صرف"} يدوي — ${v.type==="receipt"?"استلمنا من":"صرفنا لـ"} ${v.party||"—"}`, note:v.reason, by:v.recordedBy, box:boxName(v.boxId), voucherId:v.id}));
   (state.transferRequests||[]).forEach(t=> push("قبض", t.voucherNumber, {date:t.resolvedAt, amount:t.amount, title:`تحويل مستلم من ${t.fromOwner||""} إلى ${t.toOwner||""}`, note:t.purpose, by:t.toOwner, box:mainBox(t.toOwner, transferBoxType(t))}));
   (state.expenses||[]).forEach(e=>{ const cat = state.expenseCategories.find(c=>c.id===e.categoryId);
-    push("صرف", e.voucherNo, {date:e.date, amount:e.amount, title:`مصروف — ${cat?cat.label:"بدون تصنيف"}${e.subItemLabel?" / "+e.subItemLabel:""}`, note:[e.paidTo&&("دفع لـ "+e.paidTo), e.storeName, e.invoiceNumber&&("فاتورة المورد "+e.invoiceNumber), e.notes].filter(Boolean).join(" — "), by:e.recordedBy, box:boxName(e.sourceBoxId)}); });
+    push("صرف", e.voucherNo, {date:e.date, amount:e.amount, title:`مصروف — ${cat?cat.label:"بدون تصنيف"}${e.subItemLabel?" / "+e.subItemLabel:""}`, note:[e.paidTo&&("دفع لـ "+e.paidTo), e.storeName, e.invoiceNumber&&("فاتورة المورد "+e.invoiceNumber), e.notes&&("البيان: "+e.notes)].filter(Boolean).join(" — "), by:e.recordedBy, box:boxName(e.sourceBoxId)}); });
   (state.invoiceReturns||[]).forEach(r=> push("صرف", r.voucherNo, {date:r.date, amount:r.refundAmount, title:`استرداد مرتجع فاتورة #${r.invoiceNumber}`, note:r.reason, by:r.recordedBy, box:boxName(r.boxId), invId:r.invoiceId}));
   (state.salesReturns||[]).forEach(r=> push("صرف", r.voucherNo, {date:r.date, amount:r.refundAmount, title:`استرداد مرتجع مبيعات #${r.saleInvoiceNumber}`, note:r.reason, by:r.recordedBy, box:boxName(r.boxId)}));
   (state.suppliers||[]).forEach(su=> (su.payments||[]).forEach(sp=> push("صرف", sp.voucherNo, {date:sp.date, amount:sp.amount, title:`تسديد ${su.kind||"مورد"} — ${su.name}`, by:sp.recordedBy, box:boxName(sp.boxId)})));
@@ -692,9 +692,9 @@ function renderGarmentFields(prefill=null){
       return `<label class="dd-option"><input type="checkbox" class="g-addon" data-addon="${a.id}" data-name="${esc(a.name)}" ${checked?"checked":""}> <span>${esc(a.name)}</span><span class="dd-price">${addonUnitPrice(a).toFixed(0)} ريال</span></label>`;
     }).join("");
     div.innerHTML=`
-      <div style="display:flex;justify-content:space-between;align-items:center;"><span class="tag">ثوب ${i+1}</span>${!editingId && n>1 ? `<button type="button" class="btn btn-ghost btn-sm g-remove-btn" onclick="removeGarmentFromForm(${i})" title="شيل هذا الثوب من الفاتورة" style="color:var(--loss);">✕ حذف الثوب</button>` : ""}</div>
-      <div class="row-2">
-        <div class="field"><label>نوع القماش (من المشتريات)</label>
+      <div class="g-grid">
+        <div class="g-no">ثوب ${i+1}</div>
+        <div class="field g-fabric"><label>نوع القماش (من المشتريات)</label>
           <input type="text" class="g-itemCard-search" list="fabricDatalist" value="${esc(currentFabricName)}" placeholder="اختر القماش من المخزون (أو بدون قماش)..." autocomplete="off">
           <input type="hidden" class="g-itemCard" value="${g.itemCardId || (editingId ? "__none__" : "")}">
           <p class="g-avail-note sub" style="display:none;margin:4px 0 0;font-size:11px;"></p>
@@ -702,20 +702,22 @@ function renderGarmentFields(prefill=null){
         <div class="field"><label>الفئة</label>
           <select class="g-category">${BODY_CATEGORIES.map(c=>`<option value="${c}" ${c===g.category?"selected":""}>${c}</option>`).join("")}</select>
         </div>
-      </div>
-      <div class="row-2">
-        <div class="field"><label>سعر البيع الأساسي (ريال)</label><input type="number" class="g-price" min="0" placeholder="0" value="${g.price?g.price:""}"></div>
+        <div class="field"><label>سعر البيع (ريال)</label><input type="number" class="g-price" min="0" placeholder="0" value="${g.price?g.price:""}"></div>
         <div class="field"><label>الكمية المستهلكة (${unitLabel()})</label><input type="number" class="g-qty" min="0" step="0.1" value="${g.qtyUsed?g.qtyUsed:""}"></div>
+        <div class="field g-embro-check"><label>&nbsp;</label><label class="embro-toggle"><input type="checkbox" class="g-hasEmbro" ${g.hasEmbroidery?"checked":""}><span>تطريز</span></label></div>
+        <div class="g-embro-wrap" style="display:contents;">
+          <div class="field"><label>سعر التطريز</label><input type="number" class="g-embroPrice" min="0" placeholder="0" value="${g.embroideryPrice?g.embroideryPrice:""}" ${g.hasEmbroidery?"":"disabled"}></div>
+          <div class="field"><label>رقم التطريز</label><input type="text" class="g-embroNo" placeholder="—" value="${esc(g.embroideryNo||"")}" ${g.hasEmbroidery?"":"disabled"}></div>
+        </div>
+        <div class="field g-total-cell"><label>إجمالي الثوب</label><b class="g-line-total">0 ﷼</b></div>
       </div>
-      <div class="embro-toggle"><input type="checkbox" class="g-hasEmbro" ${g.hasEmbroidery?"checked":""}><label style="margin:0;">فيه تطريز</label></div>
-      <div class="row-2 g-embro-wrap" style="${g.hasEmbroidery?"":"display:none;"}">
-        <div class="field"><label>سعر التطريز (ريال)</label><input type="number" class="g-embroPrice" min="0" placeholder="0" value="${g.embroideryPrice?g.embroideryPrice:""}"></div>
-        <div class="field"><label>رقم التطريز</label><input type="text" class="g-embroNo" placeholder="مثلاً: 12" value="${esc(g.embroideryNo||"")}"></div>
-      </div>
+      <div class="g-actions">
+        ${!editingId && n>1 ? `<button type="button" class="btn btn-ghost btn-sm g-remove-btn" onclick="removeGarmentFromForm(${i})" title="شيل هذا الثوب من الفاتورة" style="color:var(--loss);order:9;margin-inline-start:auto;">✕ حذف الثوب</button>` : ""}
       <button type="button" class="btn btn-ghost btn-sm meas-toggle-btn" data-idx="${i}">كرت المقاس (اضغط للفتح)</button>
-      ${i>0 ? `<p class="sub" style="font-size:11px;margin:4px 0 0;">نفس مقاس الثوب اللي قبله؟ اترك كرته فاضي — ينسخ تلقائياً عند الحفظ (من نفس الفئة فقط)</p>` : ""}
+      ${i>0 ? `<p class="sub" style="font-size:11px;margin:0;">نفس مقاس الثوب اللي قبله؟ اترك كرته فاضي — ينسخ تلقائياً عند الحفظ (من نفس الفئة فقط)</p>` : ""}
+      </div>
       ${renderMeasurementPanelHtml(g, i)}
-      ${addonsHtml ? `<div class="field" style="margin-top:10px;"><label>الملحقات والخدمات الإضافية</label><details class="dd-select g-addons-dd"><summary class="g-addons-summary">${addonsSummaryText(g.addons)}</summary><div class="dd-menu">${addonsHtml}</div></details></div>` : ""}
+      ${addonsHtml ? `<div class="field g-addons-field"><label>الملحقات والخدمات الإضافية</label><details class="dd-select g-addons-dd"><summary class="g-addons-summary">${addonsSummaryText(g.addons)}</summary><div class="dd-menu">${addonsHtml}</div></details></div>` : ""}
     `;
     holder.appendChild(div);
     div.querySelector(".meas-toggle-btn").addEventListener("click", ()=> openMeasPanel(i));
@@ -748,7 +750,7 @@ function renderGarmentFields(prefill=null){
       if(window.scrollY !== savedPageScrollY) window.scrollTo(0, savedPageScrollY);
     }));
     const cb = div.querySelector(".g-hasEmbro"), wrap = div.querySelector(".g-embro-wrap");
-    cb.addEventListener("change", ()=>{ wrap.style.display = cb.checked?"":"none"; updateLiveTotals(); });
+    cb.addEventListener("change", ()=>{ wrap.querySelectorAll("input").forEach(x=> x.disabled = !cb.checked); updateLiveTotals(); });
     div.querySelector(".g-price").addEventListener("input", updateLiveTotals);
     div.querySelector(".g-embroPrice").addEventListener("input", updateLiveTotals);
     div.querySelectorAll(".g-addon").forEach(cbx=> cbx.addEventListener("change", ()=>{
@@ -867,6 +869,48 @@ function updateFixedShareNote(){
   const extra = editingId? 0 : (parseInt($("invCount").value)||0);
   $("fixedShareNote").textContent = `حصة الثوب الواحد من التكاليف الثابتة (الشهر الحالي): ${currentFixedShare(extra).toFixed(2)} ريال (إجمالي التكاليف الثابتة الشهرية ${totalFixed().toFixed(0)} ريال ÷ ${garmentsCutInMonth(state.settings.currentMonth)+extra} ثوب مقطوع بالشهر الحالي).`;
 }
+// the summary beside the invoice form (wide screens) and each thobe's own line total — display only
+function updateInvoiceSideSummary(prices, totalDiscount){
+  const cards = Array.from($("garmentsHolder").children);
+  cards.forEach(card=>{
+    const t = card.querySelector(".g-line-total"); if(!t) return;
+    const p = parseFloat(card.querySelector(".g-price").value)||0;
+    const emb = card.querySelector(".g-hasEmbro").checked ? (parseFloat(card.querySelector(".g-embroPrice").value)||0) : 0;
+    const add = Array.from(card.querySelectorAll(".g-addon:checked")).reduce((s,c)=>{ const d = state.addonDefs.find(x=>x.id===c.dataset.addon); return s + (d ? addonUnitPrice(d) : 0); },0);
+    t.textContent = fmtSar(p+emb+add)+" ﷼";
+  });
+  if($("invNumPill")) $("invNumPill").textContent = $("invNumber").value || "—";
+  syncInvoiceSideButtons();
+  if(!$("issTotal")) return;
+  const embro = cards.reduce((a,card)=> a + (card.querySelector(".g-hasEmbro").checked ? (parseFloat(card.querySelector(".g-embroPrice").value)||0) : 0), 0);
+  const cash = paymentsListTemp.reduce((a,p)=>a+(p.cash||0),0), net = paymentsListTemp.reduce((a,p)=>a+(p.network||0),0);
+  $("issCount").textContent = cards.length;
+  $("issTotal").textContent = $("liveInvoiceTotal").textContent;
+  $("issEmbro").textContent = fmtSar(embro)+" ﷼"; $("issEmbroRow").style.display = embro>0.01 ? "" : "none";
+  $("issDisc").textContent = fmtSar(totalDiscount)+" ﷼"; $("issDiscRow").style.display = totalDiscount>0.01 ? "" : "none";
+  $("issCash").textContent = fmtSar(cash)+" ﷼"; $("issNet").textContent = fmtSar(net)+" ﷼";
+  $("issRemaining").textContent = $("liveRemaining").textContent;
+}
+function syncInvoiceSideButtons(){
+  document.querySelectorAll("#invSideSummary .iss-btn").forEach(b=>{
+    const o = $(b.dataset.for); if(!o) return;
+    if(!b.dataset.bound){ b.dataset.bound = "1"; b.addEventListener("click", ()=> $(b.dataset.for).click()); }
+    b.style.display = (o.style.display==="none" || o.hidden) ? "none" : "";
+    b.disabled = o.disabled; b.style.opacity = o.style.opacity;
+    if(b.dataset.for==="saveInvoiceBtn") b.textContent = o.textContent==="حفظ" ? "حفظ الفاتورة" : o.textContent;
+    else b.textContent = o.textContent;
+  });
+}
+if(typeof window!=="undefined") window.addEventListener("DOMContentLoaded", ()=>{
+  const row = document.querySelector("#tab-invoice .actions-row");
+  if(row && window.MutationObserver) new MutationObserver(syncInvoiceSideButtons).observe(row, {subtree:true, childList:true, characterData:true, attributes:true});
+  syncInvoiceSideButtons();
+});
+function stepInvCount(d){
+  const inp = $("invCount"); if(!inp || inp.disabled || inp.readOnly) return;
+  inp.value = Math.max(1, (parseInt(inp.value)||1) + d);
+  inp.dispatchEvent(new Event("input", {bubbles:true})); inp.dispatchEvent(new Event("change", {bubbles:true}));
+}
 function updateLiveTotals(){
   const prices = Array.from($("garmentsHolder").children).reduce((a,card)=>{
     const p = parseFloat(card.querySelector(".g-price").value)||0;
@@ -896,6 +940,7 @@ function updateLiveTotals(){
   $("liveInvoiceTotal").textContent = prices.toFixed(0)+" ﷼";
   $("livePaid").textContent = paid.toFixed(0)+" ﷼";
   $("liveRemaining").textContent = (prices-paid-totalDiscount).toFixed(0)+" ﷼";
+  updateInvoiceSideSummary(prices, totalDiscount);
   if(totalDiscount>0.01){
     const parts = [];
     if(loyaltyDiscount>0.01) parts.push(`نقاط ولاء: ${loyaltyDiscount.toFixed(0)} ﷼`);
@@ -967,6 +1012,24 @@ function paymentRowActions(p, i){
   if(r && r.status==="pending") return `<span class="badge b-pending">طلب التعديل بانتظار الموافقة</span>`;
   return `<button class="icon-btn pay-request-btn" onclick="requestPaymentEdit(${i})">طلب تعديل</button>`;
 }
+// an added payment as one line: كاش / شبكة, the amount, its voucher, the card type (a payment carrying
+// both cash and network — older ones — shows both)
+function paymentLineHtml(p, i){
+  const seg = m=> `<div class="pay-seg pay-seg-ro"><span class="${m==="cash"?"on":""}">كاش</span><span class="${m==="network"?"on":""}">شبكة</span></div>`;
+  const parts = [];
+  if((p.cash||0)>0 || (!p.network && !p.discount)) parts.push(`<div class="pay-line pay-done">
+      <div class="field"><label>طريقة الدفع</label>${seg("cash")}</div>
+      <div class="field"><label>المبلغ</label><div class="pay-val">${fmtSar(p.cash)} ﷼</div></div>
+      <div class="field"><label>رقم السند</label><div class="pay-val">${p.cashReceiptNo?esc(String(p.cashReceiptNo)):"—"}</div></div>
+      <div class="field"><label>التاريخ</label><div class="pay-val pay-muted">${p.date}${p.correction?" — معدّلة":""}</div></div></div>`);
+  if((p.network||0)>0) parts.push(`<div class="pay-line pay-done">
+      <div class="field"><label>طريقة الدفع</label>${seg("network")}</div>
+      <div class="field"><label>المبلغ</label><div class="pay-val">${fmtSar(p.network)} ﷼</div></div>
+      <div class="field"><label>رقم سند الشبكة</label><div class="pay-val">${esc(p.networkReceiptNo||p.receipt||"—")}</div></div>
+      <div class="field"><label>نوع البطاقة</label><div class="pay-val">${p.cardType==="visa"?"فيزا / ماستر":"مدى"}</div></div></div>`);
+  if(p.discount) parts.push(`<div class="pay-line pay-done"><div class="field"><label>خصم</label><div class="pay-val">${fmtSar(p.discount)} ﷼</div></div><div class="field"><label>التاريخ</label><div class="pay-val pay-muted">${p.date}</div></div></div>`);
+  return `<div class="payment-row pay-group">${parts.join("")}<div class="pay-actions">${paymentRowActions(p, i)}</div></div>`;
+}
 function renderPaymentsList(){
   const el = $("paymentsList");
   if(paymentsListTemp.length===0){ el.innerHTML = `<p class="sub">ما فيه دفعات مسجّلة بعد.</p>`; }
@@ -978,11 +1041,7 @@ function renderPaymentsList(){
       <select class="pe-card card-type-select">${cardTypeOptionsHtml(p.cardType)}</select>
       <button class="btn btn-gold btn-sm" onclick="applyPaymentEdit(${i})">تم</button>
       <button class="btn btn-ghost btn-sm" onclick="editingPaymentIdx=null;renderPaymentsList()">إلغاء</button></div>`
-    : `<div class="payment-row">
-      <span>كاش: ${fmtSar(p.cash)} ﷼${p.cashReceiptNo?` (سند ${p.cashReceiptNo})`:""}</span><span>شبكة: ${fmtSar(p.network)} ﷼${p.networkReceiptNo?` (سند ${p.networkReceiptNo})`:""}</span>
-      ${p.discount?`<span>خصم: ${p.discount.toFixed(0)} ﷼</span>`:""}
-      <span style="color:var(--muted)">${p.date}${p.correction?" — معدّلة":""}</span>
-      ${paymentRowActions(p, i)}</div>`).join("");
+    : paymentLineHtml(p, i)).join("");
   }
   updateLiveTotals();
 }
@@ -1028,6 +1087,18 @@ async function applyPaymentEdit(i){
   // old amount until «حفظ الفاتورة» was pressed — easy to miss
   await saveInvoice();
 }
+let payEntryMethod = "cash";
+function setPayMethod(m){
+  payEntryMethod = m==="network" ? "network" : "cash";
+  document.querySelectorAll("#payMethodSeg button").forEach(b=> b.classList.toggle("on", b.dataset.m===payEntryMethod));
+  const row = $("payEntryRow"); if(row){ row.classList.toggle("pay-m-network", payEntryMethod==="network"); row.classList.toggle("pay-m-cash", payEntryMethod==="cash"); }
+  syncPayAmount();
+}
+function syncPayAmount(){
+  const amt = $("newPayAmount") ? $("newPayAmount").value : "";
+  $("newPayCash").value = payEntryMethod==="cash" ? amt : "";
+  $("newPayNetwork").value = payEntryMethod==="network" ? amt : "";
+}
 function addPaymentTemp(){
   const cash = parseFloat($("newPayCash").value)||0;
   const network = parseFloat($("newPayNetwork").value)||0;
@@ -1036,7 +1107,7 @@ function addPaymentTemp(){
   if(network>0 && !networkReceiptNo){ showToast("أدخل رقم سند الشبكة"); return; }
   const cashReceiptNo = cash>0 ? nextVoucherNo() : null;
   paymentsListTemp.push({id:newId(), date:todayStr(), cash, network, cashReceiptNo, networkReceiptNo, cardType: network>0 ? readCardType("newPayCardType") : undefined});
-  $("newPayCash").value=""; $("newPayNetwork").value=""; $("newPayReceipt").value="";
+  $("newPayCash").value=""; $("newPayNetwork").value=""; $("newPayReceipt").value=""; if($("newPayAmount")) $("newPayAmount").value="";
   renderPaymentsList();
   if(cashReceiptNo) showToast(`تم إصدار سند كاش رقم ${cashReceiptNo} تلقائياً`);
 }

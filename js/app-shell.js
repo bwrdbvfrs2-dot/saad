@@ -1377,7 +1377,9 @@ function renderSidebar(){
   }));
   refreshLucideIcons();
 }
-const BOTTOM_NAV_TABS = ["dashboard","invoice","distribution","customerDebts"];
+const BOTTOM_NAV_TABS = ["invoice","invoicesList","distribution"];
+const BOTTOM_NAV_SHORT = {invoice:"فاتورة", invoicesList:"السجل", distribution:"التوزيع"};
+// «التقارير»: opens the menu straight on the reports group — only the reports this user may open
 function renderBottomNav(){
   const nav = $("bottomNav");
   if(!nav || !currentUser) return;
@@ -1393,9 +1395,14 @@ function renderBottomNav(){
   }).filter(Boolean);
   const itemsHtml = items.map(it=>{
     const isActive = it.tab===activeTab;
-    return `<button type="button" class="bottom-nav-item${isActive?" active":""}" data-tab="${it.tab}"><i data-lucide="${navIcon(it.tab)}"></i><span>${esc(it.label)}</span></button>`;
+    return `<button type="button" class="bottom-nav-item${isActive?" active":""}" data-tab="${it.tab}"><i data-lucide="${navIcon(it.tab)}"></i><span>${esc(BOTTOM_NAV_SHORT[it.tab]||it.label)}</span></button>`;
   }).join("");
-  nav.innerHTML = itemsHtml + `<button type="button" class="bottom-nav-item more-btn" id="bottomNavMoreBtn"><i data-lucide="menu"></i><span>المزيد</span></button>`;
+  const reportsGroup = NAV_GROUPS.find(g=>g.title==="التقارير");
+  const reportTabs = (isTailor || currentUser.role==="فاحص جودة" || !reportsGroup) ? [] : reportsGroup.items.filter(it=>{ const b = document.querySelector(`.tab-btn[data-tab="${it.tab}"]`); return b && b.style.display!=="none"; });
+  const reportsActive = reportTabs.some(it=> it.tab===activeTab);
+  const reportsBtn = reportTabs.length ? `<button type="button" class="bottom-nav-item${reportsActive?" active":""}" id="bottomNavReportsBtn"><i data-lucide="bar-chart-3"></i><span>التقارير</span></button>` : "";
+  nav.innerHTML = itemsHtml + reportsBtn + `<button type="button" class="bottom-nav-item more-btn" id="bottomNavMoreBtn"><i data-lucide="menu"></i><span>المزيد</span></button>`;
+  if($("bottomNavReportsBtn")) $("bottomNavReportsBtn").addEventListener("click", ()=>{ navDrawerActiveGroup = "التقارير"; renderNavDrawer(); $("navDrawerOverlay").classList.remove("hidden"); });
   nav.querySelectorAll(".bottom-nav-item[data-tab]").forEach(btn=> btn.addEventListener("click", ()=> switchTab(btn.dataset.tab)));
   $("bottomNavMoreBtn").addEventListener("click", openNavDrawer);
   refreshLucideIcons();
@@ -1686,4 +1693,81 @@ function toggleSection(btn, id){
   const open = el.style.display==="none";
   el.style.display = open ? "" : "none";
   if(btn) btn.classList.toggle("active", open);
+}
+
+// ---- design (A) everywhere: a «كاش + شبكة» pair of fields becomes «كاش / شبكة» buttons and one amount.
+// The original two fields stay (hidden) and are filled from it, so every screen's own code reads them as before.
+const PAY_PAIR_SPECS = [
+  {cash:"#saleCash", net:()=>$("saleNetwork"), netOnly:()=>[$("saleCardType")]},
+  {cash:"#rpPayCash", net:()=>$("rpPayNet"), netOnly:()=>[$("rpPayRec"), $("rpPayCard")]},
+  {cash:"#legDeliverAmountInput", net:()=>$("legDeliverNetworkInput"), netOnly:()=>[]},
+  {cash:"#distPayCash", net:()=>$("distPayNetwork"), netOnly:()=>[$("distPayReceipt"), $("distPayCard")]},
+  {cash:"#quickPayCash", net:()=>$("quickPayNetwork"), netOnly:()=>[$("quickPayReceipt"), $("quickPayCard")]},
+  {cash:'input[id^="rpp-"][id$="-Cash"]', net:c=>$(c.id.replace(/-Cash$/,"-Net")), netOnly:c=>[$(c.id.replace(/-Cash$/,"-Rec")), $(c.id.replace(/-Cash$/,"-Card"))]},
+  {cash:"input.debt-cash", net:c=>{ const b = c.closest(".row-3"); return b && b.querySelector(".debt-network"); }, netOnly:c=>{ const b = c.closest(".row-3"); return b ? [b.querySelector(".debt-card"), b.querySelector(".debt-receipt")] : []; }},
+];
+const enhancedPayPairs = [];
+function enhancePayPairs(){
+  PAY_PAIR_SPECS.forEach(spec=>{
+    document.querySelectorAll(spec.cash).forEach(cash=>{
+      if(cash.dataset.paySeg) return;
+      const net = spec.net(cash); if(!net) return;
+      const cf = cash.closest(".field"), nf = net.closest(".field"); if(!cf || !nf) return;
+      cash.dataset.paySeg = "1";
+      const netOnly = (spec.netOnly(cash)||[]).filter(Boolean).map(x=> x.closest(".field") || x);
+      const num = v=> parseFloat(v)||0;
+      let mode = num(net.value)>0 && num(cash.value)>0 ? "both" : num(net.value)>0 ? "network" : "cash";
+      const segF = document.createElement("div"); segF.className = "field pay-seg-field";
+      // «كاش + شبكة»: a customer paying part cash and part card in one go — both fields shown as before
+      segF.innerHTML = `<label>طريقة الدفع</label><div class="pay-seg"><button type="button" data-m="cash">كاش</button><button type="button" data-m="network">شبكة</button><button type="button" data-m="both">كاش + شبكة</button></div>`;
+      const amtF = document.createElement("div"); amtF.className = "field";
+      amtF.innerHTML = `<label>المبلغ (ريال)</label><input type="number" min="0" step="0.01" placeholder="0" class="pay-amount">`;
+      const amt = amtF.querySelector("input");
+      amt.value = mode==="network" ? (num(net.value)||"") : (num(cash.value)||"");
+      cf.parentNode.insertBefore(segF, cf); cf.parentNode.insertBefore(amtF, cf);
+      cf.style.display = "none"; nf.style.display = "none";
+      const fire = el=>{ el.dispatchEvent(new Event("input", {bubbles:true})); el.dispatchEvent(new Event("change", {bubbles:true})); };
+      const push = ()=>{ if(mode==="both") return; const v = amt.value; cash.value = mode==="cash" ? v : ""; net.value = mode==="network" ? v : (net.defaultValue==="0" ? "0" : ""); fire(cash); fire(net); };
+      const paint = ()=>{
+        segF.querySelectorAll("button").forEach(b=> b.classList.toggle("on", b.dataset.m===mode));
+        amtF.style.display = mode==="both" ? "none" : "";
+        cf.style.display = mode==="both" ? "" : "none"; nf.style.display = mode==="both" ? "" : "none";
+        netOnly.forEach(el=>{ if(el) el.style.display = mode==="cash" ? "none" : ""; });
+      };
+      segF.querySelectorAll("button").forEach(b=> b.addEventListener("click", ()=>{
+        const was = mode; mode = b.dataset.m;
+        // carry what was typed into the new choice
+        if(mode==="both" && was!=="both"){ /* the two fields already hold it */ }
+        else if(was==="both"){ amt.value = (num(cash.value)+num(net.value)) || ""; }
+        paint(); push(); }));
+      amt.addEventListener("input", push);
+      paint();
+      enhancedPayPairs.push({cash, net, amt, isBoth:()=>mode==="both"});
+    });
+  });
+}
+// a «طريقة السداد» drop-down (كاش / شبكة) shown as the same two buttons; the drop-down keeps the value
+function enhancePayMethodSelects(){
+  document.querySelectorAll("select.od-settle-method").forEach(sel=>{
+    if(sel.dataset.paySeg) return; sel.dataset.paySeg = "1";
+    const seg = document.createElement("div"); seg.className = "pay-seg";
+    seg.innerHTML = [...sel.options].map(o=>`<button type="button" data-v="${o.value}">${o.textContent}</button>`).join("");
+    const paint = ()=> seg.querySelectorAll("button").forEach(b=> b.classList.toggle("on", b.dataset.v===sel.value));
+    seg.querySelectorAll("button").forEach(b=> b.addEventListener("click", ()=>{ sel.value = b.dataset.v; sel.dispatchEvent(new Event("change", {bubbles:true})); paint(); }));
+    sel.style.display = "none"; sel.parentNode.insertBefore(seg, sel); paint();
+  });
+}
+// a screen that empties its fields after a payment (without re-drawing them) empties the amount too
+setInterval(()=>{
+  for(let i=enhancedPayPairs.length-1;i>=0;i--){
+    const p = enhancedPayPairs[i];
+    if(!p.cash.isConnected){ enhancedPayPairs.splice(i,1); continue; }
+    if(p.isBoth() || document.activeElement===p.amt || p.amt.value==="") continue;
+    if(!(parseFloat(p.cash.value)>0) && !(parseFloat(p.net.value)>0)) p.amt.value = "";
+  }
+}, 700);
+if(typeof window!=="undefined" && window.MutationObserver){
+  let payScan = 0;
+  new MutationObserver(()=>{ if(payScan) return; payScan = requestAnimationFrame(()=>{ payScan = 0; enhancePayPairs(); enhancePayMethodSelects(); }); }).observe(document.documentElement, {childList:true, subtree:true});
+  window.addEventListener("DOMContentLoaded", ()=>{ enhancePayPairs(); enhancePayMethodSelects(); });
 }
