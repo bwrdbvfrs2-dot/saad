@@ -63,7 +63,7 @@ function dimensionLineMarkup(x1,y1,x2,y2,strokeColor){
 }
 // ---------------- the shop's colour (settings, for the whole shop) + night mode (each device on its own) ----------------
 const THEME_PRESETS = [
-  {hex:"#1F2328", label:"أسود"}, {hex:"#1E2A44", label:"كحلي"}, {hex:"#1E4D3A", label:"أخضر غامق"},
+  {hex:"#1F2328", label:"أسود"}, {hex:"#1E2A44", label:"كحلي"}, {hex:"#2F4FB8", label:"أزرق"}, {hex:"#1E4D3A", label:"أخضر غامق"},
   {hex:"#5C1F2B", label:"عنابي"}, {hex:"#7A5A24", label:"بني ذهبي"},
 ];
 const THEME_DEFAULT_COLOR = "#1F2328";
@@ -272,6 +272,7 @@ function closeMeasPanel(){
   if(panel){ panel.style.display = "none"; panel.classList.remove("modal-open"); }
   $("measModalBackdrop").classList.add("hidden");
   openMeasPanelIdx = null;
+  if(typeof updateMeasStrips==="function") updateMeasStrips();
 }
 function garmentMeasurementSeasonFromItemCardId(itemCardId){
   if(!itemCardId || itemCardId==="__none__") return null;
