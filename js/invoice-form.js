@@ -936,14 +936,18 @@ function updateMeasStrips(){
 }
 if(typeof window!=="undefined") window.addEventListener("DOMContentLoaded", ()=>{
   const h = $("garmentsHolder"); if(h) h.addEventListener("input", e=>{ if(e.target.classList && e.target.classList.contains("meas-field")) updateMeasStrips(); });
-  // keyboard: Ctrl+S saves, Ctrl+P saves and prints (on the invoice screen, with no window open over it)
+  // keyboard: Ctrl+S saves the form on the screen (invoice, sales, purchase, expense, voucher); on the invoice
+  // Ctrl+P saves and prints. Nothing happens while a window is open over the screen.
+  const SAVE_KEYS = {invoice:{s:"saveInvoiceBtn", p:"saveAndPrintBtn"}, salesInvoice:{s:"saveSaleBtn"}, purchases:{s:"addPurchaseBtn"}, expenses:{s:"addExpenseBtn"}, vouchers:{s:"submitVoucherBtn"}};
   document.addEventListener("keydown", e=>{
     if(!(e.ctrlKey||e.metaKey) || e.altKey || e.shiftKey) return;
     const k = (e.key||"").toLowerCase();
     if(k!=="s" && k!=="p") return;
-    const tab = $("tab-invoice");
-    if(!tab || !tab.classList.contains("active") || document.querySelector(".modal-overlay:not(.hidden)") || openMeasPanelIdx!==null) return;
-    const btn = $(k==="s" ? "saveInvoiceBtn" : "saveAndPrintBtn");
+    const tab = document.querySelector(".tab-panel.active");
+    const map = tab && SAVE_KEYS[tab.id.replace(/^tab-/,"")];
+    if(!map || !map[k] || document.querySelector(".modal-overlay:not(.hidden)") || openMeasPanelIdx!==null) return;
+    if(pickerOpen) pickerClose();
+    const btn = $(map[k]);
     if(!btn || btn.disabled || btn.style.display==="none") return;
     e.preventDefault();
     btn.click();

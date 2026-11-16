@@ -146,17 +146,44 @@ function customerPickerItems(query){
   }));
   return out.slice(0, 40);
 }
-function attachCustomerPicker(){
-  const inp = $("custName");
+// a customer name box with a mobile box beside it (the tailoring invoice and the sales invoice)
+function attachCustomerNamePicker(nameId, mobileId, isEditing){
+  const inp = $(nameId);
   if(!inp) return;
   attachPicker(inp, {
     title: "اختر العميل", desktopOnly: true, openOnFocus: false, emptyText: "عميل جديد — كمّل الاسم والجوال",
-    when: ()=> !$("custMobile").value.trim() && !editingId,
+    when: ()=> !$(mobileId).value.trim() && !(isEditing && isEditing()),
     items: customerPickerItems,
     onPick: it=>{
-      $("custMobile").value = it.mobile; $("custMobile").dispatchEvent(new Event("input"));
+      $(mobileId).value = it.mobile; $(mobileId).dispatchEvent(new Event("input"));
       inp.value = it.label; inp.dispatchEvent(new Event("input"));
     },
   });
 }
-if(typeof window!=="undefined") window.addEventListener("DOMContentLoaded", attachCustomerPicker);
+// a search box backed by a hidden id: the pick fills the box and fires the same input/change typing would
+function pickInto(inp, value){ inp.value = value; inp.dispatchEvent(new Event("input", {bubbles:true})); inp.dispatchEvent(new Event("change", {bubbles:true})); }
+function stockBadge(c){
+  const avail = cardAvailableQty(c), unit = c.type==="fabric" ? unitLabel() : "قطعة";
+  return {text:`${+avail.toFixed(2)} ${unit}`, tone: avail<=0.001 ? "out" : (c.type==="fabric" && avail < FABRIC_LOW_STOCK) ? "low" : "ok"};
+}
+function attachOtherPickers(){
+  attachCustomerNamePicker("custName", "custMobile", ()=> typeof editingId!=="undefined" && !!editingId);
+  attachCustomerNamePicker("saleCustName", "saleCustMobile");
+  const sup = $("purchSupplierSearch");
+  if(sup) attachPicker(sup, {title:"اختر المورد", emptyText:"ما فيه مورد بهالاسم — أضفه من «الموردين والدائنين»",
+    items: q=>{ const n = normArabic(q); return state.suppliers.filter(s=>(s.kind||"مورد")==="مورد" && (!n || normArabic(s.name).includes(n))).map(s=>({id:s.id, label:s.name, sub:s.phone||""})); },
+    onPick: it=> pickInto(sup, it.label)});
+  const item = $("purchItemName");
+  if(item) attachPicker(item, {title:"اختر الصنف", emptyText:"صنف جديد — يتسجّل كصنف جديد مع فاتورة الشراء",
+    items: q=>{ const n = normArabic(q), type = $("purchType").value;
+      return state.itemCards.filter(c=>c.type===type && (!n || normArabic(c.name).includes(n) || String(c.code||"").includes(String(q).trim())))
+        .map(c=>({id:c.id, label:c.name, sub:[c.code?`كود #${c.code}`:"", c.origin||"", c.season||""].filter(Boolean).join(" · "), badge:stockBadge(c)})); },
+    onPick: it=> pickInto(item, it.label)});
+  const ql = $("quickLabelSearch");
+  if(ql) attachPicker(ql, {title:"اختر الصنف", emptyText:"ما فيه صنف بهالاسم أو الباركود",
+    items: q=>{ const n = normArabic(q);
+      return quickLabelCards().filter(c=> !n || normArabic(c.name).includes(n) || String(c.code||"").includes(String(q).trim()))
+        .slice(0, 80).map(c=>({id:c.id, label:`${c.name} — #${c.code}`, sub:c.type==="fabric" ? "قماش" : "منتج جاهز", badge:stockBadge(c)})); },
+    onPick: it=> pickInto(ql, it.label)});
+}
+if(typeof window!=="undefined") window.addEventListener("DOMContentLoaded", attachOtherPickers);
