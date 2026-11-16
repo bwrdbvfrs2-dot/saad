@@ -1,0 +1,4 @@
+node_modules/
+emulators.log
+*-debug.log
+firestore.rules

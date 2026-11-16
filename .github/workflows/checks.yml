@@ -1,0 +1,46 @@
+# Checks every pull request before it can reach the shop: script syntax, the bot server's unit tests, and the
+# app itself in a real browser against local Firebase emulators (never the shop's real data).
+name: Checks
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Script syntax
+        run: for f in js/*.js; do node --check "$f"; done
+      - name: Bot server unit tests
+        working-directory: functions
+        run: npm ci && npm test
+      - name: Install browser
+        working-directory: tests/e2e
+        run: npm install --no-audit --no-fund && npx playwright install --with-deps chromium
+      - name: Start Firebase emulators
+        working-directory: tests/e2e
+        run: |
+          cp ../../firestore.rules firestore.rules   # the shop's real security rules, checked too
+          npx --yes firebase-tools@13 emulators:start --only auth,firestore --project msar-ac08c > emulators.log 2>&1 &
+          for i in $(seq 1 60); do grep -q "All emulators ready" emulators.log && break; sleep 3; done
+          grep -q "All emulators ready" emulators.log || (cat emulators.log; exit 1)
+      - name: Set up test users
+        working-directory: tests/e2e
+        run: node setup.js
+      - name: Smoke test
+        working-directory: tests/e2e
+        run: node smoke.js
