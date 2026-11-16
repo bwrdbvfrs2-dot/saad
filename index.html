@@ -671,7 +671,13 @@
   <div id="invoiceDraftWrap" style="display:none;margin-bottom:12px;"></div>
   <div id="heldInvoicesWrap" style="display:none;margin-bottom:12px;"></div>
   <div id="measOnlyNote" class="note-box" style="display:none;margin-bottom:10px;">تعديل المقاسات فقط — افتح «كرت المقاس» لكل ثوب وعدّل، ثم اضغط <b>حفظ</b>. باقي الفاتورة (الأسعار، الدفعات، العميل) ما يتغيّر. للخروج اضغط <b>إلغاء</b>.</div>
-  <section class="inv-card">
+  <nav class="inv-steps" id="invSteps" aria-label="أقسام الفاتورة">
+    <button type="button" data-sec="invSecCustomer"><i>1</i><span>العميل</span></button>
+    <button type="button" data-sec="invSecThobes"><i>2</i><span>الثياب</span></button>
+    <button type="button" data-sec="invSecDisc"><i>3</i><span>الخصم والملاحظات</span></button>
+    <button type="button" data-sec="invSecPay"><i>4</i><span>الدفع</span></button>
+  </nav>
+  <section class="inv-card" id="invSecCustomer">
     <h3 class="inv-card-title">بيانات العميل</h3>
   <div class="inv-cust-grid">
     <div class="field"><label>اسم العميل</label><input type="text" id="custName" list="custNameDatalist" autocomplete="off"><datalist id="custNameDatalist"></datalist></div>
@@ -685,16 +691,17 @@
   <div id="loyaltyInfoWrap" style="display:none;margin-bottom:12px;"></div>
   <div id="customerAlertWrap" style="display:none;margin-bottom:12px;"></div>
   </section>
-  <section class="inv-card">
+  <section class="inv-card" id="invSecThobes">
     <div class="inv-card-head"><h3 class="inv-card-title">الثياب</h3>
       <div class="inv-stepper"><label for="invCount">عدد الثياب</label><button type="button" class="step-btn" onclick="stepInvCount(-1)" aria-label="أقل">−</button><input type="number" id="invCount" min="1" value="1"><button type="button" class="step-btn" onclick="stepInvCount(1)" aria-label="أكثر">+</button></div>
     </div>
   <div id="priceLockNote" style="display:none;color:var(--gold-soft);font-weight:700;font-size:12px;margin-bottom:8px;">الأسعار مقفلة حالياً — يوجد كود خصم أو باقة عرض مفعّلة، وما يمكن تعديل السعر يدوياً حتى تُزال</div>
   <div id="garmentsHolder"></div>
+  <button type="button" class="btn btn-ghost btn-sm" id="addThobeBtn" onclick="stepInvCount(1)">+ إضافة ثوب</button>
   <datalist id="fabricDatalist"></datalist>
   <div id="invoiceOffersWrap" style="margin-top:10px;"></div>
   </section>
-  <section class="inv-card">
+  <section class="inv-card" id="invSecDisc">
     <h3 class="inv-card-title">الخصم والملاحظات</h3>
   <div class="inv-disc-grid">
   <div class="field"><label>ملاحظات على الفاتورة (اختياري)</label><textarea id="invNotes" rows="2" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 11px;color:var(--ivory);font-family:inherit;font-size:14px;" placeholder="أي ملاحظة عامة على الفاتورة كاملة..."></textarea></div>
@@ -706,7 +713,7 @@
   <div class="field"><label id="directDiscountLabel">خصم مباشر (ريال) — اختياري، منفصل عن الكود والعرض</label><input type="number" id="directDiscountInput" min="0" step="1" placeholder="0"></div>
   </div>
   </section>
-  <section class="inv-card">
+  <section class="inv-card" id="invSecPay">
     <div class="inv-card-head"><h3 class="inv-card-title">الدفعات</h3><button class="btn btn-ghost btn-sm" id="addPaymentBtn">+ إضافة دفعة</button></div>
   <div id="paymentsList"></div>
   <div class="pay-line pay-entry pay-m-cash" id="payEntryRow">
@@ -1929,6 +1936,7 @@
 <script src="js/app-shell.js"></script>
 <script src="js/customers-loyalty.js"></script>
 <script src="js/invoice-form.js"></script>
+<script src="js/picker.js"></script>
 <script src="js/mail-distribution.js"></script>
 <script src="js/revenue-closing.js"></script>
 <script src="js/render-addons.js"></script>

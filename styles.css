@@ -620,3 +620,42 @@ html[data-mode="dark"] #printArea, html[data-mode="dark"] #receiptShareRoot, htm
     --card:#fff; --soft:#F2F3F4; --row-line:#EEF0F2; --row-hover:#FAFBFB; --ivory:#1B1F1E; --muted:#5B625F;
     --due-bg:#FBE9DD; --due-text:#7A2E0C; --profit:#1f9d5c; --loss:#dc3545; --info:#2f6fb0; --warn:#e0872e;}
 }
+
+/* ================= invoice: section bar, searchable picker, measurement strip ================= */
+.inv-steps{display:flex;gap:6px;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:8px;margin-bottom:14px;overflow-x:auto;}
+.inv-steps button{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;border:none;background:none;border-radius:10px;font-family:inherit;font-size:13.5px;color:var(--muted);cursor:pointer;white-space:nowrap;padding:0 10px;}
+.inv-steps button i{font-style:normal;width:24px;height:24px;border-radius:50%;border:1px solid var(--field-border);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;}
+.inv-steps button:hover{background:var(--soft);}
+.inv-steps button.current{color:var(--ivory);font-weight:800;}
+.inv-steps button.current i{background:var(--accent);border-color:var(--accent);color:var(--on-accent);}
+.inv-steps button.done{color:var(--ivory);}
+.inv-steps button.done i{background:var(--profit);border-color:var(--profit);color:#fff;}
+#addThobeBtn{margin-top:4px;}
+.meas-toggle-btn.meas-strip{flex:1 1 100%;order:0;display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--selected-bg);border-color:transparent;text-align:start;white-space:normal;}
+.meas-toggle-btn.meas-strip span{font-weight:600;color:var(--ivory);font-variant-numeric:tabular-nums;}
+.meas-toggle-btn.meas-strip b{flex-shrink:0;background:var(--card);border:1px solid var(--field-border);border-radius:8px;padding:4px 10px;font-size:12px;}
+.pk-panel{position:absolute;z-index:400;background:var(--card);border:1px solid var(--field-border);border-radius:12px;box-shadow:0 18px 40px -16px rgba(16,24,40,.35);overflow:hidden;display:flex;flex-direction:column;max-height:360px;}
+.pk-list{overflow-y:auto;padding:6px;flex:1;}
+.pk-group{font-size:11.5px;color:var(--muted);padding:8px 10px 4px;}
+.pk-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;cursor:pointer;}
+.pk-row:hover,.pk-row.on{background:var(--selected-bg);}
+.pk-row.dim .pk-main b{color:var(--muted);}
+.pk-main{display:flex;flex-direction:column;min-width:0;}
+.pk-main b{font-weight:700;font-size:14px;color:var(--ivory);}
+.pk-main small{font-size:11.5px;color:var(--muted);}
+.pk-main mark{background:#FFE58F;color:inherit;border-radius:3px;padding:0 1px;}
+.pk-badge{flex-shrink:0;font-size:12px;font-weight:700;border-radius:999px;padding:3px 10px;font-variant-numeric:tabular-nums;}
+.pk-badge.ok{background:#E3F4EA;color:#1E7A4C;} .pk-badge.low{background:#FDF0DC;color:#9A5B0C;} .pk-badge.out{background:#FBE4E4;color:#B3261E;}
+html[data-mode="dark"] .pk-badge.ok{background:#173A28;color:#7FD9A8;} html[data-mode="dark"] .pk-badge.low{background:#3B2A12;color:#F2C27A;} html[data-mode="dark"] .pk-badge.out{background:#3D1A1A;color:#FF9A9A;}
+html[data-mode="dark"] .pk-main mark{background:#6B5A12;}
+.pk-empty{padding:14px 10px;color:var(--muted);font-size:13px;text-align:center;}
+.pk-keys{display:flex;gap:14px;justify-content:flex-start;padding:7px 12px;border-top:1px solid var(--border);background:var(--surface2);font-size:11.5px;color:var(--muted);}
+.pk-keys kbd{font-family:inherit;border:1px solid var(--field-border);border-radius:5px;padding:0 5px;margin-inline-end:3px;background:var(--card);font-size:11px;}
+.pk-backdrop{position:fixed;inset:0;background:rgba(15,18,22,.45);z-index:399;}
+.pk-sheet{position:fixed;left:0;right:0;bottom:0;top:auto;width:auto !important;max-height:78vh;border-radius:18px 18px 0 0;padding:8px 14px calc(14px + env(safe-area-inset-bottom,0px));gap:8px;}
+.pk-sheet .pk-grip{width:44px;height:5px;border-radius:9px;background:var(--field-border);margin:2px auto 4px;}
+.pk-sheet .pk-title{font-weight:800;font-size:16px;}
+.pk-sheet .pk-search{min-height:48px;font-size:16px;}
+.pk-sheet .pk-row{padding:12px 8px;border-bottom:1px solid var(--row-line);border-radius:0;}
+.pk-sheet .pk-main b{font-size:15.5px;}
+.pk-sheet .pk-cancel{width:100%;}

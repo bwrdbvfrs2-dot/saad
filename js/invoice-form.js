@@ -695,7 +695,7 @@ function renderGarmentFields(prefill=null){
       <div class="g-grid">
         <div class="g-no">ثوب ${i+1}</div>
         <div class="field g-fabric"><label>نوع القماش (من المشتريات)</label>
-          <input type="text" class="g-itemCard-search" list="fabricDatalist" value="${esc(currentFabricName)}" placeholder="اختر القماش من المخزون (أو بدون قماش)..." autocomplete="off">
+          <input type="text" class="g-itemCard-search" value="${esc(currentFabricName)}" placeholder="اختر القماش من المخزون (أو بدون قماش)..." autocomplete="off">
           <input type="hidden" class="g-itemCard" value="${g.itemCardId || (editingId ? "__none__" : "")}">
           <p class="g-avail-note sub" style="display:none;margin:4px 0 0;font-size:11px;"></p>
         </div>
@@ -803,15 +803,18 @@ function renderGarmentFields(prefill=null){
     // phones fire only "change" when a datalist entry is tapped (some only on blur) — listen to all three,
     // or the pick never reached the hidden field and the save said "اختر القماش"
     const onFabricPick = ()=>{
-      const id = resolveFabricPick(searchInp.value);
+      // a pick from the list carries the card's own id, so two cards with the same name never get mixed up
+      const id = (searchInp.dataset.pickId && searchInp.value===searchInp.dataset.pickLabel) ? searchInp.dataset.pickId : resolveFabricPick(searchInp.value);
       if(id===itemSel.value) return;
       itemSel.value = id;
       if(id==="__none__") applyDefaults(true); else if(id) applyDefaults();
     };
     ["input","change","blur"].forEach(ev=> searchInp.addEventListener(ev, onFabricPick));
+    attachPicker(searchInp, {title:"اختر القماش", items: fabricPickerItems, emptyText:"ما فيه قماش بهالاسم — القماش الجديد يدخل من فاتورة المشتريات",
+      onPick: it=>{ searchInp.dataset.pickId = it.id; searchInp.dataset.pickLabel = it.label; searchInp.value = it.label; searchInp.dispatchEvent(new Event("change")); }});
     if(!prefill) applyDefaults();
   }
-  updateFixedShareNote(); updateLiveTotals(); updatePriceFieldsLockState();
+  updateFixedShareNote(); updateLiveTotals(); updatePriceFieldsLockState(); updateMeasStrips();
   refreshLucideIcons();
 }
 // several thobes for the same person: fill one measurement card and the rest follow. A garment whose
@@ -881,6 +884,7 @@ function updateInvoiceSideSummary(prices, totalDiscount){
   });
   if($("invNumPill")) $("invNumPill").textContent = $("invNumber").value || "—";
   syncInvoiceSideButtons();
+  updateInvSteps();
   if(!$("issTotal")) return;
   const embro = cards.reduce((a,card)=> a + (card.querySelector(".g-hasEmbro").checked ? (parseFloat(card.querySelector(".g-embroPrice").value)||0) : 0), 0);
   const cash = paymentsListTemp.reduce((a,p)=>a+(p.cash||0),0), net = paymentsListTemp.reduce((a,p)=>a+(p.network||0),0);
@@ -891,6 +895,60 @@ function updateInvoiceSideSummary(prices, totalDiscount){
   $("issCash").textContent = fmtSar(cash)+" ﷼"; $("issNet").textContent = fmtSar(net)+" ﷼";
   $("issRemaining").textContent = $("liveRemaining").textContent;
 }
+// the bar over the invoice: jumps to each part, and ticks the parts already filled in
+function updateInvSteps(){
+  const bar = $("invSteps"); if(!bar) return;
+  const cards = Array.from($("garmentsHolder").children);
+  const done = {
+    invSecCustomer: !!$("custName").value.trim() && /^[0-9]{10}$/.test($("custMobile").value.trim()),
+    invSecThobes: cards.length>0 && cards.every(c=> (c.querySelector(".g-itemCard")||{}).value && (parseFloat((c.querySelector(".g-price")||{}).value)||0) > 0),
+    invSecDisc: !!(($("invNotes")||{}).value||"").trim() || (parseFloat(($("directDiscountInput")||{}).value)||0) > 0 || !!appliedPromoCode,
+    invSecPay: paymentsListTemp.length > 0,
+  };
+  let current = null;
+  bar.querySelectorAll("button").forEach(b=>{
+    const sec = b.dataset.sec, ok = done[sec];
+    b.classList.toggle("done", ok);
+    if(!ok && !current && sec!=="invSecDisc") current = sec;
+    b.querySelector("i").textContent = ok ? "✓" : b.dataset.n || (b.dataset.n = b.querySelector("i").textContent);
+  });
+  bar.querySelectorAll("button").forEach(b=> b.classList.toggle("current", b.dataset.sec===current));
+}
+if(typeof window!=="undefined") window.addEventListener("DOMContentLoaded", ()=>{
+  const bar = $("invSteps"); if(!bar) return;
+  bar.querySelectorAll("button").forEach(b=> b.addEventListener("click", ()=>{
+    const sec = $(b.dataset.sec); if(!sec) return;
+    const top = sec.getBoundingClientRect().top + window.scrollY - 90;
+    window.scrollTo({top, behavior:"smooth"});
+  }));
+  ["custName","custMobile","invNotes","directDiscountInput"].forEach(id=>{ const el = $(id); if(el) el.addEventListener("input", updateInvSteps); });
+  updateInvSteps();
+});
+// the measurement card's main figures right on the thobe, so the cashier sees them without opening it
+const MEAS_STRIP_KEYS = [["frontLength","الطول"],["shoulderWidth","الكتف"],["frontChestWidth","الصدر"],["sleeveLength","الكم"]];
+function updateMeasStrips(){
+  Array.from($("garmentsHolder").children).forEach(card=>{
+    const btn = card.querySelector(".meas-toggle-btn"); if(!btn) return;
+    const parts = MEAS_STRIP_KEYS.map(([k,l])=>{ const f = card.querySelector(`.meas-field[data-key="${k}"]`); const v = f && f.value.trim(); return v ? `${l} ${v}` : ""; }).filter(Boolean);
+    btn.classList.toggle("meas-strip", parts.length>0);
+    btn.innerHTML = parts.length ? `<span>كرت المقاس: ${esc(parts.join(" · "))}</span><b>تعديل المقاس</b>` : "كرت المقاس (اضغط للفتح)";
+  });
+}
+if(typeof window!=="undefined") window.addEventListener("DOMContentLoaded", ()=>{
+  const h = $("garmentsHolder"); if(h) h.addEventListener("input", e=>{ if(e.target.classList && e.target.classList.contains("meas-field")) updateMeasStrips(); });
+  // keyboard: Ctrl+S saves, Ctrl+P saves and prints (on the invoice screen, with no window open over it)
+  document.addEventListener("keydown", e=>{
+    if(!(e.ctrlKey||e.metaKey) || e.altKey || e.shiftKey) return;
+    const k = (e.key||"").toLowerCase();
+    if(k!=="s" && k!=="p") return;
+    const tab = $("tab-invoice");
+    if(!tab || !tab.classList.contains("active") || document.querySelector(".modal-overlay:not(.hidden)") || openMeasPanelIdx!==null) return;
+    const btn = $(k==="s" ? "saveInvoiceBtn" : "saveAndPrintBtn");
+    if(!btn || btn.disabled || btn.style.display==="none") return;
+    e.preventDefault();
+    btn.click();
+  });
+});
 function syncInvoiceSideButtons(){
   document.querySelectorAll("#invSideSummary .iss-btn").forEach(b=>{
     const o = $(b.dataset.for); if(!o) return;
