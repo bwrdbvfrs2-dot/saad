@@ -164,7 +164,7 @@ function renderGlobalSearchResults(){
   if(!q){ box.classList.remove("show"); box.innerHTML=""; return; }
   const matches = globalSearchMatches(q);
   box.innerHTML = matches.length ? matches.map(inv=>`<button type="button" class="gs-item" data-number="${esc(inv.number)}">
-      <div class="gs-title">${esc(inv.number)} — ${esc(inv.customerName||"عميل بدون اسم")}</div>
+      <div class="gs-title">${esc(inv.number)} — ${esc(inv.customerName||"مستفيد بدون اسم")}</div>
       <div class="gs-sub">${esc(inv.customerMobile||"—")} · ${inv.date}</div>
     </button>`).join("") : `<div class="gs-item"><span class="gs-sub">ما فيه نتائج مطابقة</span></div>`;
   box.classList.add("show");
@@ -320,7 +320,7 @@ function saveMeasurementSnapshotToHistory(idx){
   const mobile = $("custMobile").value.trim();
   const name = $("custName").value.trim();
   if(!/^[0-9]{10}$/.test(mobile) || !name){
-    showToast("أدخل اسم العميل ورقم جواله كامل أول عشان يُحفظ المقاس بسجله");
+    showToast("أدخل اسم المستفيد ورقم جواله كامل أول عشان يُحفظ المقاس بسجله");
     return;
   }
   const snapshot = measurementSnapshotFromPanel(idx);
@@ -335,7 +335,7 @@ function saveMeasurementSnapshotToHistory(idx){
   const seasonKey = measurementSeasonFor(itemCardId);
   recordMeasurementSnapshot(mobile, name, snapshot, seasonKey);
   saveState();
-  showToast(`تم حفظ المقاس (${seasonLabelAr(seasonKey)}) بسجل العميل`);
+  showToast(`تم حفظ المقاس (${seasonLabelAr(seasonKey)}) بسجل المستفيد`);
 }
 // picks whichever of the two seasons' latest snapshot has the more recent date — lets a customer get
 // their absolute last measurement regardless of season, independent of the currently selected fabric
@@ -359,7 +359,7 @@ function loadMeasurementSnapshotIntoGarment(idx, seasonKey){
   } else {
     snapshot = individual && individual.measurementHistory && individual.measurementHistory[seasonKey] && individual.measurementHistory[seasonKey][0];
   }
-  if(!snapshot){ showToast(seasonKey==="any" ? "ما فيه أي مقاس محفوظ سابقاً لهذا العميل" : `ما فيه مقاس ${seasonLabelAr(seasonKey)} محفوظ سابقاً لهذا العميل`); return; }
+  if(!snapshot){ showToast(seasonKey==="any" ? "ما فيه أي مقاس محفوظ سابقاً لهذا المستفيد" : `ما فيه مقاس ${seasonLabelAr(seasonKey)} محفوظ سابقاً لهذا المستفيد`); return; }
   const current = garmentsFromForm(); // keeps the "بدون قماش" pick on the re-render below
   current[idx] = {...current[idx], measurements: {...snapshot.measurements}, category: snapshot.category||current[idx].category};
   renderGarmentFields(current);
@@ -384,7 +384,7 @@ function buildMeasurementHistoryBoxHtml(idx, itemCardId){
   // only useful when both seasons have history — with just one season saved, its own button above is already "the last measurement, any season"
   const anyBtn = (summerCount && winterCount) ? `<button type="button" class="btn btn-ghost btn-sm meas-fetch-season-btn" data-idx="${idx}" data-season="any" style="width:100%;margin-bottom:4px;">تحميل آخر مقاس (بغض النظر عن الموسم)</button>` : "";
   return `<div style="margin-bottom:8px;">
-    <p class="sub" style="font-size:10px;margin:0 0 4px;">مقاسات محفوظة سابقاً لهذا العميل:</p>
+    <p class="sub" style="font-size:10px;margin:0 0 4px;">مقاسات محفوظة سابقاً لهذا المستفيد:</p>
     ${seasonBtn("summer", summerCount)}${seasonBtn("winter", winterCount)}${anyBtn}
   </div>`;
 }
@@ -537,7 +537,7 @@ function isStuckReadyGarment(g){
   return g.status==="جاهز" || (g.status==="معلقة" && !!g.readyDate); // معلقة = carried over at month close
 }
 // what's still owed on a garment handed over on credit: its own tracked balance, capped by what is
-// still unpaid on the invoice as a whole — a payment taken from "مديونيات العملاء" or the
+// still unpaid on the invoice as a whole — a payment taken from "مديونيات المستفيدين" or the
 // distribution screen goes on the invoice without touching creditPaid, so the "مديونية الثياب"
 // list kept showing the full amount owed and invited collecting it a second time
 function creditGarmentOwed(g, inv){
@@ -593,7 +593,7 @@ function renderCustomerStandingAlerts(mobile, wrapId){
     const parts = [];
     if(alert.openingDebt>0) parts.push(`دين سابق (مسجّل قبل النظام): <b>${alert.openingDebt.toFixed(0)} ريال</b>`);
     if(alert.debtAmount>0) parts.push(`مبلغ مستحق عن ثياب <b>تم تسليمها له</b> ولم يُسدد كامل قيمتها: <b>${alert.debtAmount.toFixed(0)} ريال</b> — فاتورة ${alert.debtInvoices.map(n=>"#"+esc(n)).join("، ")}`);
-    html += box("var(--loss)", "rgba(224,90,90,0.12)", `💰 تنبيه دين: على العميل ${(alert.debtAmount+alert.openingDebt).toFixed(0)} ريال`,
+    html += box("var(--loss)", "rgba(224,90,90,0.12)", `💰 تنبيه دين: على المستفيد ${(alert.debtAmount+alert.openingDebt).toFixed(0)} ريال`,
       parts.join("<br>"),
       `<button type="button" class="btn btn-ghost btn-sm" onclick="switchTab('customerDebts')" style="margin-top:6px;">الذهاب لتسوية المديونية</button>`);
   }
@@ -601,11 +601,11 @@ function renderCustomerStandingAlerts(mobile, wrapId){
     const byInv = {};
     alert.stuckGarments.forEach(({inv})=>{ byInv[inv.number] = (byInv[inv.number]||0)+1; });
     html += box("var(--gold)", "rgba(200,160,80,0.12)", `👔 تنبيه ثياب متعثرة: ${alert.stuckGarments.length} ثوب جاهز بالمحل لم يُستلم`,
-      `ثياب <b>منجزة وجاهزة</b> ما زالت في المحل ولم تُسلَّم للعميل بعد — ${Object.entries(byInv).map(([n,c])=>`فاتورة #${esc(n)} (${c} ثوب)`).join("، ")}. هذا ليس ديناً مالياً.`);
+      `ثياب <b>منجزة وجاهزة</b> ما زالت في المحل ولم تُسلَّم للمستفيد بعد — ${Object.entries(byInv).map(([n,c])=>`فاتورة #${esc(n)} (${c} ثوب)`).join("، ")}. هذا ليس ديناً مالياً.`);
   }
   if(alert.convertedGarments.length){
     html += box("var(--muted)", "rgba(128,128,128,0.10)", `ℹ ثياب سابقة تحوّلت وانباعت`,
-      alert.convertedGarments.map(({inv,g})=>`ثوب سابق (فاتورة #${esc(inv.number)}) تحوّل "متعثر" وانباع لعميل ثاني بتاريخ ${g.saleConversionDate}`).join("<br>"));
+      alert.convertedGarments.map(({inv,g})=>`ثوب سابق (فاتورة #${esc(inv.number)}) تحوّل "متعثر" وانباع لمستفيد ثاني بتاريخ ${g.saleConversionDate}`).join("<br>"));
   }
   wrap.style.display = "";
   wrap.innerHTML = html;
@@ -647,7 +647,7 @@ function renderLoyaltyInfo(){
   if(expireOldPointsForCustomer(mobile)) saveState();
   wrap.style.display = "";
   if(cust.vip){
-    wrap.innerHTML = `<div class="note-box">عميل VIP — خارج نظام النقاط، يسمح بخصم حر بدون حد أقصى وقت التوزيع.</div>`;
+    wrap.innerHTML = `<div class="note-box">مستفيد VIP — خارج نظام النقاط، يسمح بخصم حر بدون حد أقصى وقت التوزيع.</div>`;
     return;
   }
   const tier = customerTier(mobile);
@@ -690,7 +690,7 @@ function refreshMeasurementsForCustomer(mobile, name){
   const wasOpenIdx = openMeasPanelIdx;
   renderGarmentFields(current);
   if(wasOpenIdx!==null) openMeasPanel(wasOpenIdx);
-  if(autoFilled) showToast("جبنا مقاسات هذا العميل من آخر فاتورة له — تقدر تعدّلها قبل الحفظ");
+  if(autoFilled) showToast("جبنا مقاسات هذا المستفيد من آخر فاتورة له — تقدر تعدّلها قبل الحفظ");
 }
 function renderCustomerPicker(mobileInputId, nameInputId, pickerWrapId){
   const mobile = $(mobileInputId).value.trim();
@@ -806,7 +806,7 @@ function showReadyWaBanner(bannerId, inv){
   const banner = $(bannerId);
   if(!banner) return;
   if(!inv.customerMobile){ banner.style.display="none"; return; }
-  banner.innerHTML = `<div class="note-box" style="text-align:center;"><a href="${waLink(inv.customerMobile, buildReadyMessage(inv))}" target="_blank" class="btn btn-gold btn-sm" style="display:inline-block;text-decoration:none;">إرسال رسالة واتساب للعميل: ثوبك جاهز 🎉</a></div>`;
+  banner.innerHTML = `<div class="note-box" style="text-align:center;"><a href="${waLink(inv.customerMobile, buildReadyMessage(inv))}" target="_blank" class="btn btn-gold btn-sm" style="display:inline-block;text-decoration:none;">إرسال رسالة واتساب للمستفيد: ثوبك جاهز 🎉</a></div>`;
   banner.style.display = "";
 }
 // call this SYNCHRONOUSLY, still inside the click (or click-derived confirm-dialog) handler, before any
@@ -910,7 +910,7 @@ function renderAppliedPromoBanner(){
   let desc;
   if(appliedPromoCode.type==="percentage") desc = `خصم نسبة ${appliedPromoCode.value}%`;
   else if(appliedPromoCode.type==="fixed_voucher") desc = `قسيمة خصم ${appliedPromoCode.value} ﷼`;
-  else desc = `هدية عينية: ${appliedPromoCode.giftDescription} — تذكّر تسليمها للعميل!`;
+  else desc = `هدية عينية: ${appliedPromoCode.giftDescription} — تذكّر تسليمها للمستفيد!`;
   wrap.innerHTML = `<div class="item-row" style="background:rgba(87,171,124,0.12);border:1px solid var(--profit);border-radius:8px;padding:8px 12px;"><span style="color:var(--profit);font-weight:700;">كود "${esc(appliedPromoCode.code)}" — ${desc}</span><button type="button" class="btn btn-ghost btn-sm" onclick="removeAppliedPromoCode()">إلغاء</button></div>`;
 }
 function nextPromoCodeId(){ return Date.now()+"-"+Math.random().toString(36).slice(2,6); }

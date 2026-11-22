@@ -256,7 +256,7 @@ function defaultTypeLibraries(){
 
 let state = {
   settings:{wage:25, padding:10, embroideryWage:15, nextInvoiceNumber:1, currentMonth: currentMonthLabel(), allowDiscount:false, bankFeePercent:0.92, nextVoucherNumber:1,
-             waWelcomeEnabled:false, waPromoMessage:"عميلنا العزيز، بمناسبة عودتك لنا نقدّم لك عرضاً خاصاً على تفصيل ثوبك القادم! زورونا لمعرفة التفاصيل 🌹",
+             waWelcomeEnabled:false, waPromoMessage:"مستفيدنا العزيز، بمناسبة عودتك لنا نقدّم لك عرضاً خاصاً على تفصيل ثوبك القادم! زورونا لمعرفة التفاصيل 🌹",
              fixedItems:[], measureUnit:"meter", commissionBasis:"تسليم", defaultFabricQty:{"رجال":3.25, "ولادي":2.25, "طفل":1.75}, fabricQtyBuffer:0.25, nextSalesInvoiceNumber:1, nextPurchaseInvoiceNumber:1, nextAlterationNumber:1,
              loyaltyEarnRate:10, loyaltyRedeemRate:1, loyaltyMinRedeem:0,
              loyaltySilverThreshold:5000, loyaltyGoldThreshold:15000,

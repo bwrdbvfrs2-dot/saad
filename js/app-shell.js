@@ -20,7 +20,7 @@ function normalizeState(){
   if(state.settings.allowDiscount===undefined) state.settings.allowDiscount=false;
   if(state.settings.bankFeePercent===undefined) state.settings.bankFeePercent=0.92;
   if(state.settings.waWelcomeEnabled===undefined) state.settings.waWelcomeEnabled=false;
-  if(state.settings.waPromoMessage===undefined) state.settings.waPromoMessage="عميلنا العزيز، بمناسبة عودتك لنا نقدّم لك عرضاً خاصاً على تفصيل ثوبك القادم! زورونا لمعرفة التفاصيل 🌹";
+  if(state.settings.waPromoMessage===undefined) state.settings.waPromoMessage="مستفيدنا العزيز، بمناسبة عودتك لنا نقدّم لك عرضاً خاصاً على تفصيل ثوبك القادم! زورونا لمعرفة التفاصيل 🌹";
   if(state.settings.nextVoucherNumber===undefined) state.settings.nextVoucherNumber=1;
   if(!state.closingReports) state.closingReports=[];
   if(!state.legacyItems) state.legacyItems=[];
@@ -661,7 +661,7 @@ function saveState(){
   saveQueue = run.catch(()=>{});
   return run;
 }
-// what a save did, in words, for the write log — e.g. "فاتورة جديدة #12", "تعديل عميل C0003". Items are
+// what a save did, in words, for the write log — e.g. "فاتورة جديدة #12", "تعديل مستفيد C0003". Items are
 // matched by their id, and compared with key order ignored (Firestore hands maps back with their keys
 // sorted, so a plain JSON comparison saw nearly everything as changed).
 function stableJson(v){
@@ -672,7 +672,7 @@ function stableJson(v){
 const WRITE_LOG_ITEMS = {
   invoices:{one:"فاتورة", many:"فواتير", name:x=>"#"+x.number},
   salesInvoices:{one:"فاتورة مبيعات", many:"فواتير مبيعات", name:x=>"#"+x.number},
-  customers:{one:"عميل", many:"عملاء", name:x=>x.code||x.mobile||""},
+  customers:{one:"مستفيد", many:"مستفيدين", name:x=>x.code||x.mobile||""},
   itemCards:{one:"صنف", many:"أصناف", name:x=>x.name||x.code||""},
   heldInvoices:{one:"فاتورة معلّقة", many:"فواتير معلّقة", name:x=>x.customerName||""},
   heldSales:{one:"فاتورة مبيعات معلّقة", many:"فواتير مبيعات معلّقة", name:x=>x.customerName||""},
@@ -1012,7 +1012,7 @@ async function resetForGoLive(){
   if(!currentUser || currentUser.role!=="مدير"){ showToast("هذا الإجراء للمدير فقط"); return; }
   if(state.goLive){ showToast("تم تجهيز البرنامج للتشغيل الفعلي من قبل — هذا الإجراء يُستخدم مرة وحدة فقط"); return; }
   const keepSettings = !!($("resetKeepSettings")||{}).checked;
-  if(!await showConfirm(`تأكيد: بيتم مسح كل بيانات المحل${keepSettings?" ما عدا الإعدادات":""} — الفواتير والعملاء والأصناف والصناديق وكل الحركات. يبقى المستخدمين وصلاحياتهم فقط. متأكد؟`)) return;
+  if(!await showConfirm(`تأكيد: بيتم مسح كل بيانات المحل${keepSettings?" ما عدا الإعدادات":""} — الفواتير والمستفيدين والأصناف والصناديق وكل الحركات. يبقى المستخدمين وصلاحياتهم فقط. متأكد؟`)) return;
   if(!await confirmWithPassword("هذا إجراء نهائي على بيانات المحل (تنحفظ نسخة احتياطية قبله). أدخل كلمة مرورك للتأكيد.")) return;
   const backupId = "before-reset-" + new Date().toISOString().replace(/[:.]/g,"-");
   try{
@@ -1051,7 +1051,7 @@ async function resetForGoLive(){
 }
 async function restoreBackup(dateId){
   if(!currentUser || currentUser.role!=="مدير"){ showToast("استرجاع نسخة احتياطية متاح للمدير فقط"); return; }
-  if(!await confirmWithPassword(`متأكد تبي تسترجع نسخة يوم ${dateId}؟ بيتم استبدال كل البيانات الحالية (الفواتير، العملاء، الإعدادات...) ببيانات تلك النسخة. المستخدمين وصلاحياتهم يبقون كما هم الحين. أدخل كلمة مرورك للتأكيد.`)) return;
+  if(!await confirmWithPassword(`متأكد تبي تسترجع نسخة يوم ${dateId}؟ بيتم استبدال كل البيانات الحالية (الفواتير، المستفيدين، الإعدادات...) ببيانات تلك النسخة. المستخدمين وصلاحياتهم يبقون كما هم الحين. أدخل كلمة مرورك للتأكيد.`)) return;
   try{
     const snap = await BACKUPS_COL.doc(dateId).get();
     if(!snap.exists){ showToast("النسخة غير موجودة"); return; }
@@ -1258,9 +1258,9 @@ const NAV_GROUPS = [
     {tab:"report-undelivered", label:"الثياب غير المسلّمة"},
     {tab:"report-garmentInventory", label:"جرد الثياب حسب الحالة"},
   ]},
-  {title:"العملاء", color:"#1f9d5c", items:[
-    {tab:"customerDebts", label:"مديونيات العملاء"},
-    {tab:"report-customers", label:"تقرير العملاء"},
+  {title:"المستفيدين", color:"#1f9d5c", items:[
+    {tab:"customerDebts", label:"مديونيات المستفيدين"},
+    {tab:"report-customers", label:"تقرير المستفيدين"},
     {tab:"report-broadcastCampaign", label:"قوائم البث والعروض الخاصة"},
     {tab:"bot", label:"وطني بوت"},
   ]},
@@ -1318,7 +1318,7 @@ const TAB_ICONS = {
   settingsShop:"store", settingsFinance:"circle-dollar-sign", settingsUsers:"user-cog",
   settingsProducts:"shirt", settingsMarketing:"gift", mail:"mail-open", bot:"bot", repairs:"wrench",
 };
-const GROUP_ICONS = { "الرئيسية":"home", "المبيعات":"shopping-bag", "الخياطة":"scissors", "العملاء":"users",
+const GROUP_ICONS = { "الرئيسية":"home", "المبيعات":"shopping-bag", "الخياطة":"scissors", "المستفيدين":"users",
   "المخزون":"warehouse", "الحسابات":"wallet", "التقارير":"bar-chart-3", "الإعدادات":"settings" };
 function navIcon(tab){ return TAB_ICONS[tab] || "circle"; }
 // only icons not drawn yet: lucide.createIcons() redraws every icon on the page (hundreds, across all the
@@ -1557,9 +1557,9 @@ function renderStateSizeMeter(){
   const used = Math.max(mainUsed, shard.bytes), pct = used/STATE_DOC_LIMIT_BYTES*100;
   const color = pct>=85 ? "var(--loss)" : pct>=70 ? "var(--warn)" : "var(--profit)";
   const parts = Object.keys(doc).map(k=>[k, stateSizeBytes(doc[k])]).sort((a,b)=>b[1]-a[1]).slice(0,5);
-  const LABELS = {invoices:"فواتير التفصيل", customers:"العملاء والمقاسات", salesInvoices:"فواتير المبيعات", purchases:"المشتريات (مع صورها)", auditLog:"سجل التدقيق", itemCards:"الأصناف", settings:"الإعدادات (مع الشعار والصور)", payrollLedger:"الرواتب", expenses:"المصروفات", decisions:"الإشعارات", mailRequests:"طلبات البريد", deletedInvoicesLog:"الفواتير المحذوفة", garmentTypes:"أنواع الثياب (مع صورها)", collarTypes:"أنواع الياقة (مع صورها)", cufflinkTypes:"أنواع الكبك (مع صورها)"};
+  const LABELS = {invoices:"فواتير التفصيل", customers:"المستفيدين والمقاسات", salesInvoices:"فواتير المبيعات", purchases:"المشتريات (مع صورها)", auditLog:"سجل التدقيق", itemCards:"الأصناف", settings:"الإعدادات (مع الشعار والصور)", payrollLedger:"الرواتب", expenses:"المصروفات", decisions:"الإشعارات", mailRequests:"طلبات البريد", deletedInvoicesLog:"الفواتير المحذوفة", garmentTypes:"أنواع الثياب (مع صورها)", collarTypes:"أنواع الياقة (مع صورها)", cufflinkTypes:"أنواع الكبك (مع صورها)"};
   el.innerHTML = `<p style="margin:0 0 6px;">${split ? `أكبر سجل مستخدم <b style="color:${color};">${(used/1024).toFixed(0)} كيلوبايت</b> من ${(STATE_DOC_LIMIT_BYTES/1024).toFixed(0)} (${pct.toFixed(0)}%)` : `مستخدم <b style="color:${color};">${(used/1024).toFixed(0)} كيلوبايت</b> من ${(STATE_DOC_LIMIT_BYTES/1024).toFixed(0)} (${pct.toFixed(0)}%)`}</p>
-    ${split ? `<p class="sub" style="margin:0 0 6px;">البيانات مقسّمة على أكثر من سجل، وكل سجل له حده: السجل الرئيسي ${(mainUsed/1024).toFixed(0)} ك.ب، وأكبر سجل للعملاء أو الفواتير ${(shard.bytes/1024).toFixed(0)} ك.ب. العملاء على ${shardDocsOf(SHARD_SPECS[0]).length} سجلات، والفواتير الشغالة سجلين لكل شهر.</p>` : ""}
+    ${split ? `<p class="sub" style="margin:0 0 6px;">البيانات مقسّمة على أكثر من سجل، وكل سجل له حده: السجل الرئيسي ${(mainUsed/1024).toFixed(0)} ك.ب، وأكبر سجل للمستفيدين أو الفواتير ${(shard.bytes/1024).toFixed(0)} ك.ب. المستفيدين على ${shardDocsOf(SHARD_SPECS[0]).length} سجلات، والفواتير الشغالة سجلين لكل شهر.</p>` : ""}
     <div style="height:10px;background:var(--surface3);border-radius:6px;overflow:hidden;"><div style="height:100%;width:${Math.min(100,pct).toFixed(1)}%;background:${color};"></div></div>
     <p class="sub" style="margin:6px 0 2px;">أكبر الأجزاء: ${parts.map(([k,b])=>`${LABELS[k]||k} ${(b/1024).toFixed(0)} ك.ب`).join("، ")}</p>
     <p class="sub" style="margin:2px 0;">${pct>=70 ? `<b style="color:${color};">قربت البيانات من الحد — لما توصل 100% يوقف الحفظ. انقل الفواتير المنتهية للأرشيف من الزر تحت.</b>` : (split ? "كل سجل حده 1 ميجابايت تقريباً — تنبيه يطلع لك إذا وصل أي سجل 70%." : "كل بيانات المحل محفوظة بسجل واحد حده 1 ميجابايت تقريباً — تنبيه يطلع لك إذا وصلت 70%.")}</p>

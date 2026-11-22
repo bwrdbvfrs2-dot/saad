@@ -46,7 +46,7 @@ function renderMailTab(){
   const typeLabel = t=> t==="invoice_return_defect"?"فاتورة مرتجعة (خلل)" : t==="invoice_return"?"مرتجع فاتورة" : t==="advance"?"طلب سلفة" : t==="payment_edit"?"تعديل دفعة فاتورة" : "طلب إجازة";
   const detailLine = r=>{
     if(r.type==="invoice_return_defect") return `فاتورة ${esc(r.invoiceNumber)} — ${r.amount.toFixed(0)} ﷼ — المتسبّب: ${esc(r.responsibleUsername)} — السبب: ${esc(r.reason)}`;
-    if(r.type==="invoice_return") return `فاتورة ${esc(r.invoiceNumber)} — يرجع للعميل ${fmtSar(r.amount)} ﷼${r.amount>0?` من ${esc(r.boxLabel||"—")}`:""} — طلبها ${esc(r.createdBy)} — السبب: ${esc(r.reason)}`;
+    if(r.type==="invoice_return") return `فاتورة ${esc(r.invoiceNumber)} — يرجع للمستفيد ${fmtSar(r.amount)} ﷼${r.amount>0?` من ${esc(r.boxLabel||"—")}`:""} — طلبها ${esc(r.createdBy)} — السبب: ${esc(r.reason)}`;
     if(r.type==="advance") return `${esc(r.employeeUsername)} — ${r.amount.toFixed(0)} ﷼ — ${esc(r.reason||"—")}`;
     if(r.type==="payment_edit") return `فاتورة ${esc(r.invoiceNumber)} — الدفعة: كاش ${fmtSar(r.cash)} / شبكة ${fmtSar(r.network)} ﷼ (${r.payDate||"—"}) — طلبها ${esc(r.createdBy)} — السبب: ${esc(r.reason||"—")}${r.usedAt?` — عُدّلت ${r.usedAt}`:""}`;
     if(r.type==="leave") return `${esc(r.employeeUsername)} — من ${r.fromDate} إلى ${r.toDate} — ${esc(r.reason||"—")}`;
@@ -117,7 +117,7 @@ function openReturnRequestModal(invId){
   const boxes = userBoxes(currentUser.username);
   const refundable = Math.max(0, invoicePaid(inv) - invoiceRefunded(inv));
   returnReqInvId = invId;
-  $("returnReqSummary").textContent = `فاتورة ${inv.number} — ${inv.customerName||"—"} — دفع العميل ${fmtSar(refundable)} ريال`;
+  $("returnReqSummary").textContent = `فاتورة ${inv.number} — ${inv.customerName||"—"} — دفع المستفيد ${fmtSar(refundable)} ريال`;
   $("returnReqAmount").value = refundable ? String(+refundable.toFixed(2)) : "0";
   $("returnReqAmount").max = String(refundable);
   $("returnReqBox").innerHTML = boxes.map(b=>`<option value="${b.id}">${esc(b.name)} (${typeLabel(b.type)}) — ${fmtSar(boxTotal(b))} ﷼</option>`).join("");
@@ -132,7 +132,7 @@ async function submitReturnRequest(){
   const reason = $("returnReqReason").value.trim();
   const refundable = Math.max(0, invoicePaid(inv) - invoiceRefunded(inv));
   if(!reason){ showToast("اكتب سبب المرتجع"); return; }
-  if(amount<0 || amount - refundable > 0.01){ showToast(`المبلغ لازم يكون بين 0 و${fmtSar(refundable)} ريال (اللي دفعه العميل)`); return; }
+  if(amount<0 || amount - refundable > 0.01){ showToast(`المبلغ لازم يكون بين 0 و${fmtSar(refundable)} ريال (اللي دفعه المستفيد)`); return; }
   const box = amount>0 ? findCashBox($("returnReqBox").value) : null;
   if(amount>0 && (!box || box.owner!==currentUser.username)){ showToast("اختر صندوقك اللي يطلع منه المبلغ"); return; }
   if(state.invoiceReturns.some(r=>r.invoiceId===inv.id) || pendingReturnRequestOf(inv)){ showToast("هذي الفاتورة عليها مرتجع أو طلب مرتجع مسبقاً"); closeReturnRequestModal(); return; }
@@ -155,11 +155,11 @@ async function decideInvoiceReturnRequest(reqId, approved){
     if(!inv){ showToast("الفاتورة ما عادت موجودة"); return; }
     if(state.invoiceReturns.some(x=>x.invoiceId===inv.id)){ showToast(`الفاتورة ${inv.number} مسجّل لها مرتجع مسبقاً — ارفض الطلب`); return; }
     const refundable = Math.max(0, invoicePaid(inv) - invoiceRefunded(inv));
-    if(r.amount - refundable > 0.01){ showToast(`المبلغ أكبر من اللي دفعه العميل (${fmtSar(refundable)} ريال) — ارفض الطلب`); return; }
+    if(r.amount - refundable > 0.01){ showToast(`المبلغ أكبر من اللي دفعه المستفيد (${fmtSar(refundable)} ريال) — ارفض الطلب`); return; }
     const box = r.amount>0 ? findCashBox(r.boxId) : null;
     if(r.amount>0 && !box){ showToast("صندوق الموظف ما عاد موجود — ارفض الطلب"); return; }
     if(box && boxTotal(box) < r.amount){ showToast(`رصيد صندوق ${r.createdBy} (${fmtSar(boxTotal(box))} ريال) أقل من مبلغ المرتجع`); return; }
-    if(!await showConfirm(`الموافقة على مرتجع فاتورة ${inv.number}؟\nيرجع للعميل ${fmtSar(r.amount)} ريال${box?` من صندوق ${r.createdBy} — ${r.boxLabel}`:""}، والثياب اللي ما انسلّمت تنلغي.`)) return;
+    if(!await showConfirm(`الموافقة على مرتجع فاتورة ${inv.number}؟\nيرجع للمستفيد ${fmtSar(r.amount)} ريال${box?` من صندوق ${r.createdBy} — ${r.boxLabel}`:""}، والثياب اللي ما انسلّمت تنلغي.`)) return;
   }
   // re-read after the confirm box (another device may have changed things meanwhile)
   const req = state.mailRequests.find(x=>x.id===reqId);
@@ -178,7 +178,7 @@ async function decideInvoiceReturnRequest(reqId, approved){
   }
   req.status = "decided"; req.approved = !!approved; req.decidedBy = currentUser.username; req.decidedAt = todayStr();
   state.decisions.push({id:newId(), seq, type:"invoice_return", recipientUsername:req.createdBy, amount: approved ? req.amount : 0, reason:req.reason,
-    message: approved ? `وافق ${currentUser.username} على مرتجع فاتورة #${req.invoiceNumber}${req.amount>0?` — انخصم ${fmtSar(req.amount)} ريال من صندوقك (${req.boxLabel}) وارجعه للعميل`:""}.`
+    message: approved ? `وافق ${currentUser.username} على مرتجع فاتورة #${req.invoiceNumber}${req.amount>0?` — انخصم ${fmtSar(req.amount)} ريال من صندوقك (${req.boxLabel}) وارجعه للمستفيد`:""}.`
                       : `رفض ${currentUser.username} طلب مرتجع فاتورة #${req.invoiceNumber} — ما انخصم شي.`,
     decidedBy:currentUser.username, date:todayStr()});
   if(!await saveStateWithRollback(snapshot)) return;
@@ -248,7 +248,7 @@ function openMailDecisionModal(reqId){
   if(!r) return;
   mailDecisionTargetId = reqId;
   const alreadyReturned = state.invoiceReturns.some(x=>x.invoiceId===r.invoiceId);
-  $("mailDecisionSummary").textContent = `فاتورة ${r.invoiceNumber} — مبلغ ${r.amount.toFixed(0)} ريال — المتسبّب: ${r.responsibleUsername}` + (alreadyReturned ? " — المرتجع واسترداد العميل مسجّلين مسبقاً، القرار يحدد التحميل فقط" : "");
+  $("mailDecisionSummary").textContent = `فاتورة ${r.invoiceNumber} — مبلغ ${r.amount.toFixed(0)} ريال — المتسبّب: ${r.responsibleUsername}` + (alreadyReturned ? " — المرتجع واسترداد المستفيد مسجّلين مسبقاً، القرار يحدد التحميل فقط" : "");
   $("mailDecisionBoxWrap").style.display = alreadyReturned ? "none" : "";
   $("mailDecisionBox").innerHTML = userBoxes(currentUser.username).map(b=>`<option value="${b.id}">${esc(b.name)} (${typeLabel(b.type)})</option>`).join("");
   $("mailDecisionChoice").value = "full";
@@ -371,7 +371,7 @@ function renderReturnsLog(){
     returns.map(r=>`<tr><td>${r.invoiceNumber}</td><td>${esc(r.reason)}</td><td>${r.refundAmount?r.refundAmount.toFixed(0)+" ﷼":"—"}</td><td>${r.lostCost?`<span style="color:var(--loss);">${r.lostCost.toFixed(0)} ﷼</span>`:"—"}</td><td>${r.date}</td><td>${r.recordedBy}</td></tr>`).join("") +
     `</tbody></table></div>` : `<p class="sub">ما فيه مرتجعات مسجّلة بعد.</p>`;
   html += `<div class="stitch"></div><h4 style="margin:0 0 8px;font-size:14px;">سجل الفواتير المحذوفة (${deleted.length})</h4>`;
-  html += deleted.length ? `<div class="table-wrap"><table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>الإجمالي</th><th>تاريخ الحذف</th><th>بواسطة</th></tr></thead><tbody>` +
+  html += deleted.length ? `<div class="table-wrap"><table><thead><tr><th>رقم الفاتورة</th><th>المستفيد</th><th>الإجمالي</th><th>تاريخ الحذف</th><th>بواسطة</th></tr></thead><tbody>` +
     deleted.map(d=>`<tr><td>${esc(d.invoiceSnapshot.number)}</td><td>${esc(d.invoiceSnapshot.customerName||"—")}</td><td>${invoiceSaleTotal(d.invoiceSnapshot).toFixed(0)} ﷼</td><td>${new Date(d.deletedAt).toLocaleString("ar-SA")}</td><td>${d.deletedBy}</td></tr>`).join("") +
     `</tbody></table></div>` : `<p class="sub">ما فيه فواتير محذوفة.</p>`;
   el.innerHTML = html;
@@ -405,14 +405,14 @@ async function saveInvoiceOnce(){
   const number = $("invNumber").value.trim();
   if(!number){ showToast("أدخل رقم الفاتورة"); return; }
   const duplicateInv = state.invoices.find(i=>i.number===number && i.id!==editingId);
-  if(duplicateInv){ showToast(`رقم الفاتورة ${number} مستخدم مسبقاً (فاتورة العميل: ${duplicateInv.customerName||"—"}) — اختر رقم ثاني`); return; }
+  if(duplicateInv){ showToast(`رقم الفاتورة ${number} مستخدم مسبقاً (فاتورة المستفيد: ${duplicateInv.customerName||"—"}) — اختر رقم ثاني`); return; }
   // the date can't be chosen: a new invoice is dated today (server date), an edited one keeps its own date
   const date = editingId ? ((state.invoices.find(i=>i.id===editingId)||{}).date || todayStr()) : todayStr();
   if(!date){ showToast("أدخل تاريخ الفاتورة"); return; }
   const custName = $("custName").value.trim();
   const custMobile = $("custMobile").value.trim();
-  if(!custName){ showToast("أدخل اسم العميل"); return; }
-  if(!custMobile){ showToast("أدخل رقم جوال العميل"); return; }
+  if(!custName){ showToast("أدخل اسم المستفيد"); return; }
+  if(!custMobile){ showToast("أدخل رقم جوال المستفيد"); return; }
   if(!/^[0-9]{10}$/.test(custMobile)){ showToast("رقم الجوال لازم يكون 10 أرقام بالضبط"); return; }
   const garmentCards = Array.from($("garmentsHolder").children);
   for(let i=0;i<garmentCards.length;i++){
@@ -427,7 +427,7 @@ async function saveInvoiceOnce(){
   const pointsToRedeem = (redeemInp && isNewInvoice) ? (parseInt(redeemInp.value)||0) : 0;
   if(pointsToRedeem>0){
     const cust = findCustomerByMobile(custMobile);
-    if(!cust || cust.vip){ showToast("لا يمكن استخدام نقاط لهذا العميل"); return; }
+    if(!cust || cust.vip){ showToast("لا يمكن استخدام نقاط لهذا المستفيد"); return; }
     if(pointsToRedeem < (state.settings.loyaltyMinRedeem||0)){ showToast(`الحد الأدنى لاستخدام النقاط: ${state.settings.loyaltyMinRedeem} نقطة`); return; }
     if(pointsToRedeem > (cust.loyaltyPoints||0)){ showToast(`رصيد النقاط غير كافٍ (المتاح ${cust.loyaltyPoints} نقطة)`); return; }
   }
@@ -485,7 +485,7 @@ async function saveInvoiceOnce(){
     // family members share one mobile — a son's invoice next to his father's is not a duplicate
     const twin = state.invoices.find(i=> i.customerMobile===custMobile && i.date===date && String(i.customerName||"").trim()===custName &&
       i.garments.map(g=>g.price||0).sort((a,b)=>a-b).join(",")===newPrices);
-    if(twin && !await showConfirm(`تنبيه ازدواجية: فيه فاتورة لنفس العميل اليوم بنفس الثياب والأسعار (فاتورة رقم ${twin.number}).\nمتأكد إنها طلب جديد مختلف وتبي تحفظها؟`)) return;
+    if(twin && !await showConfirm(`تنبيه ازدواجية: فيه فاتورة لنفس المستفيد اليوم بنفس الثياب والأسعار (فاتورة رقم ${twin.number}).\nمتأكد إنها طلب جديد مختلف وتبي تحفظها؟`)) return;
   }
   const originMonth = editingId ? state.invoices.find(i=>i.id===editingId).originMonth : date.slice(0,7);
   if(isMonthClosed(originMonth) && editingId){ showToast("هذا الشهر مقفول"); return; }
@@ -661,7 +661,7 @@ async function saveInvoiceOnce(){
     const paid = invData.payments.reduce((a,p)=>a+(p.cash||0)+(p.network||0),0);
     if(paid - total > 0.01){
       state = stateSnapshotBeforeSave; renderAll();
-      showToast(`إجمالي الفاتورة بعد التعديل (${fmtSar(total)} ريال) أقل من المدفوع (${fmtSar(paid)} ريال) — الفرق يُرجَع للعميل من شاشة المرتجعات، مو بالتعديل`);
+      showToast(`إجمالي الفاتورة بعد التعديل (${fmtSar(total)} ريال) أقل من المدفوع (${fmtSar(paid)} ريال) — الفرق يُرجَع للمستفيد من شاشة المرتجعات، مو بالتعديل`);
       return;
     }
     let excess = Math.round((paid + invData.payments.reduce((a,p)=>a+(p.discount||0),0) - total)*100)/100;
@@ -704,7 +704,7 @@ async function saveInvoiceOnce(){
   }
   if(isNewInvoice && state.settings.waWelcomeEnabled && invData.customerMobile){
     const link = waLink(invData.customerMobile, buildWelcomeMessage(invData));
-    $("waWelcomeBanner").innerHTML = `<div class="note-box" style="text-align:center;"><a href="${link}" target="_blank" class="btn btn-gold btn-sm" style="display:inline-block;text-decoration:none;">إرسال رسالة واتساب ترحيبية للعميل</a></div>`;
+    $("waWelcomeBanner").innerHTML = `<div class="note-box" style="text-align:center;"><a href="${link}" target="_blank" class="btn btn-gold btn-sm" style="display:inline-block;text-decoration:none;">إرسال رسالة واتساب ترحيبية للمستفيد</a></div>`;
     $("waWelcomeBanner").style.display = "";
   } else {
     $("waWelcomeBanner").style.display = "none";
@@ -722,7 +722,7 @@ async function saveInvoiceOnce(){
     if(!editingId){ selectedOfferIds = []; appliedPromoCode = null; }
     showToast(editingId ? "تم تحديث الفاتورة" : (appliedOffers.length ? `تم حفظ الفاتورة — تطبيق: ${appliedOffers.join("، ")}` : "تم حفظ الفاتورة"));
     if(!editingId){
-      $("printReceiptBanner").innerHTML = `<button class="btn btn-gold btn-sm" style="width:100%;" onclick="printCustomerReceipt('${invData.id}')">طباعة فاتورة العميل</button>
+      $("printReceiptBanner").innerHTML = `<button class="btn btn-gold btn-sm" style="width:100%;" onclick="printCustomerReceipt('${invData.id}')">طباعة فاتورة المستفيد</button>
         <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:6px;" onclick="shareReceiptViaWhatsApp('${invData.id}')">إرسال الفاتورة واتساب</button>` +
         invData.garments.map((g,i)=>`<button class="btn btn-ghost btn-sm" style="width:100%;margin-top:6px;" onclick="printCuttingCard('${invData.id}', ${i})">طباعة كرت القصاص — ثوب ${i+1}</button>`).join("");
     }
@@ -789,7 +789,7 @@ function renderOverdueDashboard(targetId, withOpenBtn){
     let html = `<div class="garment-card"><span class="tag">${title} (${rows.length})</span>`;
     if(!rows.length){ html += `<p class="sub" style="margin-top:8px;">${emptyMsg}</p>`; }
     else {
-      html += `<div class="table-wrap" style="margin-top:8px;"><table><thead><tr><th>فاتورة</th><th>العميل</th><th>التاريخ</th><th>الحالة</th>${reasonFn?"<th>سبب التأخير</th>":""}${withOpenBtn?"<th></th>":""}</tr></thead><tbody>`;
+      html += `<div class="table-wrap" style="margin-top:8px;"><table><thead><tr><th>فاتورة</th><th>المستفيد</th><th>التاريخ</th><th>الحالة</th>${reasonFn?"<th>سبب التأخير</th>":""}${withOpenBtn?"<th></th>":""}</tr></thead><tbody>`;
       rows.slice(0,15).forEach(({inv,g})=>{
         const st = STATUSES.find(s=>s.v===g.status);
         html += `<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${inv.expectedDeliveryDate||inv.date}</td><td><span class="badge ${st?st.cls:""}">${st?st.label:g.status}</span></td>${reasonFn?`<td class="sub">${reasonFn({inv,g})}</td>`:""}${withOpenBtn?`<td><button type="button" class="btn btn-ghost btn-sm open-overdue-btn" data-number="${esc(inv.number)}">فتح</button></td>`:""}</tr>`;
@@ -910,7 +910,7 @@ function searchInvoiceForDistribution(){
   if(!q && !statusFilter) return;
   const legacyMatches = q ? state.legacyItems.filter(x=> x.status!=="تم التسليم" && (x.name.toLowerCase().includes(q.toLowerCase()) || x.mobile.includes(q))) : [];
   const legacyHtml = legacyMatches.length ? `<div class="stitch"></div><h4 style="font-size:13px;margin:10px 0;color:var(--gold-soft);">أمانات قديمة من الجرد الافتتاحي (لسا ما تسلّمت)</h4>
-    <div class="table-wrap"><table><thead><tr><th>العميل</th><th>الجوال</th><th>الوصف</th><th>المتبقي تسليمه</th><th></th></tr></thead><tbody>
+    <div class="table-wrap"><table><thead><tr><th>المستفيد</th><th>الجوال</th><th>الوصف</th><th>المتبقي تسليمه</th><th></th></tr></thead><tbody>
     ${legacyMatches.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.mobile)}</td><td>${esc(x.desc)}</td><td>${x.count-(x.deliveredCount||0)} من ${x.count}</td><td><button class="btn btn-ghost btn-sm" onclick="openLegacyDeliverModal('${x.id}')">تسليم</button></td></tr>`).join("")}
     </tbody></table></div>` : "";
   // exact invoice number match -> open directly (keeps barcode-scan flow instant)
@@ -924,7 +924,7 @@ function searchInvoiceForDistribution(){
   }).slice(0,30);
   if(!matches.length){ resultsList.innerHTML = legacyHtml || emptyStateHtml("search-x","ما فيه نتائج مطابقة."); refreshLucideIcons(); return; }
   if(matches.length===1 && !legacyMatches.length){ openDistributionInvoice(matches[0]); return; }
-  resultsList.innerHTML = `<div class="table-wrap"><table><thead><tr><th>الفاتورة</th><th>العميل</th><th>الجوال</th><th>التاريخ</th><th></th></tr></thead><tbody>` +
+  resultsList.innerHTML = `<div class="table-wrap"><table><thead><tr><th>الفاتورة</th><th>المستفيد</th><th>الجوال</th><th>التاريخ</th><th></th></tr></thead><tbody>` +
     matches.map(inv=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${inv.date}</td><td><button class="btn btn-ghost btn-sm open-dist-inv-btn" data-number="${inv.number.replace(/"/g,"&quot;")}">فتح</button></td></tr>`).join("") +
     `</tbody></table></div>` + legacyHtml;
   document.querySelectorAll(".open-dist-inv-btn").forEach(btn=> btn.addEventListener("click", ()=> openDistributionInvoiceByNumber(btn.dataset.number)));
@@ -976,7 +976,7 @@ function renderDistributionArea(inv){
   const summaryHtml = `<div class="order-summary-card">
     <div class="order-summary-head"><span class="order-summary-number">${esc(inv.number)}</span><span class="sub" style="margin-right:8px;">${monthDisplay(inv.originMonth)}</span></div>
     <div class="order-summary-grid">
-      ${summaryField("العميل", esc(inv.customerName||"—"))}
+      ${summaryField("المستفيد", esc(inv.customerName||"—"))}
       ${summaryField("رقم الجوال", esc(inv.customerMobile||"—"))}
       ${summaryField("تاريخ الطلب", inv.date)}
       ${summaryField("تاريخ التسليم المتوقع", inv.expectedDeliveryDate||"—")}
@@ -1029,7 +1029,7 @@ function renderDistributionArea(inv){
       <div class="field"><label>رقم سند الشبكة (إلزامي لو فيه شبكة)</label><input type="text" id="distPayReceipt"></div>
     </div>
     <div class="row-3"><div class="field"><label>نوع البطاقة</label><select id="distPayCard" class="card-type-select">${cardTypeOptionsHtml()}</select></div></div>
-    ${(userDiscountEnabled(currentUser)||isCustomerVip(inv.customerMobile))?`<div class="field"><label>خصم (ريال)${isCustomerVip(inv.customerMobile)?` — عميل VIP: بدون حد أقصى`:` — الحد الأقصى لك: ${userMaxDiscountAmount(currentUser,total).toFixed(0)} ريال`}</label><input type="number" id="distPayDiscount" min="0" placeholder="0"></div>`:""}
+    ${(userDiscountEnabled(currentUser)||isCustomerVip(inv.customerMobile))?`<div class="field"><label>خصم (ريال)${isCustomerVip(inv.customerMobile)?` — مستفيد VIP: بدون حد أقصى`:` — الحد الأقصى لك: ${userMaxDiscountAmount(currentUser,total).toFixed(0)} ريال`}</label><input type="number" id="distPayDiscount" min="0" placeholder="0"></div>`:""}
     <button class="btn btn-ghost btn-sm" id="addDistPaymentBtn">إضافة دفعة</button>
     <div class="stitch"></div>
     <button class="btn btn-gold btn-sm" id="saveDistBtn">حفظ التوزيع</button>`;

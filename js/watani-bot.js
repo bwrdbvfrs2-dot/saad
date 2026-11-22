@@ -1,4 +1,4 @@
-// ---------------- وطني بوت — المرحلة 1: قائمة العملاء المحتملين، الإعدادات، وقائمة الإرسال التجريبية ----------------
+// ---------------- وطني بوت — المرحلة 1: قائمة المستفيدين المحتملين، الإعدادات، وقائمة الإرسال التجريبية ----------------
 // Everything the bot keeps lives in its own collections, never inside shop/state (that document has a hard size
 // limit and the conversations would outgrow it):
 //   leads/{mobile}         numbers imported from Excel — people who never ordered here
@@ -71,27 +71,27 @@ async function renderBotTab(){
     <h3 style="margin:0 0 10px;font-size:14px;">الإعدادات</h3>
     <div class="row-3">
       <div class="field"><label>السقف اليومي للرسائل</label><input type="number" id="botDailyCap" min="1" max="1000" value="${s.dailyCap}"></div>
-      <div class="field"><label>العميل خامل بعد (شهر)</label><input type="number" id="botDormantMonths" min="1" max="36" value="${s.dormantMonths}"></div>
+      <div class="field"><label>المستفيد خامل بعد (شهر)</label><input type="number" id="botDormantMonths" min="1" max="36" value="${s.dormantMonths}"></div>
       <div class="field"><label>احتساب الفاتورة نتيجة للحملة خلال (يوم)</label><input type="number" id="botAttributionDays" min="1" max="180" value="${s.attributionDays}"></div>
     </div>
     <h3 style="margin:14px 0 6px;font-size:13px;">ربط واتساب</h3>
     <p class="sub" style="margin-bottom:8px;">القيم من حسابك في Meta (WhatsApp Manager). المفتاح السري ما ينحط هنا أبد — مكانه Secret Manager في Google Cloud.</p>
     <div class="row-3">
       <div class="field"><label>معرّف رقم الواتساب (Phone number ID)</label><input type="text" id="botPhoneNumberId" dir="ltr" value="${esc(s.phoneNumberId||"")}"></div>
-      <div class="field"><label>اسم قالب العملاء الخاملين</label><input type="text" id="botTemplateCustomer" dir="ltr" value="${esc(s.templateCustomer||"")}"></div>
-      <div class="field"><label>اسم قالب العملاء المحتملين</label><input type="text" id="botTemplateLead" dir="ltr" placeholder="نفس قالب العملاء إذا فاضي" value="${esc(s.templateLead||"")}"></div>
+      <div class="field"><label>اسم قالب المستفيدين الخاملين</label><input type="text" id="botTemplateCustomer" dir="ltr" value="${esc(s.templateCustomer||"")}"></div>
+      <div class="field"><label>اسم قالب المستفيدين المحتملين</label><input type="text" id="botTemplateLead" dir="ltr" placeholder="نفس قالب المستفيدين إذا فاضي" value="${esc(s.templateLead||"")}"></div>
     </div>
     <div class="row-3">
       <div class="field"><label>لغة القوالب</label><input type="text" id="botTemplateLang" dir="ltr" value="${esc(s.templateLang||"ar")}"></div>
       <div class="field" style="grid-column:span 2;"><label>أرقام التجربة (يفصل بينها فاصلة)</label><input type="text" id="botTestNumbers" dir="ltr" value="${esc((s.testNumbers||[]).join(", "))}"></div>
     </div>
-    <div class="embro-toggle" style="margin:4px 0;"><input type="checkbox" id="botTestMode" ${s.testMode?"checked":""}><label style="margin:0;">وضع التجربة — الرسائل تروح لأرقام التجربة بس، وما يوصل شي للعملاء</label></div>
+    <div class="embro-toggle" style="margin:4px 0;"><input type="checkbox" id="botTestMode" ${s.testMode?"checked":""}><label style="margin:0;">وضع التجربة — الرسائل تروح لأرقام التجربة بس، وما يوصل شي للمستفيدين</label></div>
     <div class="embro-toggle" style="margin:4px 0;"><input type="checkbox" id="botCampaignsEnabled" ${s.campaignsEnabled?"checked":""}><label style="margin:0;">تشغيل الإرسال اليومي التلقائي (كل يوم الساعة 10 الصبح)</label></div>
     <h3 style="margin:14px 0 6px;font-size:13px;">الرد الآلي بالذكاء الاصطناعي</h3>
-    <div class="embro-toggle" style="margin:4px 0;"><input type="checkbox" id="botAiReplies" ${s.aiRepliesEnabled?"checked":""}><label style="margin:0;">البوت يرد على رسائل العملاء (من معلومات المحل وطلبات العميل نفسه بس)</label></div>
+    <div class="embro-toggle" style="margin:4px 0;"><input type="checkbox" id="botAiReplies" ${s.aiRepliesEnabled?"checked":""}><label style="margin:0;">البوت يرد على رسائل المستفيدين (من معلومات المحل وطلبات المستفيد نفسه بس)</label></div>
     <div class="row-3"><div class="field"><label>أقصى عدد ردود آلية لكل رقم في اليوم</label><input type="number" id="botAiDailyPerNumber" min="1" max="50" value="${s.aiDailyPerNumber}"></div></div>
     <button class="btn btn-gold btn-sm" id="botSaveSettingsBtn">حفظ الإعدادات</button>
-    <button class="btn btn-ghost btn-sm" id="botRunNowBtn" style="margin-inline-start:6px;">إرسال الآن ${s.testMode?"(لأرقام التجربة)":"(للعملاء فعلياً)"}</button>
+    <button class="btn btn-ghost btn-sm" id="botRunNowBtn" style="margin-inline-start:6px;">إرسال الآن ${s.testMode?"(لأرقام التجربة)":"(للمستفيدين فعلياً)"}</button>
     <div id="botRunNowResult" style="margin-top:8px;"></div>
     <div class="stitch"></div>
     <h3 style="margin:0 0 6px;font-size:14px;">محادثات تحتاج موظف</h3>
@@ -100,14 +100,14 @@ async function renderBotTab(){
     <h3 style="margin:0 0 6px;font-size:14px;">آخر عمليات الإرسال</h3>
     ${renderBotRunsHtml()}
     <div class="stitch"></div>
-    <h3 style="margin:0 0 10px;font-size:14px;">قائمة العملاء المحتملين</h3>
-    <p class="sub" style="margin-bottom:8px;">أرقام ناس ما فصّلوا عندك قبل. أول ما يسجّل أي رقم منها فاتورة، يتحوّل لعميل ويطلع من القائمة تلقائياً.</p>
+    <h3 style="margin:0 0 10px;font-size:14px;">قائمة المستفيدين المحتملين</h3>
+    <p class="sub" style="margin-bottom:8px;">أرقام ناس ما فصّلوا عندك قبل. أول ما يسجّل أي رقم منها فاتورة، يتحوّل لمستفيد ويطلع من القائمة تلقائياً.</p>
     <div class="report-grid" style="margin-bottom:10px;">
       <div class="report-card"><div class="st">الإجمالي</div><div class="amt">${counts.total}</div></div>
       <div class="report-card"><div class="st">لم يُتواصل معهم</div><div class="amt">${counts.fresh}</div></div>
       <div class="report-card"><div class="st">تم التواصل</div><div class="amt">${counts.contacted}</div></div>
       <div class="report-card"><div class="st">طلبوا الإيقاف</div><div class="amt">${counts.optedOut}</div></div>
-      <div class="report-card"><div class="st">تحوّلوا لعملاء</div><div class="amt">${counts.converted}</div></div>
+      <div class="report-card"><div class="st">تحوّلوا لمستفيدين</div><div class="amt">${counts.converted}</div></div>
     </div>
     <p class="sub" style="margin-bottom:8px;">الملف يكفي فيه عمود الجوال، والاسم اختياري. البرنامج يتعرف على الأعمدة بنفسه، ويقبل الأرقام بأي صيغة سعودية (05… أو 5… أو ‎+966…).</p>
     <div class="actions-row" style="margin-bottom:10px;"><button class="btn btn-ghost btn-sm" id="leadsTemplateBtn">تحميل قالب الإكسل</button></div>
@@ -115,7 +115,7 @@ async function renderBotTab(){
     <div id="leadsImportPreview"></div>
     <div class="stitch"></div>
     <h3 style="margin:0 0 6px;font-size:14px;">قائمة إرسال اليوم (تجريبية)</h3>
-    <p class="sub" style="margin-bottom:10px;">هذي الأرقام اللي بيرسل لها البوت اليوم لو كان شغال — <b>ما ينرسل شي فعلياً</b>. الأولوية للعملاء الخاملين (الأقدم خمولاً أولاً)، والباقي يتعبى من قائمة العملاء المحتملين.</p>
+    <p class="sub" style="margin-bottom:10px;">هذي الأرقام اللي بيرسل لها البوت اليوم لو كان شغال — <b>ما ينرسل شي فعلياً</b>. الأولوية للمستفيدين الخاملين (الأقدم خمولاً أولاً)، والباقي يتعبى من قائمة المستفيدين المحتملين.</p>
     <div id="botDryRun">${renderBotDryRunHtml()}</div>`;
   $("botSaveSettingsBtn").addEventListener("click", saveBotSettings);
   $("botRunNowBtn").addEventListener("click", botRunNow);
@@ -143,7 +143,7 @@ async function saveBotSettings(){
   const old = {...botData.settings};
   // switching real sending on is the one change that reaches customers — ask once, clearly
   if(campaignsEnabled && !testMode && !(old.campaignsEnabled && !old.testMode)){
-    if(!await showConfirm(`تأكيد: البوت بيبدأ يرسل للعملاء فعلياً كل يوم الساعة 10 الصبح — حتى ${dailyCap} رسالة يومياً. متأكد؟`)) return;
+    if(!await showConfirm(`تأكيد: البوت بيبدأ يرسل للمستفيدين فعلياً كل يوم الساعة 10 الصبح — حتى ${dailyCap} رسالة يومياً. متأكد؟`)) return;
   }
   const next = {dailyCap, dormantMonths, attributionDays, phoneNumberId, templateCustomer, templateLead, templateLang, testNumbers, testMode, campaignsEnabled, aiRepliesEnabled, aiDailyPerNumber};
   try{ await BOT_SETTINGS_DOC.set({...next, updatedAt:serverNowIso(), updatedBy:currentUser.username}, {merge:true}); }
@@ -160,7 +160,7 @@ async function botRunNow(){
   if(!isBotAdmin()){ showToast("للمدير فقط"); return; }
   const s = botData.settings;
   if(!s.phoneNumberId || !s.templateCustomer){ showToast("احفظ معرّف الرقم واسم القالب أولاً"); return; }
-  if(!s.testMode && !await showConfirm(`وضع التجربة موقف — هذا بيرسل للعملاء فعلياً الحين (حتى ${s.dailyCap} رسالة). متأكد؟`)) return;
+  if(!s.testMode && !await showConfirm(`وضع التجربة موقف — هذا بيرسل للمستفيدين فعلياً الحين (حتى ${s.dailyCap} رسالة). متأكد؟`)) return;
   const out = $("botRunNowResult");
   out.innerHTML = `<p class="sub">جاري الإرسال…</p>`;
   try{
@@ -199,7 +199,7 @@ async function showBotConversation(mobile){
     const msgs = snap.docs.map(d=>d.data()).reverse();
     el.innerHTML = msgs.length ? msgs.map(m=>`<div style="margin:4px 0;padding:6px 8px;border-radius:8px;max-width:85%;${m.direction==="in"?"background:var(--card2,#f3f3f3);":"background:rgba(201,162,39,.15);margin-inline-start:auto;"}">
         <div style="font-size:12px;">${esc(m.text||"")}</div>
-        <div class="sub" style="font-size:10px;">${m.direction==="in"?"العميل":(m.kind==="ai"?"البوت (ذكاء اصطناعي)":m.kind==="template"?"رسالة الحملة":"البوت")}${m.at&&m.at.toDate?" — "+m.at.toDate().toLocaleString("ar-SA-u-ca-gregory-nu-latn",{timeZone:"Asia/Riyadh",dateStyle:"short",timeStyle:"short"}):""}${m.status&&m.direction==="out"?" — "+esc(m.status):""}</div>
+        <div class="sub" style="font-size:10px;">${m.direction==="in"?"المستفيد":(m.kind==="ai"?"البوت (ذكاء اصطناعي)":m.kind==="template"?"رسالة الحملة":"البوت")}${m.at&&m.at.toDate?" — "+m.at.toDate().toLocaleString("ar-SA-u-ca-gregory-nu-latn",{timeZone:"Asia/Riyadh",dateStyle:"short",timeStyle:"short"}):""}${m.status&&m.direction==="out"?" — "+esc(m.status):""}</div>
       </div>`).join("") : `<p class="sub">ما فيه رسائل.</p>`;
   }catch(e){ el.innerHTML = `<p class="sub">تعذّر تحميل المحادثة.</p>`; }
 }
@@ -253,10 +253,10 @@ function renderBotDryRunHtml(){
   const {list, dormantTotal, leadsTotal} = computeBotDailyList();
   const cap = botData.settings.dailyCap;
   const daysLeft = Math.ceil((dormantTotal+leadsTotal)/cap);
-  let html = `<p class="sub" style="margin-bottom:8px;">مؤهلون الآن: <b>${dormantTotal}</b> عميل خامل + <b>${leadsTotal}</b> عميل محتمل — بالسقف الحالي (${cap} يومياً) تخلص القائمة خلال <b>${daysLeft||0}</b> يوم تقريباً.</p>`;
+  let html = `<p class="sub" style="margin-bottom:8px;">مؤهلون الآن: <b>${dormantTotal}</b> مستفيد خامل + <b>${leadsTotal}</b> مستفيد محتمل — بالسقف الحالي (${cap} يومياً) تخلص القائمة خلال <b>${daysLeft||0}</b> يوم تقريباً.</p>`;
   if(!list.length) return html + `<p class="sub">ما فيه أحد مؤهل اليوم.</p>`;
   html += `<div style="max-height:360px;overflow:auto;"><table><thead><tr><th>#</th><th>النوع</th><th>الاسم</th><th>الجوال</th><th>التحية</th><th>آخر فاتورة</th></tr></thead><tbody>` +
-    list.map((r,i)=>`<tr><td>${i+1}</td><td>${r.kind==="customer"?"عميل خامل":"عميل محتمل"}</td><td>${esc(r.name||"—")}</td><td>${esc(r.mobile)}</td><td>${esc(botGreeting(r.name))}</td><td>${r.lastInvoice||"—"}</td></tr>`).join("") +
+    list.map((r,i)=>`<tr><td>${i+1}</td><td>${r.kind==="customer"?"مستفيد خامل":"مستفيد محتمل"}</td><td>${esc(r.name||"—")}</td><td>${esc(r.mobile)}</td><td>${esc(botGreeting(r.name))}</td><td>${r.lastInvoice||"—"}</td></tr>`).join("") +
     `</tbody></table></div>`;
   return html;
 }
@@ -266,7 +266,7 @@ async function downloadLeadsTemplate(){
   try{ await loadXlsxLib(); } catch(e){ showToast("تعذّر تحميل مكتبة الإكسل — تأكد من الاتصال"); return; }
   const ws = XLSX.utils.aoa_to_sheet([["الجوال","الاسم","ملاحظة"],["0551234567","محمد العتيبي","قائمة 2024"],["0569876543","",""]]);
   ws["!cols"] = [{wch:16},{wch:22},{wch:18}];
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "العملاء المحتملين");
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "المستفيدين المحتملين");
   const blob = new Blob([XLSX.write(wb, {type:"array", bookType:"xlsx"})], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob); a.download = "leads-import-template.xlsx";
@@ -303,7 +303,7 @@ function buildLeadsImportRows(aoa){
     const note = cols.note>=0 ? String(r[cols.note]??"").trim().slice(0,120) : "";
     let error = null;
     if(!mobile) error = raw ? "رقم غير صحيح أو غير سعودي" : "بدون رقم";
-    else if(customerMobiles.has(mobile)) error = "عميل فعلي عندك — يدخل من مسار العملاء الخاملين";
+    else if(customerMobiles.has(mobile)) error = "مستفيد فعلي عندك — يدخل من مسار المستفيدين الخاملين";
     else if(existing.has(mobile)) error = "موجود في القائمة من قبل";
     else if(seen.has(mobile)) error = "مكرر داخل الملف";
     if(!error) seen.add(mobile);
@@ -348,7 +348,7 @@ async function confirmLeadsImport(){
   const existing = new Set(botData.leads.map(l=>l.mobile));
   const rows = leadsImportPending.rows.filter(r=>!r.error && !customerMobiles.has(r.mobile) && !existing.has(r.mobile));
   if(!rows.length){ showToast("ما فيه أرقام جديدة للإضافة"); return; }
-  if(!await showConfirm(`إضافة ${rows.length} رقم لقائمة العملاء المحتملين؟`)) return;
+  if(!await showConfirm(`إضافة ${rows.length} رقم لقائمة المستفيدين المحتملين؟`)) return;
   const batchId = newId(), importedAt = serverNowIso();
   try{
     for(let i=0;i<rows.length;i+=400){
@@ -358,7 +358,7 @@ async function confirmLeadsImport(){
     }
   } catch(e){ showToast("تعذّر الحفظ — تأكد من الاتصال وقواعد الحماية"); return; }
   logAudit("leads_imported", {batchId, fileName:leadsImportPending.fileName, source, count:rows.length});
-  showToast(`تمت إضافة ${rows.length} رقم لقائمة العملاء المحتملين`);
+  showToast(`تمت إضافة ${rows.length} رقم لقائمة المستفيدين المحتملين`);
   leadsImportPending = null;
   renderBotTab();
 }

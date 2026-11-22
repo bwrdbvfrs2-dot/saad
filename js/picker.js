@@ -125,7 +125,7 @@ function fabricPickerItems(query){
   const NO = "أجرة تفصيل (بدون قماش)";
   const match = (...t)=> !q || t.some(x=> normArabic(x).includes(q));
   const out = [];
-  if(match(NO, "بدون قماش")) out.push({id:"__none__", label:NO, sub:"العميل جايب قماشه"});
+  if(match(NO, "بدون قماش")) out.push({id:"__none__", label:NO, sub:"المستفيد جايب قماشه"});
   const cards = activeFabricCards().map(c=>({c, avail:cardAvailableQty(c)}))
     .filter(({c})=> match(c.name, String(c.code||""), c.origin||"", c.season||""))
     .sort((a,b)=> (b.avail>0) - (a.avail>0) || String(a.c.name).localeCompare(String(b.c.name), "ar"));
@@ -151,7 +151,7 @@ function attachCustomerNamePicker(nameId, mobileId, isEditing){
   const inp = $(nameId);
   if(!inp) return;
   attachPicker(inp, {
-    title: "اختر العميل", desktopOnly: true, openOnFocus: false, emptyText: "عميل جديد — كمّل الاسم والجوال",
+    title: "اختر المستفيد", desktopOnly: true, openOnFocus: false, emptyText: "مستفيد جديد — كمّل الاسم والجوال",
     when: ()=> !$(mobileId).value.trim() && !(isEditing && isEditing()),
     items: customerPickerItems,
     onPick: it=>{

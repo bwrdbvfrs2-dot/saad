@@ -69,7 +69,7 @@ async function runOutreach({ manual = false, by = "schedule" } = {}){
   for(const t of targets){
     const to = toWhatsApp(t.mobile);
     const template = t.kind === "lead" && settings.templateLead ? settings.templateLead : settings.templateCustomer;
-    const name = firstName(t.name) || "عميلنا";
+    const name = firstName(t.name) || "مستفيدنا";
     try{
       const wamid = await sendTemplate({ phoneNumberId:settings.phoneNumberId, token, to, template, lang:settings.templateLang, bodyParams:[name] });
       results.sent++; results.recipients.push({ mobile:t.mobile, kind:t.kind });

@@ -34,8 +34,8 @@ function readRepairPayment(prefix, maxAmount){
 async function saveNewRepair(){
   const name = $("rpName").value.trim(), mobile = $("rpMobile").value.trim(), description = $("rpDesc").value.trim();
   const price = parseFloat($("rpPrice").value)||0;
-  if(!name){ showToast("اكتب اسم العميل"); return; }
-  if(!/^05\d{8}$/.test(mobile)){ showToast("اكتب جوال العميل بصيغة 05XXXXXXXX"); return; }
+  if(!name){ showToast("اكتب اسم المستفيد"); return; }
+  if(!/^05\d{8}$/.test(mobile)){ showToast("اكتب جوال المستفيد بصيغة 05XXXXXXXX"); return; }
   if(!description){ showToast("اكتب وش المطلوب بالصيانة"); return; }
   if(!(price>0)){ showToast("اكتب سعر الصيانة"); return; }
   const snapshot = JSON.parse(JSON.stringify(state));
@@ -99,7 +99,7 @@ async function deliverRepair(id){
     const {payment, error} = readRepairPayment("rpp-"+id+"-", owed);
     if(error){ state = snapshot; showToast(error); return; }
     const got = payment ? payment.cash + payment.network : 0;
-    if(got < owed - 0.001){ state = snapshot; showToast(`باقي على العميل ${fmtSar(owed)} ريال — اكتبه بخانات الدفع قبل التسليم`); return; }
+    if(got < owed - 0.001){ state = snapshot; showToast(`باقي على المستفيد ${fmtSar(owed)} ريال — اكتبه بخانات الدفع قبل التسليم`); return; }
     r.payments.push(payment); applyPaymentToBalances(payment);
   }
   r.status = "تسليم"; r.deliveredDate = todayStr(); r.deliveredBy = currentUser.username;
@@ -114,7 +114,7 @@ async function cancelRepair(id){
   if(!r || r.status==="تسليم" || r.status==="ملغي") return;
   const paid = repairPaid(r);
   if(paid>0 && currentUser.role!=="مدير"){ showToast("الصيانة عليها مدفوعات — إلغاؤها واسترداد المبلغ للمدير بس"); return; }
-  if(!await showConfirm(`إلغاء ${repairLabel(r)}؟${paid>0?` بيرجع للعميل ${paid.toFixed(0)} ريال من نفس الصناديق اللي استلمته.`:""}`)) return;
+  if(!await showConfirm(`إلغاء ${repairLabel(r)}؟${paid>0?` بيرجع للمستفيد ${paid.toFixed(0)} ريال من نفس الصناديق اللي استلمته.`:""}`)) return;
   const snapshot = JSON.parse(JSON.stringify(state));
   r.refunds = [];
   (r.payments||[]).forEach(p=>{
@@ -181,7 +181,7 @@ function renderRepairsList(){
         ${open && owed>0.001 ? `<button class="btn btn-ghost btn-sm" onclick="addRepairPayment('${r.id}')">تسجيل دفعة</button>` : ""}
         ${r.status==="استلام" ? `<button class="btn btn-gold btn-sm" onclick="markRepairReady('${r.id}')">جاهز</button>` : ""}
         ${r.status==="جاهز" ? `<button class="btn btn-gold btn-sm" onclick="deliverRepair('${r.id}')">تسليم${owed>0.001?` وتحصيل ${fmtSar(owed)} ﷼`:""}</button>` : ""}
-        <button class="btn btn-ghost btn-sm" onclick="printRepairReceipt('${r.id}')">إيصال العميل</button>
+        <button class="btn btn-ghost btn-sm" onclick="printRepairReceipt('${r.id}')">إيصال المستفيد</button>
         <button class="btn btn-ghost btn-sm" onclick="printRepairTag('${r.id}')">بطاقة الثوب</button>
         ${open ? `<button class="btn btn-ghost btn-sm" style="color:var(--loss);" onclick="cancelRepair('${r.id}')">إلغاء</button>` : ""}
       </div>
@@ -212,7 +212,7 @@ async function printRepairReceipt(id){
     <p style="margin:2px 0;">رقم الصيانة: <b>${repairLabel(r)}</b></p>
     <p style="margin:2px 0;">التاريخ: ${r.date}</p>
     ${r.expectedDate?`<p style="margin:2px 0;">التسليم المتوقع: ${r.expectedDate}</p>`:""}
-    <p style="margin:2px 0;">العميل: ${esc(r.customerName)}</p>
+    <p style="margin:2px 0;">المستفيد: ${esc(r.customerName)}</p>
     <p style="margin:2px 0;">الجوال: ${esc(r.customerMobile)}</p>
     <hr>
     <p style="margin:2px 0;white-space:pre-line;">${esc(r.description)}</p>

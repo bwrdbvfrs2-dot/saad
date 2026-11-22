@@ -118,7 +118,7 @@ function renderBroadcastList(){
         <a href="${waLink(c.mobile, personalizedMsg)}" target="_blank" class="icon-btn" style="${sent?'opacity:0.5;':''}" onclick="markBroadcastSent('${c.mobile}')" title="إرسال واتساب"><i data-lucide="message-circle"></i></a>
       </span>
     </div>`;
-  }).join("") : `<p class="sub">${imported ? "ما فيه أرقام — ارفع ملف إكسل." : "ما فيه عملاء مطابقين لهذا الفلتر."}</p>`;
+  }).join("") : `<p class="sub">${imported ? "ما فيه أرقام — ارفع ملف إكسل." : "ما فيه مستفيدين مطابقين لهذا الفلتر."}</p>`;
   $("broadcastPageLabel").textContent = `صفحة ${broadcastPage+1} من ${totalPages}`;
 }
 function markBroadcastSent(mobile){
@@ -127,7 +127,7 @@ function markBroadcastSent(mobile){
 }
 function exportBroadcastToExcel(){
   const list = buildBroadcastList();
-  if(!list.length){ showToast("ما فيه عملاء بالقائمة الحالية للتصدير"); return; }
+  if(!list.length){ showToast("ما فيه مستفيدين بالقائمة الحالية للتصدير"); return; }
   const template = $("bcMessageInput").value || state.settings.waPromoMessage;
   const rows = [["الكود","الاسم","رقم الجوال","نص الرسالة"]];
   list.forEach(c=> rows.push([c.code||"", c.name||"", c.mobile, campaignMessage(c.name, template)]));
@@ -138,16 +138,16 @@ function exportBroadcastToExcel(){
   a.href = url; a.download = `broadcast-campaign-${todayStr()}.csv`;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  showToast(`تم تصدير ${list.length} عميل لملف إكسل`);
+  showToast(`تم تصدير ${list.length} مستفيد لملف إكسل`);
 }
 async function resetBroadcastCampaign(){
-  if(!await showConfirm("متأكد تبي تبدأ حملة جديدة؟ بيتصفر مؤشر (تم الإرسال) لكل العملاء.")) return;
+  if(!await showConfirm("متأكد تبي تبدأ حملة جديدة؟ بيتصفر مؤشر (تم الإرسال) لكل المستفيدين.")) return;
   state.broadcastCampaign.sentMobiles = [];
   saveState(); renderBroadcastList();
   showToast("بدأت حملة جديدة");
 }
 function renderCustomers(){
-  $("totalCustomersCount").textContent = `إجمالي عدد العملاء المسجّلين: ${state.customers.length}`;
+  $("totalCustomersCount").textContent = `إجمالي عدد المستفيدين المسجّلين: ${state.customers.length}`;
   const q=($("customerSearch").value||"").trim(); const filter=$("customerFilter").value;
   let customers = getCustomers().filter(c=>customerMatchesFilter(c, filter));
   if(q) customers = customers.filter(c=>c.mobile.includes(q));
@@ -168,7 +168,7 @@ function renderCustomers(){
       const pts = cust ? (cust.loyaltyPoints||0) : 0;
       loyaltyCell = `${tierLabel(tier)}<br><span class="sub">${pts} نقطة</span>${isAdmin?`<br><label style="display:flex;align-items:center;gap:4px;font-size:11px;"><input type="checkbox" class="cust-vip-toggle" data-mobile="${c.mobile}"> اجعله VIP</label>`:""}`;
     }
-    html.push(`<tr><td>${esc(displayCode)}</td><td>${esc(c.name)} ${c.mobile?`<a href="${waLink(c.mobile)}" target="_blank" class="icon-btn" title="فتح واتساب"><i data-lucide="message-circle"></i></a>`:""}</td><td>${esc(c.mobile)}</td><td>${c.lastDate||"—"}</td><td>${c.count}</td><td>${loyaltyCell}</td><td><button class="btn btn-ghost btn-sm" onclick="showCustomerReport('${c.mobile}','${esc(c.name).replace(/'/g,"\\'")}')">تقرير العميل</button> ${waBtn}</td></tr>`);
+    html.push(`<tr><td>${esc(displayCode)}</td><td>${esc(c.name)} ${c.mobile?`<a href="${waLink(c.mobile)}" target="_blank" class="icon-btn" title="فتح واتساب"><i data-lucide="message-circle"></i></a>`:""}</td><td>${esc(c.mobile)}</td><td>${c.lastDate||"—"}</td><td>${c.count}</td><td>${loyaltyCell}</td><td><button class="btn btn-ghost btn-sm" onclick="showCustomerReport('${c.mobile}','${esc(c.name).replace(/'/g,"\\'")}')">تقرير المستفيد</button> ${waBtn}</td></tr>`);
   });
   tbody.innerHTML = html.join("");
   document.querySelectorAll(".cust-vip-toggle").forEach(cb=> cb.addEventListener("change", ()=>{
@@ -178,7 +178,7 @@ function renderCustomers(){
     cust.vip = cb.checked;
     if(cust.vip) cust.loyaltyPoints = 0;
     saveState(); renderAll();
-    showToast(cust.vip ? "تم تفعيل VIP لهذا العميل" : "تم إلغاء VIP لهذا العميل");
+    showToast(cust.vip ? "تم تفعيل VIP لهذا المستفيد" : "تم إلغاء VIP لهذا المستفيد");
   }));
   refreshLucideIcons();
 }
@@ -191,7 +191,7 @@ function saveCustomerNotes(mobile){
 }
 function showCustomerReport(mobile, filterName){
   const invs = state.invoices.filter(i=>(i.customerMobile||"").trim()===mobile && (!filterName || i.customerName===filterName));
-  if(!invs.length){ $("customerReportView").innerHTML=`<p class="sub">ما فيه فواتير لهذا العميل.</p>`; return; }
+  if(!invs.length){ $("customerReportView").innerHTML=`<p class="sub">ما فيه فواتير لهذا المستفيد.</p>`; return; }
   const name = filterName || invs.find(i=>i.customerName)?.customerName || "—";
   let totalSale=0, totalPaid=0, totalDiscount=0, totalRemaining=0;
   const cust = findCustomerByMobile(mobile);
@@ -205,7 +205,7 @@ function showCustomerReport(mobile, filterName){
       </div>
     </div>` : "";
   const notesHtml = `<div class="order-summary-card" style="margin-top:12px;">
-      <div class="order-summary-head"><span class="order-summary-number" style="font-size:14px;">ملاحظات عن العميل</span></div>
+      <div class="order-summary-head"><span class="order-summary-number" style="font-size:14px;">ملاحظات عن المستفيد</span></div>
       <textarea id="customerNotesInput" rows="3" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--ivory);font-family:inherit;font-size:13px;">${esc(cust?.notes||"")}</textarea>
       <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="saveCustomerNotes('${mobile}')">حفظ الملاحظات</button>
     </div>`;
@@ -342,7 +342,7 @@ function showInvoiceDetails(invId){
   }).join("");
   $("invoiceDetailsBody").innerHTML = `<h3 style="margin:0 0 6px;text-align:center;">تفاصيل الفاتورة #${esc(inv.number)}</h3>
     <div class="table-wrap"><table><tbody>
-      <tr><td>العميل</td><td>${esc(inv.customerName||"—")}</td><td>الجوال</td><td>${esc(inv.customerMobile||"—")}</td></tr>
+      <tr><td>المستفيد</td><td>${esc(inv.customerName||"—")}</td><td>الجوال</td><td>${esc(inv.customerMobile||"—")}</td></tr>
       <tr><td>تاريخ الفاتورة</td><td>${d(inv.date)}</td><td>موعد التسليم</td><td>${d(inv.expectedDeliveryDate)}</td></tr>
       <tr><td>أنشأها</td><td>${usr(inv.createdBy)}</td><td>آخر تعديل</td><td>${inv.lastEditedBy?`${esc(inv.lastEditedBy)} — ${d(inv.lastEditedAt)}`:"—"}</td></tr>
       <tr><td>إجمالي البيع</td><td>${fmtSar(invoiceSaleTotal(inv))} ﷼</td><td>المدفوع</td><td>${fmtSar(invoicePaid(inv))} ﷼${invoiceDiscountTotal(inv)?` + خصم ${fmtSar(invoiceDiscountTotal(inv))}`:""}</td></tr>
@@ -386,6 +386,10 @@ function buildDailyReportHtml(day, r, username){
     <div class="dr-head"><div class="dr-shop">${esc(shop)}</div>
       <div class="dr-name">${username ? `التقرير اليومي — ${esc(username)}` : "التقرير اليومي الشامل"}</div>
       <div class="dr-date">${r.to && r.to!==day ? `من ${day} إلى ${r.to}` : day}</div></div>`;
+  // متوسط الثوب: إجمالي الفواتير الجديدة ÷ عدد الثياب فيها (الملغاة ما تدخل)
+  const avgNewThobes = r.newInvoices.flatMap(i=> i.garments.filter(g=> g.status!=="ملغي"));
+  const avgNewTotal = avgNewThobes.reduce((a,g)=> a + garmentSalePrice(g), 0);
+  html += `<div class="dr-avg" style="text-align:right;margin:8px 0 10px;"><span>متوسط الثوب:</span> <b>${avgNewThobes.length ? sar(avgNewTotal/avgNewThobes.length) : "—"}</b> <span class="sub">(${sar(avgNewTotal)} ÷ ${avgNewThobes.length} ثوب)</span></div>`;
   const parts = [];
   // new invoices in two tables that never repeat a thobe: the shop's fabric, and the customer's own fabric
   // (no fabric card). One row per invoice, with the thobe price(s) between the count and the total;
@@ -396,7 +400,7 @@ function buildDailyReportHtml(day, r, username){
     const kind = Object.keys(kinds).length===1 ? Object.keys(kinds)[0] : Object.entries(kinds).map(([k,c])=>`${k} ${c}`).join("، ");
     return gs.length ? {inv, n:gs.length, kind, prices:[...new Set(gs.map(g=>garmentSalePrice(g)))], total:gs.reduce((a,g)=>a+garmentSalePrice(g),0)} : null;
   }).filter(Boolean);
-  const newTable = (title, rows)=> dailySection(title, ["رقم","العميل","عدد الثياب","النوع","سعر الثوب","الإجمالي"],
+  const newTable = (title, rows)=> dailySection(title, ["رقم","المستفيد","عدد الثياب","النوع","سعر الثوب","الإجمالي"],
     rows.map(x=>`<tr><td>${esc(x.inv.number)}</td><td>${esc(x.inv.customerName||"—")}</td><td>${x.n}</td><td>${esc(x.kind)}</td><td>${x.prices.map(v=>fmtSar(v)).join(" / ")} ﷼</td><td>${sar(x.total)}</td></tr>`),
     {foot:`<td colspan="2">الإجمالي</td><td>${rows.reduce((a,x)=>a+x.n,0)} ثوب</td><td></td><td></td><td>${sar(rows.reduce((a,x)=>a+x.total,0))}</td>`});
   const shopRows = groupNew(false), ownRows = groupNew(true);
@@ -415,7 +419,7 @@ function buildDailyReportHtml(day, r, username){
     const c = ps.reduce((a,l)=>a+legacyCashOf(l),0), n = ps.reduce((a,l)=>a+legacyNetworkOf(l),0);
     const nos = ps.map(l=>[ (l.cashReceiptNo||l.voucherNo) ? `قبض ${l.cashReceiptNo||l.voucherNo}` : "", l.networkReceiptNo ? `شبكة ${l.networkReceiptNo}` : "" ].filter(Boolean).join(" / ")).filter(Boolean).join("، ");
     return {c, n, nos}; };
-  if(!username) parts.push(dailySection("تسليمات الجرد الافتتاحي", ["اسم العميل","الجوال","الوصف","كاش","شبكة","السند / الإيصال","المتبقي"],
+  if(!username) parts.push(dailySection("تسليمات الجرد الافتتاحي", ["اسم المستفيد","الجوال","الوصف","كاش","شبكة","السند / الإيصال","المتبقي"],
     r.legacyDelivered.map(x=>{ const d = legacyPaidThatDay(x); return `<tr><td>${esc(x.name)}</td><td>${esc(x.mobile)}</td><td>${esc(x.desc)}</td><td>${d.c?sar(d.c):"—"}</td><td>${d.n?sar(d.n):"—"}</td><td>${esc(d.nos||"—")}</td><td>${x.remaining?sar(x.remaining):"—"}</td></tr>`; })));
   // every amount received, tailoring payments and ready-made sales together, each with what it was for
   const payRows = r.paymentRows.map(({inv,p})=>`<tr data-receipt="${esc((p.cashReceiptNo||"")+" "+(p.networkReceiptNo||p.receipt||""))}"><td>${esc(inv.number)}</td><td>${paymentKindLabel(inv,p)}</td><td>${sar(p.cash)}</td><td>${p.cashReceiptNo||"—"}</td><td>${sar(p.network)}</td><td>${p.networkReceiptNo||p.receipt||"—"}</td><td>${p.discount?sar(p.discount):"—"}</td></tr>`)
@@ -427,7 +431,7 @@ function buildDailyReportHtml(day, r, username){
     {id:"dailyPaymentsTable", foot:`<td colspan="2">الإجمالي</td><td>${sar(r.cash+salesCash)}</td><td></td><td>${sar(r.network+salesNet)}</td><td></td><td>${(r.discount+salesDisc)?sar(r.discount+salesDisc):"—"}</td>`}));
   const repairRows = r.repairPaymentsToday.map(({r:rp,p})=>`<tr><td>ص-${rp.number}</td><td>${esc(rp.customerName||"—")}</td><td>${esc(rp.description||"")}</td><td>${sar(p.cash)}</td><td>${sar(p.network)}</td></tr>`)
     .concat(r.repairsToday.filter(rp=>!r.repairPaymentsToday.some(x=>x.r===rp)).map(rp=>`<tr><td>ص-${rp.number}</td><td>${esc(rp.customerName||"—")}</td><td>${esc(rp.description||"")}</td><td>—</td><td>—</td></tr>`));
-  parts.push(dailySection("الصيانة الخارجية", ["الرقم","العميل","المطلوب","كاش","شبكة"], repairRows));
+  parts.push(dailySection("الصيانة الخارجية", ["الرقم","المستفيد","المطلوب","كاش","شبكة"], repairRows));
   parts.push(dailySection("سندات القبض والصرف", ["رقم السند","النوع","المبلغ","الطرف","السبب"],
     r.vouchersToday.map(v=>`<tr><td>${v.voucherNo}</td><td>${v.type==="receipt"?"قبض":"صرف"}</td><td>${sar(v.amount)}</td><td>${esc(v.party)}</td><td>${esc(v.reason)}</td></tr>`)));
   parts.push(dailySection("المصروفات", ["البند","المبلغ","صُرف لـ","البيان"],
@@ -605,7 +609,7 @@ function findMissingReceiptInvoices(){
   if(!rows.length){
     html = `<p class="sub" style="margin-top:10px;">ما فيه دفعات ناقصة رقم سند.</p>`;
   } else {
-    html = `<div class="table-wrap" style="margin-top:10px;"><table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>تاريخ الدفعة</th><th>كاش</th><th>شبكة</th></tr></thead><tbody>`;
+    html = `<div class="table-wrap" style="margin-top:10px;"><table><thead><tr><th>رقم الفاتورة</th><th>المستفيد</th><th>تاريخ الدفعة</th><th>كاش</th><th>شبكة</th></tr></thead><tbody>`;
     rows.forEach(({inv,p})=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${p.date||"—"}</td><td>${(p.cash||0).toFixed(0)} ﷼</td><td>${(p.network||0).toFixed(0)} ﷼</td></tr>`);
     html += `</tbody></table></div>`;
   }
@@ -871,7 +875,7 @@ function showGarmentInventory(){
   const readyCells = g=>{ if(!readyCols) return ""; const d = g.readyDate ? daysSinceDate(g.readyDate) : null; const left = d===null ? null : readyToSaleDays() - d;
     return `<td>${g.readyDate||"—"}${d!==null?`<br><span style="font-size:11px;">${d} يوم</span>`:""}</td><td style="${left!==null&&left<=7?"color:var(--loss);font-weight:700;":""}">${left===null?"—":left>0?`${left} يوم`:"اليوم"}</td>`; };
   const cols = 8 + (readyCols?2:0);
-  html += `<table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>الجوال</th><th>نوع القماش</th><th>الخياط</th><th>السعر</th><th>الحالة</th><th>شهر الإصدار</th>${readyCols?"<th>جاهز من</th><th>يتحول للبيع بعد</th>":""}</tr></thead><tbody>`;
+  html += `<table><thead><tr><th>رقم الفاتورة</th><th>المستفيد</th><th>الجوال</th><th>نوع القماش</th><th>الخياط</th><th>السعر</th><th>الحالة</th><th>شهر الإصدار</th>${readyCols?"<th>جاهز من</th><th>يتحول للبيع بعد</th>":""}</tr></thead><tbody>`;
   rows.forEach(({inv,g,amount},i)=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}<!--wa:${i}--></td><td>${esc(g.fabricType)}</td><td>${esc(g.tailor||"—")}</td><td>${fmtSar(amount)} ﷼</td><td>${statusLabel(g.status)}</td><td>${monthDisplay(inv.originMonth)}</td>${readyCells(g)}</tr>`);
   if(!rows.length) html+=`<tr><td colspan="${cols}" style="text-align:center;">لا يوجد</td></tr>`;
   html += `</tbody>${rows.length?`<tfoot><tr style="font-weight:700;"><td colspan="5">الإجمالي (${rows.length} ثوب)</td><td>${fmtSar(grandAmount)} ﷼</td><td colspan="${cols-6}"></td></tr></tfoot>`:""}</table>`;
@@ -891,7 +895,7 @@ function showNoFabricWageReport(){
   const title = `تقرير أجرة تفصيل بدون قماش — ${periodLabel("noFabricWage")}`;
   let html = `<h2>${title}</h2>`;
   html += `<p>إجمالي عدد الثياب: <b>${rows.length}</b> — إجمالي الأجرة: <b>${fmtSar(rows.reduce((a,{inv,g})=>a+garmentNetSalePrice(g, inv),0))} ﷼</b></p>`;
-  html += `<table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>الجوال</th><th>الخياط</th><th>الأجرة</th><th>الحالة</th><th>شهر الإصدار</th></tr></thead><tbody>`;
+  html += `<table><thead><tr><th>رقم الفاتورة</th><th>المستفيد</th><th>الجوال</th><th>الخياط</th><th>الأجرة</th><th>الحالة</th><th>شهر الإصدار</th></tr></thead><tbody>`;
   rows.forEach(({inv,g})=> html+=`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${esc(g.tailor||"—")}</td><td>${fmtSar(garmentNetSalePrice(g, inv))} ﷼</td><td>${STATUSES.find(s=>s.v===g.status)?.label||g.status}</td><td>${monthDisplay(inv.originMonth)}</td></tr>`);
   if(!rows.length) html+=`<tr><td colspan="7" style="text-align:center;">لا يوجد</td></tr>`;
   html += `</tbody></table>`;
@@ -999,7 +1003,7 @@ function printUndelivered(){
     inv.garments.forEach(g=>{ if(g.status!=="تسليم"&&g.status!=="ملغي") rows.push({inv,g}); });
   });
   const head = `<h2>تقرير الثياب غير المسلّمة — ${periodLabel("undel")}</h2>`;
-  const cols = `<th>رقم الفاتورة</th><th>العميل</th><th>الجوال</th><th>نوع القماش</th><th>الخياط</th><th>السعر</th><th>الحالة</th><th>شهر الإصدار</th>`;
+  const cols = `<th>رقم الفاتورة</th><th>المستفيد</th><th>الجوال</th><th>نوع القماش</th><th>الخياط</th><th>السعر</th><th>الحالة</th><th>شهر الإصدار</th>`;
   const rowHtml = ({inv,g}, withWa)=> `<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}${withWa && inv.customerMobile ? ` <a href="${waLink(inv.customerMobile, undeliveredWaMessage(inv, g))}" target="_blank" class="icon-btn" title="إرسال تذكير واتساب"><i data-lucide="message-circle"></i></a>` : ""}</td><td>${esc(g.fabricType)}</td><td>${esc(g.tailor||"—")}</td><td>${fmtSar(garmentNetSalePrice(g, inv))} ﷼</td><td>${STATUSES.find(s=>s.v===g.status)?.label||g.status}</td><td>${monthDisplay(inv.originMonth)}</td></tr>`;
   const table = withWa => `<table><thead><tr>${cols}</tr></thead><tbody>${rows.map(r=>rowHtml(r, withWa)).join("") || `<tr><td colspan="8">لا يوجد</td></tr>`}</tbody></table><p>إجمالي: ${rows.length}</p>`;
   const html = head + table(false); // the printed copy has no WhatsApp icons
@@ -1010,7 +1014,7 @@ function printUndelivered(){
 function printCustomers(){
   const filter=$("customerFilter").value;
   const customers = getCustomers().filter(c=>customerMatchesFilter(c, filter));
-  let html = `<h2>قائمة العملاء — ${CUSTOMER_FILTER_LABELS[filter]||filter}</h2><table><thead><tr><th>اسم العميل</th><th>رقم الجوال</th><th>آخر فاتورة</th><th>عدد الفواتير</th></tr></thead><tbody>`;
+  let html = `<h2>قائمة المستفيدين — ${CUSTOMER_FILTER_LABELS[filter]||filter}</h2><table><thead><tr><th>اسم المستفيد</th><th>رقم الجوال</th><th>آخر فاتورة</th><th>عدد الفواتير</th></tr></thead><tbody>`;
   customers.forEach(c=> html+=`<tr><td>${esc(c.name)}</td><td>${c.mobile}</td><td>${c.lastDate||"—"}</td><td>${c.count}</td></tr>`);
   if(!customers.length) html+=`<tr><td colspan="4">لا يوجد</td></tr>`;
   html += `</tbody></table>`; printHtml(html);
@@ -1018,14 +1022,14 @@ function printCustomers(){
 function exportCustomersCsv(){
   const filter=$("customerFilter").value;
   const customers = getCustomers().filter(c=>customerMatchesFilter(c, filter));
-  const rows=[["اسم العميل","رقم الجوال","آخر فاتورة","عدد الفواتير"]];
+  const rows=[["اسم المستفيد","رقم الجوال","آخر فاتورة","عدد الفواتير"]];
   customers.forEach(c=> rows.push([c.name,c.mobile,c.lastDate||"",c.count]));
   const csv="\uFEFF"+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
   const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}); const a=document.createElement("a");
   a.href=URL.createObjectURL(blob); a.download="customers-"+filter+".csv"; a.click();
 }
 function buildCsvString(){
-  const rows=[["رقم الفاتورة","العميل","الجوال","التاريخ","شهر الإصدار","نوع القماش","تطريز","سعر البيع","تكلفة الثوب","الحالة","الخياط","رقم إيصال التسليم"]];
+  const rows=[["رقم الفاتورة","المستفيد","الجوال","التاريخ","شهر الإصدار","نوع القماش","تطريز","سعر البيع","تكلفة الثوب","الحالة","الخياط","رقم إيصال التسليم"]];
   state.invoices.forEach(inv=> inv.garments.forEach(g=>{
     rows.push([inv.number, inv.customerName||"", inv.customerMobile||"", inv.date, inv.originMonth, g.fabricType, g.hasEmbroidery?("نعم - "+g.embroideryPrice):"لا", garmentNetSalePrice(g, inv), garmentCostFor(g,inv).toFixed(2), g.status, g.tailor||"", deliveryReceiptOf(inv,g)==="—" ? "" : deliveryReceiptOf(inv,g)]);
   }));
@@ -1175,7 +1179,7 @@ const REPORT_SECTION_DEFS = [
   {key:"salesRanking", label:"الأكثر والأقل مبيعاً"},
   {key:"vatCalc", label:"حاسبة الضريبة"},
   {key:"returns", label:"المرتجعات والفواتير المحذوفة"},
-  {key:"customers", label:"تقرير العملاء"},
+  {key:"customers", label:"تقرير المستفيدين"},
   {key:"daily", label:"التقرير اليومي"},
   {key:"missingReceipt", label:"فواتير بدون رقم سند"},
   {key:"tailorMonthly", label:"تقرير الخياط الشهري"},

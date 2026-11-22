@@ -144,7 +144,7 @@ function buildReceiptHtml(inv){
     <p style="margin:2px 0;">رقم الفاتورة: ${esc(inv.number)}</p>
     <p style="margin:2px 0;">تاريخ إصدار الفاتورة: ${inv.date}</p>
     <p style="margin:2px 0;">تاريخ التسليم المتوقع: ${inv.expectedDeliveryDate||"—"}</p>
-    <p style="margin:2px 0;">العميل: ${esc(inv.customerName||"—")}</p>
+    <p style="margin:2px 0;">المستفيد: ${esc(inv.customerName||"—")}</p>
     <p style="margin:2px 0;">الجوال: ${esc(inv.customerMobile||"—")}</p>
     <hr>
     <table style="width:100%;border-collapse:collapse;font-size:15px;table-layout:fixed;">
@@ -312,11 +312,11 @@ function buildCuttingCardHtml(inv, gIdx){
       <div style="font-size:9.5px;">
         <p style="margin:1px 0;">تاريخ الفاتورة: <span style="white-space:nowrap;">${inv.date}</span></p>
         <p style="margin:1px 0;">تاريخ التسليم المتوقع: <span style="white-space:nowrap;">${inv.expectedDeliveryDate||"—"}</span></p>
-        <p style="margin:1px 0;">اسم العميل: ${esc(inv.customerName||"—")}</p>
+        <p style="margin:1px 0;">اسم المستفيد: ${esc(inv.customerName||"—")}</p>
       </div>
       <div style="font-size:9.5px;">
-        <p style="margin:1px 0;">جوال العميل: ${esc(inv.customerMobile||"—")}</p>
-        <p style="margin:1px 0;">كود العميل: ${esc(customerCode)}</p>
+        <p style="margin:1px 0;">جوال المستفيد: ${esc(inv.customerMobile||"—")}</p>
+        <p style="margin:1px 0;">كود المستفيد: ${esc(customerCode)}</p>
         <p style="margin:1px 0;">رقم الفاتورة: ${esc(inv.number)}</p>
         <p style="margin:1px 0;font-weight:700;">المتبقي على الفاتورة: ${remainingLine}</p>
       </div>
@@ -529,7 +529,7 @@ async function htmlToPngBlob(html, width, cls){
 async function shareReceiptViaWhatsApp(invId){
   const inv = state.invoices.find(i=>i.id===invId);
   if(!inv) return;
-  if(!inv.customerMobile){ showToast("ما فيه رقم جوال مسجّل لهذا العميل"); return; }
+  if(!inv.customerMobile){ showToast("ما فيه رقم جوال مسجّل لهذا المستفيد"); return; }
   // the shop's choice in the settings: the invoice as a picture (default) or as a text message
   if(state.settings.waInvoiceMode==="text"){ window.open(waLink(inv.customerMobile, buildInvoiceTextMessage(inv)), "_blank"); return; }
   const chat = canShareImageFiles() ? null : window.open("", "_blank");
