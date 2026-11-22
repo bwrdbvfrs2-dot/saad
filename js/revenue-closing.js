@@ -994,6 +994,12 @@ function renderCustomerDebts(){
         <span class="tag">دين سابق — عميل ${c.code} — ${esc(customerDisplayName(c))}</span>
         <p class="sub" style="margin:6px 0;">الجوال: ${esc(c.mobile)} — سُجّل بتاريخ ${c.openingDebtDate||"—"} بمبلغ ${(c.openingDebt||0).toFixed(0)} ﷼${c.openingDebtNote?` — ${esc(c.openingDebtNote)}`:""}</p>
         <p style="font-weight:700;color:var(--loss);margin:6px 0;">المبلغ المتبقي: ${fmtSar(remaining)} ﷼</p>
+        ${openingDebtPaymentsOf(c).length ? `<details style="margin:6px 0;"><summary class="sub" style="cursor:pointer;">سدادات سابقة (${openingDebtPaymentsOf(c).length}) — اضغط للطباعة</summary>
+          <div style="margin-top:6px;">${openingDebtPaymentsOf(c).map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--row-line);">
+            <span class="sub">${esc(p.date||"—")} — ${fmtSar((p.cash||0)+(p.network||0))} ﷼ ${p.cash>0&&!(p.network>0)?"(كاش)":p.network>0&&!(p.cash>0)?"(شبكة)":"(كاش + شبكة)"}${p.cashReceiptNo?` — سند ${p.cashReceiptNo}`:" — بدون رقم سند"}</span>
+            <button class="btn btn-ghost btn-sm" onclick="reprintOpeningDebtReceipt('${c.id}','${p.id}')">طباعة السند</button>
+          </div>`).join("")}</div>
+        </details>` : ""}
         <div class="row-2">
           <div class="field" style="margin-bottom:0;"><label>مبلغ السداد (ريال)</label><input type="number" class="od-settle-amount" data-cust="${c.id}" min="0" max="${remaining}" placeholder="${fmtSar(remaining)}"></div>
           <div class="field" style="margin-bottom:0;"><label>طريقة السداد</label><select class="od-settle-method" data-cust="${c.id}"><option value="cash">كاش</option><option value="network">شبكة — مدى</option><option value="network_visa" ${cardFeeRate("visa")===null?"disabled":""}>شبكة — فيزا / ماستر</option></select></div>
@@ -1187,6 +1193,20 @@ async function settleOpeningDebt(custId){
     printDebtReceipt({date:payment.date, voucherNo:payment.cashReceiptNo, customerName:(cust.individuals&&cust.individuals[0]||{}).name||customerDisplayName(cust), mobile:cust.mobile,
       ref:`دين سابق (قبل النظام) — عميل ${cust.code}`, before:remaining, amount, cash:payment.cash, network:payment.network, after:openingDebtRemaining(cust), by:currentUser.username});
   }
+}
+// reprint the receipt of an opening-debt payment already made (older payments may have no receipt number)
+function reprintOpeningDebtReceipt(custId, payId){
+  const cust = state.customers.find(c=>c.id===custId); if(!cust) return;
+  const list = openingDebtPaymentsOf(cust);
+  const idx = list.findIndex(p=>p.id===payId); if(idx<0) return;
+  const p = list[idx];
+  const start = (cust.openingDebt||0) - (cust.openingDebtWrittenOff||0);
+  const before = start - list.slice(0, idx).reduce((a,x)=>a+(x.cash||0)+(x.network||0),0);
+  const amount = (p.cash||0)+(p.network||0);
+  printDebtReceipt({date:p.date, voucherNo:p.cashReceiptNo||undefined, networkNo:p.networkReceiptNo,
+    customerName:(cust.individuals&&cust.individuals[0]||{}).name||customerDisplayName(cust), mobile:cust.mobile,
+    ref:`دين سابق (قبل النظام) — عميل ${cust.code} — إعادة طباعة`, before:Math.max(0,before), amount, cash:p.cash||0, network:p.network||0,
+    after:Math.max(0, before-amount), by:p.recordedBy||"—"});
 }
 async function payCreditDebt(invId, idx){
   const inv = state.invoices.find(i=>i.id===invId); if(!inv) return;
