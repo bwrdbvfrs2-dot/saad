@@ -1176,7 +1176,9 @@ async function settleOpeningDebt(custId){
   if(amount<=0){ showToast("أدخل مبلغ سداد صحيح"); return; }
   if(amount - remaining > 0.01){ showToast(`المبلغ أكبر من المتبقي (${fmtSar(remaining)} ريال)`); return; }
   const snapshot = JSON.parse(JSON.stringify(state));
-  const payment = {id:newId(), customerId:cust.id, customerCode:cust.code, mobile:cust.mobile, date:todayStr(), cash: method==="cash"?amount:0, network: isNetworkMethod(method)?amount:0, recordedBy: currentUser.username, cardType: isNetworkMethod(method) ? readMethodCard(method) : undefined};
+  const payment = {id:newId(), customerId:cust.id, customerCode:cust.code, mobile:cust.mobile, date:todayStr(), cash: method==="cash"?amount:0, network: isNetworkMethod(method)?amount:0, recordedBy: currentUser.username, cardType: isNetworkMethod(method) ? readMethodCard(method) : undefined,
+    // a cash payment gets its سند قبض number from the same counter as every other receipt (the snapshot above restores it if the save fails)
+    cashReceiptNo: method==="cash" ? nextVoucherNo() : null};
   state.openingDebtPayments.push(payment);
   applyPaymentToBalances(payment);
   if(await saveStateWithRollback(snapshot)){
