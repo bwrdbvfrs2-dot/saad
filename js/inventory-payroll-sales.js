@@ -1295,12 +1295,12 @@ function showEmployeeStatement(){
   rows.forEach(r=>{ run += r.signed; r.balance = run; });
   const period = from||to ? `من ${from||"البداية"} إلى ${to||"اليوم"}` : "كل الفترات";
   let html = `<h2>كشف حساب موظف — ${esc(username)} (${esc(u.role)})</h2><p style="font-size:12px;">الفترة: ${period}</p>`;
-  html += `<table><thead><tr><th>التاريخ</th><th>الحركة</th><th>البيان</th><th>له</th><th>عليه / صُرف</th><th>الرصيد له</th></tr></thead><tbody>`;
-  html += `<tr style="font-weight:700;"><td>${from||"—"}</td><td colspan="4">${from?"رصيد ما قبل الفترة":"الرصيد الافتتاحي"}</td><td>${sar(opening)}</td></tr>`;
-  rows.forEach(({e,signed,balance})=> html += `<tr><td>${e.date||"—"}</td><td>${PAYROLL_TYPE_LABELS[e.type]||e.type}${e.voucherNo?` #${e.voucherNo}`:""}</td><td style="font-size:11.5px;">${esc(e.note||"")}</td><td>${signed>0?fmtSar(signed):""}</td><td>${signed<0?fmtSar(-signed):""}</td><td>${sar(balance)}</td></tr>`);
+  html += `<table><thead><tr><th>التاريخ</th><th>الحركة</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody>`;
+  html += `<tr style="font-weight:700;"><td>${from||"—"}</td><td colspan="4">${from?"رصيد ما قبل الفترة":"الرصيد الافتتاحي"}</td><td>${stmtRed(sar(opening), opening)}</td></tr>`;
+  rows.forEach(({e,signed,balance})=> html += `<tr><td>${e.date||"—"}</td><td>${PAYROLL_TYPE_LABELS[e.type]||e.type}${e.voucherNo?` #${e.voucherNo}`:""}</td><td style="font-size:11.5px;">${esc(e.note||"")}</td><td>${signed>0?fmtSar(signed):""}</td><td>${signed<0?fmtSar(-signed):""}</td><td>${stmtRed(sar(balance), balance)}</td></tr>`);
   if(!rows.length) html += `<tr><td colspan="6" style="text-align:center;">ما فيه حركات بهذي الفترة</td></tr>`;
   const tIn = rows.filter(r=>r.signed>0).reduce((a,r)=>a+r.signed,0), tOut = rows.filter(r=>r.signed<0).reduce((a,r)=>a-r.signed,0);
-  html += `</tbody><tfoot><tr style="font-weight:800;"><td colspan="3">الإجمالي (${rows.length} حركة)</td><td>${fmtSar(tIn)}</td><td>${fmtSar(tOut)}</td><td>${sar(run)}</td></tr></tfoot></table>`;
+  html += `</tbody><tfoot><tr style="font-weight:800;"><td colspan="3">الإجمالي (${rows.length} حركة)</td><td>${fmtSar(tIn)}</td><td>${fmtSar(tOut)}</td><td>${stmtRed(sar(run), run)}</td></tr></tfoot></table>`;
   // per month
   const months = {};
   const mk = m=> months[m] || (months[m] = {entitled:0, bonus:0, paid:0, deducted:0});
@@ -1980,10 +1980,10 @@ function renderItemStatementBody(cardId){
   const balanceBeforePeriod = firstShownIdx>0 ? allLedgerRows[firstShownIdx-1].balance : (card.openingBalance||0);
   const unitTxt = card.type==="fabric" ? unitLabel() : "قطعة";
   let body = `<div class="remaining-box"><span>المتاح حالياً: ${cardAvailableQty(card).toFixed(1)} ${unitTxt}</span><span class="amt">التكلفة الحالية: ${card.currentCost.toFixed(2)} ريال</span></div>`;
-  body += `<h4 style="margin:14px 0 8px;font-size:13px;">حركة المخزون — ${periodLabel("itemStmt")} (دائن = وارد / مدين = صادر)</h4>`;
-  body += `<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>الحركة</th><th>دائن (+)</th><th>مدين (-)</th><th>الرصيد بعدها</th><th>قيمة الرصيد</th></tr></thead><tbody>`;
+  body += `<h4 style="margin:14px 0 8px;font-size:13px;">حركة المخزون — ${periodLabel("itemStmt")} (مدين = وارد / دائن = صادر)</h4>`;
+  body += `<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>الحركة</th><th>مدين (وارد)</th><th>دائن (صادر)</th><th>الرصيد بعدها</th><th>قيمة الرصيد</th></tr></thead><tbody>`;
   body += `<tr><td>—</td><td>الرصيد قبل هذي الفترة</td><td>—</td><td>—</td><td>${balanceBeforePeriod.toFixed(1)}</td><td>${(balanceBeforePeriod*(card.currentCost||0)).toFixed(2)} ريال</td></tr>`;
-  inPeriod.forEach(m=> body += `<tr><td>${m.date||"—"}</td><td>${esc(m.type)}${m.ref?" — "+esc(m.ref):""}</td><td>${m.credit?m.qty.toFixed(1):"—"}</td><td>${!m.credit?m.qty.toFixed(1):"—"}</td><td>${m.balance.toFixed(1)}</td><td>${(m.balance*(card.currentCost||0)).toFixed(2)} ريال</td></tr>`);
+  inPeriod.forEach(m=> body += `<tr><td>${m.date||"—"}</td><td>${esc(m.type)}${m.ref?" — "+esc(m.ref):""}</td><td>${m.credit?m.qty.toFixed(1):"—"}</td><td>${!m.credit?m.qty.toFixed(1):"—"}</td><td>${stmtRed(m.balance.toFixed(1), m.balance)}</td><td>${(m.balance*(card.currentCost||0)).toFixed(2)} ريال</td></tr>`);
   if(!inPeriod.length) body += `<tr><td colspan="6" class="sub" style="text-align:center;padding:14px;">ما فيه حركات بهذي الفترة.</td></tr>`;
   body += `</tbody></table></div>`;
   body += `<p class="sub" style="margin-top:6px;">* عمود "قيمة الرصيد" محسوب بتكلفة الوحدة الحالية (${card.currentCost.toFixed(2)} ريال)، مو بالضرورة سعر الشراء وقت كل حركة تاريخياً.</p>`;
@@ -2097,15 +2097,17 @@ function buildBoxStatement(boxId, from, to){
   const rebuiltNow = (box.openingBalance||0) + moves.reduce((a,m)=>a+m.amount,0);
   return {box, from, to, opening, rows, totalIn, totalOut, closing: run, actualNow: boxTotal(box), driftNow: boxTotal(box) - rebuiltNow};
 }
+// a negative balance (or a debt owed by us) shows in red on every statement
+const stmtRed = (txt, n)=> n < -0.005 ? `<span style="color:var(--loss);font-weight:800;">${txt}</span>` : txt;
 function boxStatementHtml(st){
   const b = st.box;
   const period = st.from||st.to ? `من ${st.from||"البداية"} إلى ${st.to||"اليوم"}` : "كل الفترات";
   let html = `<h2>كشف حساب صندوق — ${esc(b.owner)} — ${esc(b.name)} (${typeLabel(b.type)})</h2><p>الفترة: ${period}</p>`;
-  html += `<table><thead><tr><th>التاريخ</th><th>البيان</th><th>داخل</th><th>خارج</th><th>الرصيد</th></tr></thead><tbody>`;
-  html += `<tr style="font-weight:700;"><td>${st.from||"—"}</td><td>${st.from?"رصيد ما قبل الفترة":"الرصيد الافتتاحي"}</td><td></td><td></td><td>${fmtSar(st.opening)} ﷼</td></tr>`;
-  st.rows.forEach(r=> html += `<tr><td>${r.day||"—"}</td><td>${esc(r.label)}</td><td>${r.amount>=0?fmtSar(r.amount):""}</td><td>${r.amount<0?fmtSar(-r.amount):""}</td><td>${fmtSar(r.balance)} ﷼</td></tr>`);
+  html += `<table><thead><tr><th>التاريخ</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody>`;
+  html += `<tr style="font-weight:700;"><td>${st.from||"—"}</td><td>${st.from?"رصيد ما قبل الفترة":"الرصيد الافتتاحي"}</td><td></td><td></td><td>${stmtRed(fmtSar(st.opening)+" ﷼", st.opening)}</td></tr>`;
+  st.rows.forEach(r=> html += `<tr><td>${r.day||"—"}</td><td>${esc(r.label)}</td><td>${r.amount>=0?fmtSar(r.amount):""}</td><td>${r.amount<0?fmtSar(-r.amount):""}</td><td>${stmtRed(fmtSar(r.balance)+" ﷼", r.balance)}</td></tr>`);
   if(!st.rows.length) html += `<tr><td colspan="5" style="text-align:center;">ما فيه حركات بهذي الفترة</td></tr>`;
-  html += `</tbody><tfoot><tr style="font-weight:700;"><td colspan="2">الإجمالي (${st.rows.length} حركة)</td><td>${fmtSar(st.totalIn)}</td><td>${fmtSar(st.totalOut)}</td><td>${fmtSar(st.closing)} ﷼</td></tr></tfoot></table>`;
+  html += `</tbody><tfoot><tr style="font-weight:700;"><td colspan="2">الإجمالي (${st.rows.length} حركة)</td><td>${fmtSar(st.totalIn)}</td><td>${fmtSar(st.totalOut)}</td><td>${stmtRed(fmtSar(st.closing)+" ﷼", st.closing)}</td></tr></tfoot></table>`;
   if(Math.abs(st.driftNow)>0.01) html += `<p class="sub" style="color:var(--warn);">ملاحظة: رصيد الصندوق الحالي بالنظام ${fmtSar(st.actualNow)} ﷼ — يختلف بـ ${fmtSar(st.driftNow)} ﷼ عن مجموع الحركات المسجّلة (راجع «فحص سلامة الحسابات»).</p>`;
   return html;
 }
