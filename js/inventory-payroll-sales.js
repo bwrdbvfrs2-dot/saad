@@ -86,7 +86,7 @@ function renderTailoringOnlyCard(){
   const t = state.settings.tailoringOnly;
   el.innerHTML = `<div class="garment-card" style="border-color:var(--gold);">
     <span class="tag">كرت صنف: أجرة تفصيل (بدون قماش)</span>
-    <p class="sub" style="margin:6px 0;">للثوب اللي يجيب العميل قماشه — سعر البيع يتعبّى تلقائياً بالفاتورة حسب الفئة، والحد الأدنى يمنع البيع بأقل منه إلا لمن عنده صلاحية خصم (وضمن حدّه). تعديل سعر الرجال يحسب الولادي والطفل تلقائياً.</p>
+    <p class="sub" style="margin:6px 0;">للثوب اللي يجيب المستفيد قماشه — سعر البيع يتعبّى تلقائياً بالفاتورة حسب الفئة، والحد الأدنى يمنع البيع بأقل منه إلا لمن عنده صلاحية خصم (وضمن حدّه). تعديل سعر الرجال يحسب الولادي والطفل تلقائياً.</p>
     <div class="row-3">${BODY_CATEGORIES.map(cat=>`<div class="field"><label>سعر ${cat} (ريال)</label><input type="number" class="to-price" data-cat="${cat}" min="0" value="${t.prices[cat]||""}" placeholder="0"></div>`).join("")}</div>
     <div class="row-3">${BODY_CATEGORIES.map(cat=>`<div class="field"><label>الحد الأدنى ${cat} (ريال)</label><input type="number" class="to-minprice" data-cat="${cat}" min="0" step="5" value="${t.minPrices[cat]||""}" placeholder="0"></div>`).join("")}</div>
   </div>`;
@@ -1521,8 +1521,8 @@ function updateSaleTotal(){
     const allowed = d.vip || userDiscountEnabled(currentUser);
     directInp.disabled = !allowed;
     $("saleDirectDiscountLabel").textContent = allowed
-      ? `خصم مباشر على الإجمالي (ريال) — ${d.vip ? "عميل VIP: أي موظف يقدر يخصم بدون حد (حتى 100%)" : `حدّك الأقصى ${fmtSar(d.maxDirect)} ريال`}`
-      : "خصم مباشر على الإجمالي — ما عندك صلاحية خصم (إلا لعميل VIP)";
+      ? `خصم مباشر على الإجمالي (ريال) — ${d.vip ? "مستفيد VIP: أي موظف يقدر يخصم بدون حد (حتى 100%)" : `حدّك الأقصى ${fmtSar(d.maxDirect)} ريال`}`
+      : "خصم مباشر على الإجمالي — ما عندك صلاحية خصم (إلا لمستفيد VIP)";
   }
   const parts = [];
   if(d.offerDisc>0.001) parts.push(`عرض "${d.offer.name}": ${fmtSar(d.offerDisc)} ﷼`);
@@ -1562,7 +1562,7 @@ function heldSalesLive(){
 }
 async function holdCurrentSale(){
   const name = $("saleCustName").value.trim(), mobile = $("saleCustMobile").value.trim();
-  if(!name || !/^05\d{8}$/.test(mobile)){ showToast("اكتب اسم العميل وجواله أول عشان تقدر تجيب الفاتورة لما يرجع"); return; }
+  if(!name || !/^05\d{8}$/.test(mobile)){ showToast("اكتب اسم المستفيد وجواله أول عشان تقدر تجيب الفاتورة لما يرجع"); return; }
   if((saleCashTouched && (parseFloat($("saleCash").value)||0) > 0) || (parseFloat($("saleNetwork").value)||0) > 0){ showToast("فيه مبلغ مكتوب — الفاتورة المعلّقة تكون بدون أي مبلغ. امسح المبلغ أو احفظ الفاتورة عادي"); return; }
   const lines = Array.from(document.querySelectorAll("#saleItemsHolder .garment-card")).map(div=>({
     itemCardId: div.querySelector(".sl-item").value, qty: parseFloat(div.querySelector(".sl-qty").value)||0, price: parseFloat(div.querySelector(".sl-price").value)||0,
@@ -1594,7 +1594,7 @@ function fetchHeldSale(id){
 }
 async function deleteHeldSale(id){
   const h = (state.heldSales||[]).find(x=>x.id===id); if(!h) return;
-  if(!await showConfirm(`حذف فاتورة المبيعات المعلّقة للعميل ${h.customerName}؟`)) return;
+  if(!await showConfirm(`حذف فاتورة المبيعات المعلّقة للمستفيد ${h.customerName}؟`)) return;
   const snapshot = JSON.parse(JSON.stringify(state));
   state.heldSales = (state.heldSales||[]).filter(x=>x.id!==id);
   if(fetchedHeldSaleId===id) fetchedHeldSaleId = null;
@@ -1679,7 +1679,7 @@ async function saveSaleInvoice(){
   const date = todayStr(); // the date can't be chosen — always today's (server date)
   const custName = $("saleCustName").value.trim();
   const custMobile = $("saleCustMobile").value.trim();
-  if(!custName){ showToast("أدخل اسم العميل"); return; }
+  if(!custName){ showToast("أدخل اسم المستفيد"); return; }
   if(!custMobile || !/^[0-9]{10}$/.test(custMobile)){ showToast("رقم الجوال لازم يكون 10 أرقام"); return; }
   const lineDivs = Array.from(document.querySelectorAll("#saleItemsHolder .garment-card"));
   if(!lineDivs.length){ showToast("أضف صنف واحد على الأقل"); return; }
@@ -1988,7 +1988,7 @@ function renderItemStatementBody(cardId){
   body += `</tbody></table></div>`;
   body += `<p class="sub" style="margin-top:6px;">* عمود "قيمة الرصيد" محسوب بتكلفة الوحدة الحالية (${card.currentCost.toFixed(2)} ريال)، مو بالضرورة سعر الشراء وقت كل حركة تاريخياً.</p>`;
   body += `<h4 style="margin:14px 0 8px;font-size:13px;">الثياب المرتبطة بهذا الصنف — ${periodLabel("itemStmt")} (${garmentRows.length})</h4>`;
-  body += `<div class="table-wrap"><table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>التاريخ</th><th>الكمية</th><th>الحالة</th></tr></thead><tbody>`;
+  body += `<div class="table-wrap"><table><thead><tr><th>رقم الفاتورة</th><th>المستفيد</th><th>التاريخ</th><th>الكمية</th><th>الحالة</th></tr></thead><tbody>`;
   garmentRows.forEach(g=> body += `<tr><td>${g.invNumber}</td><td>${g.customer||"—"}</td><td>${g.date||"—"}</td><td>${g.qty.toFixed(1)}</td><td>${STATUSES.find(s=>s.v===g.status)?.label||g.status}</td></tr>`);
   if(!garmentRows.length) body += `<tr><td colspan="5" class="sub" style="text-align:center;padding:14px;">ما فيه ثياب مرتبطة بهذا الصنف بهذي الفترة.</td></tr>`;
   body += `</tbody></table></div>`;
@@ -2299,7 +2299,7 @@ function printClosingDetail(monthLabel){
     const st = {}; inv.garments.forEach(g=>{ const l=STATUSES.find(s=>s.v===g.status)?.label||g.status; st[l]=(st[l]||0)+1; });
     return `<tr><td>${esc(inv.number)}</td><td>${inv.date||"—"}</td><td>${esc(inv.customerName||"—")}</td><td>${inv.garments.length}</td><td style="font-size:11px;">${Object.entries(st).map(([k,v])=>`${k}: ${v}`).join("، ")}</td><td>${sar(t)}</td><td>${sar(d)}</td><td>${sar(pd)}</td><td>${sar(rem)}</td></tr>`;
   });
-  html += section("فواتير التفصيل", ["رقم","التاريخ","العميل","الثياب","الحالات","الإجمالي","الخصم","المدفوع","المتبقي"], invRows,
+  html += section("فواتير التفصيل", ["رقم","التاريخ","المستفيد","الثياب","الحالات","الإجمالي","الخصم","المدفوع","المتبقي"], invRows,
     `<td colspan="5">الإجمالي</td><td>${sar(tT)}</td><td>${sar(tD)}</td><td>${sar(tP)}</td><td>${sar(tR)}</td>`);
   // collections dated in the month, per user
   const coll = {};
@@ -2314,7 +2314,7 @@ function printClosingDetail(monthLabel){
     `<td>الإجمالي</td><td>${cs.count}</td><td>${sar(cs.cash)}</td><td>${sar(cs.network)}</td><td>${sar(cs.cash+cs.network)}</td>`);
   // ready-made sales
   const sales = state.salesInvoices.filter(x=>inM(x.date));
-  html += section("فواتير المبيعات (الجاهز)", ["رقم","التاريخ","العميل","الأصناف","الصافي"],
+  html += section("فواتير المبيعات (الجاهز)", ["رقم","التاريخ","المستفيد","الأصناف","الصافي"],
     sales.map(x=>`<tr><td>${esc(x.number)}</td><td>${x.date}</td><td>${esc(x.customerName||"—")}</td><td>${x.items.length}</td><td>${sar(saleNetTotal(x))}</td></tr>`),
     `<td colspan="4">الإجمالي</td><td>${sar(sales.reduce((a,x)=>a+saleNetTotal(x),0))}</td>`);
   // expenses

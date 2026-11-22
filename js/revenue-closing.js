@@ -70,20 +70,20 @@ const AUDIT_ACTION_LABELS = {
   payment_edited:"تعديل دفعة", payment_removed:"حذف دفعة", deposit_bypassed:"تجاوز العربون", deposit_bypass_code_set:"كود تجاوز العربون", deposit_bypass_code_cleared:"إلغاء كود تجاوز العربون",
   invoice_measurements_edited:"تعديل مقاسات فاتورة", invoice_held:"تعليق فاتورة", held_invoice_deleted:"حذف فاتورة معلقة", sale_held:"تعليق فاتورة مبيعات", held_sale_deleted:"حذف فاتورة مبيعات معلقة",
   mail_request_decided:"قرار طلب بريد", mail_decision_resolved:"قرار مرتجع خلل", bonus_or_deduction:"مكافأة/خصم", garment_credit_delivered:"تسليم بدين",
-  customer_debt_settled:"سداد دين عميل", credit_debt_settled:"سداد دين تسليم", credit_debt_written_off:"إسقاط دين تسليم",
-  opening_debt_added:"دين افتتاحي لعميل", opening_debt_edited:"تعديل دين افتتاحي", opening_debt_written_off:"إسقاط دين افتتاحي", opening_debt_deleted:"حذف دين افتتاحي", opening_debt_settled:"سداد دين افتتاحي",
+  customer_debt_settled:"سداد دين مستفيد", credit_debt_settled:"سداد دين تسليم", credit_debt_written_off:"إسقاط دين تسليم",
+  opening_debt_added:"دين افتتاحي لمستفيد", opening_debt_edited:"تعديل دين افتتاحي", opening_debt_written_off:"إسقاط دين افتتاحي", opening_debt_deleted:"حذف دين افتتاحي", opening_debt_settled:"سداد دين افتتاحي",
   sewn_date_approved:"اعتماد تاريخ تفصيل", qc_passed:"اجتياز فحص الجودة", qc_rejected:"رفض فحص الجودة", qc_setting_changed:"إعداد فحص الجودة",
   alteration_received:"استلام تعديل", alteration_measurements_changed:"تعديل مقاسات (تعديلات)", legacy_item_delivered:"تسليم بضاعة قديمة",
   repair_received:"استلام تصليح", repair_payment:"دفعة تصليح", repair_ready:"تصليح جاهز", repair_delivered:"تسليم تصليح", repair_cancelled:"إلغاء تصليح", repair_wage_percent_changed:"نسبة أجرة التصليح",
   ready_to_sale_days_changed:"أيام تحويل الجاهز للبيع", expense_category_fixed_toggled:"تصنيف مصروف ثابت", option_image_changed:"تغيير صورة خيار",
   invoices_archived:"أرشفة فواتير", auto_archived:"أرشفة تلقائية", shop_reset_for_go_live:"تصفير للتشغيل", login_account_relinked:"إعادة ربط حساب",
-  daily_report_sent_whatsapp:"إرسال التقرير اليومي", broadcast_list_imported:"استيراد قائمة بث", leads_imported:"استيراد عملاء محتملين",
+  daily_report_sent_whatsapp:"إرسال التقرير اليومي", broadcast_list_imported:"استيراد قائمة بث", leads_imported:"استيراد مستفيدين محتملين",
   bot_settings_changed:"إعدادات البوت", bot_run_now:"تشغيل البوت", bot_conversation_handled:"محادثة بوت", reserved_fixed:"تصحيح المحجوز", theme_color_changed:"لون البرنامج",
 };
 const AUDIT_KEY_LABELS = {
   amount:"المبلغ", refundAmount:"المبلغ المرتجع", reason:"السبب", invoiceNumber:"فاتورة", number:"رقم", invoiceNo:"رقم الفاتورة", seq:"رقم الطلب",
   cash:"كاش", network:"شبكة", total:"الإجمالي", paidTo:"دفع لمن", date:"التاريخ", voucherNo:"رقم السند", voucherNumber:"رقم السند", category:"الفئة",
-  customerName:"العميل", customerMobile:"الجوال", mobile:"الجوال", customerCode:"كود العميل", supplierName:"المورد", username:"الموظف", employeeUsername:"الموظف",
+  customerName:"المستفيد", customerMobile:"الجوال", mobile:"الجوال", customerCode:"كود المستفيد", supplierName:"المورد", username:"الموظف", employeeUsername:"الموظف",
   requestedBy:"طلبه", recordedBy:"سجّله", responsibleUsername:"المسؤول", responsible:"المسؤول", tailor:"الخياط", approved:"القرار", garmentIdx:"ثوب",
   qty:"الكمية", value:"القيمة", items:"الأصناف", count:"العدد", months:"الأشهر", monthLabel:"الشهر", profit:"الربح", from:"من", to:"إلى",
   role:"الدور", tab:"الشاشة", group:"المجموعة", granted:"الحالة", newUsername:"المستخدم", removedUsername:"المستخدم", removedRole:"الدور",
@@ -126,7 +126,7 @@ function describeAuditEntry(r){
     case "funds_transferred": return `تحويل ${fmtSar(d.amount||0)} ﷼ من ${n(d.fromOwner)} إلى ${n(d.toOwner)}${d.purpose?` — ${d.purpose}`:""}`;
     case "expense_recorded": return `مصروف ${fmtSar(d.amount||0)} ﷼${d.paidTo?` — دفع لـ ${d.paidTo}`:""}${d.subItemLabel?` — ${d.subItemLabel}`:""}${d.date?` — ${d.date}`:""}`;
     case "payment_edited": return `تعديل دفعة فاتورة #${n(d.invoiceNumber)}: من كاش ${fmtSar(d.fromCash||0)} / شبكة ${fmtSar(d.fromNetwork||0)} إلى كاش ${fmtSar(d.toCash||0)} / شبكة ${fmtSar(d.toNetwork||0)} ﷼`;
-    case "opening_debt_edited": return `تعديل دين افتتاحي للعميل #${n(d.customerCode)}: من ${fmtSar(d.oldAmount||0)} إلى ${fmtSar(d.newAmount||0)} ﷼${d.reason?` — ${d.reason}`:""}`;
+    case "opening_debt_edited": return `تعديل دين افتتاحي للمستفيد #${n(d.customerCode)}: من ${fmtSar(d.oldAmount||0)} إلى ${fmtSar(d.newAmount||0)} ﷼${d.reason?` — ${d.reason}`:""}`;
     case "month_closed": return `إقفال شهر ${n(d.monthLabel)} — ${n(d.invoiceCount)} فاتورة، ${n(d.garmentCount)} ثوب، الربح ${fmtSar(d.profit||0)} ﷼`;
   }
   const rest = auditFmtObj(d);
@@ -160,7 +160,7 @@ async function loadAndRenderAuditLog(){
   }
 }
 // the mandatory write log — one line per save of shop/state (who, when, which parts changed)
-const WRITE_LOG_PART_LABELS = {invoices:"الفواتير", salesInvoices:"فواتير المبيعات", cashBoxes:"الصناديق", customers:"العملاء", itemCards:"الأصناف",
+const WRITE_LOG_PART_LABELS = {invoices:"الفواتير", salesInvoices:"فواتير المبيعات", cashBoxes:"الصناديق", customers:"المستفيدين", itemCards:"الأصناف",
   expenses:"المصاريف", vouchers:"السندات", payrollLedger:"الرواتب", purchases:"المشتريات", purchaseReturns:"مرتجع المشتريات", suppliers:"الموردين",
   settings:"الإعدادات", users:"المستخدمين", permissions:"الصلاحيات", invoiceReturns:"مرتجع الفواتير", salesReturns:"مرتجع المبيعات",
   transfers:"التحويلات", advisory:"الأرصدة الإرشادية", offers:"العروض", promoCodes:"أكواد الخصم", alterations:"التعديلات", closingReports:"إقفال الشهر"};
@@ -210,7 +210,7 @@ function collectBoxMovements(){
     if(c) add(mainId(l.recordedBy,"cash"), c, "تحصيل قطعة قديمة"+((l.cashReceiptNo||l.voucherNo)?` — سند قبض ${l.cashReceiptNo||l.voucherNo}`:""), l.date);
     if(n) add(mainId(l.recordedBy,"network"), networkNetOf(l), "تحصيل قطعة قديمة — شبكة"+(l.networkReceiptNo?` ${l.networkReceiptNo}`:""), l.date);
   });
-  (state.openingDebtPayments||[]).forEach(p=> pay(p, `تحصيل دين سابق — عميل ${p.customerCode}`, p.date));
+  (state.openingDebtPayments||[]).forEach(p=> pay(p, `تحصيل دين سابق — مستفيد ${p.customerCode}`, p.date));
   (state.repairs||[]).forEach(r=>{
     (r.payments||[]).forEach(p=> pay(p, `دفعة صيانة ص-${r.number}`, p.date));
     (r.refunds||[]).forEach(f=>{
@@ -613,7 +613,7 @@ function renderSensitiveBalanceCards(){
   return `
     <div class="stat-card cost"${click("owedByShop")}><div class="lbl">الديون اللي على المحل</div><div class="val">${fmtSar(b.owedByShop)} ﷼</div>
       ${line("للموردين", b.suppliers)}${line("للدائنين", b.creditors)}${hint}</div>
-    <div class="stat-card sales"${click("owedToShop")}><div class="lbl">الديون اللي للمحل (على العملاء)</div><div class="val">${fmtSar(b.owedToShop)} ﷼</div>
+    <div class="stat-card sales"${click("owedToShop")}><div class="lbl">الديون اللي للمحل (على المستفيدين)</div><div class="val">${fmtSar(b.owedToShop)} ﷼</div>
       ${line("فواتير مسلّمة وما تسددت", b.customers)}${line("ثياب مسلّمة بالآجل", b.credit)}${line("ديون سابقة (قبل النظام)", b.opening)}
       <div style="font-size:11px;color:var(--muted);margin-top:4px;">غير داخل فيها: باقي فواتير لسا ما انسلّمت ${fmtSar(b.inProgress)} ﷼</div>${hint}</div>
     <div class="stat-card" style="border-color:var(--gold-soft);cursor:pointer;" onclick="showSensitiveDetail('wages')" title="اضغط عشان تشوف من وين جا الرقم"><div class="lbl">الأجور المستحقة للموظفين</div><div class="val" style="color:var(--gold-soft);">${fmtSar(b.wagesDue)} ﷼</div>
@@ -655,13 +655,13 @@ function showSensitiveDetail(kind){
       if(rem - c > 0.01) progress.push({inv, rem: rem - c});
     });
     const openings = state.customers.filter(c=>openingDebtRemaining(c)>0.01);
-    html = table("فواتير مسلّمة وما تسددت", ["الفاتورة","العميل","الجوال","التاريخ","المتبقي"],
+    html = table("فواتير مسلّمة وما تسددت", ["الفاتورة","المستفيد","الجوال","التاريخ","المتبقي"],
         delivered.sort((a,b)=>b.rem-a.rem).map(({inv,rem})=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${inv.date}</td><td><b>${sar(rem)}</b></td></tr>`), delivered.reduce((a,x)=>a+x.rem,0))
-      + table("ثياب مسلّمة بالآجل", ["الفاتورة","العميل","الثوب","تاريخ التسليم","المتبقي"],
+      + table("ثياب مسلّمة بالآجل", ["الفاتورة","المستفيد","الثوب","تاريخ التسليم","المتبقي"],
         credit.map(({inv,g,i,o})=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${i+1} — ${esc(g.fabricType||"")}</td><td>${g.deliveredDate||"—"}</td><td><b>${sar(o)}</b></td></tr>`), credit.reduce((a,x)=>a+x.o,0))
-      + table("ديون سابقة (قبل النظام)", ["العميل","الكود","الجوال","تاريخ التسجيل","المتبقي"],
+      + table("ديون سابقة (قبل النظام)", ["المستفيد","الكود","الجوال","تاريخ التسجيل","المتبقي"],
         openings.map(c=>`<tr><td>${esc(customerDisplayName(c))}</td><td>${esc(c.code||"")}</td><td>${esc(c.mobile)}</td><td>${c.openingDebtDate||"—"}</td><td><b>${sar(openingDebtRemaining(c))}</b></td></tr>`), openings.reduce((a,c)=>a+openingDebtRemaining(c),0))
-      + `<p class="sub" style="margin-top:10px;">مو داخلة في الرقم: ${progress.length} فاتورة لسا ما انسلّمت، باقيها ${sar(progress.reduce((a,x)=>a+x.rem,0))} — العميل ما استلم ثوبه بعد.</p>`;
+      + `<p class="sub" style="margin-top:10px;">مو داخلة في الرقم: ${progress.length} فاتورة لسا ما انسلّمت، باقيها ${sar(progress.reduce((a,x)=>a+x.rem,0))} — المستفيد ما استلم ثوبه بعد.</p>`;
   } else if(kind==="wages"){
     title = "الأجور المستحقة للموظفين — من وين جا الرقم";
     const cur = state.settings.currentMonth;
@@ -721,7 +721,7 @@ function renderStuckInvoicesReportInto(targetId){
   const table = (rows, emptyMsg)=>{
     if(!rows.length) return `<p class="sub">${emptyMsg}</p>`;
     const total = rows.reduce((a,r)=>a+r.remaining,0);
-    return `<div class="table-wrap"><table><thead><tr><th>فاتورة</th><th>العميل</th><th>تاريخ الجاهزية</th><th>أيام التعثر</th><th>يتحوّل للبيع بعد</th><th>المتبقي</th><th></th></tr></thead><tbody>
+    return `<div class="table-wrap"><table><thead><tr><th>فاتورة</th><th>المستفيد</th><th>تاريخ الجاهزية</th><th>أيام التعثر</th><th>يتحوّل للبيع بعد</th><th>المتبقي</th><th></th></tr></thead><tbody>
       ${rows.map(({inv,g,daysOverdue,remaining})=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")} ${inv.customerMobile?`<a href="${waLink(inv.customerMobile)}" target="_blank" class="icon-btn" title="فتح واتساب"><i data-lucide="message-circle"></i></a>`:""}</td><td>${g.readyDate}</td><td style="color:var(--loss);font-weight:700;">${daysOverdue} يوم</td><td>${Math.max(0, readyToSaleDays()-daysSinceDate(g.readyDate))} يوم</td><td>${fmtSar(remaining)} ﷼</td><td><button class="btn btn-ghost btn-sm" onclick="switchTab('distribution'); setTimeout(()=>openDistributionInvoiceByNumber('${inv.number.replace(/'/g,"\\'")}'),150);">↩ فتح للتسوية</button></td></tr>`).join("")}
     </tbody></table></div>
     <p style="margin-top:8px;font-weight:700;">إجمالي: ${rows.length} ثوب متعثر — ${total.toFixed(0)} ﷼ متبقي</p>`;
@@ -757,7 +757,7 @@ function buildTailorMonthlyReport(username, monthLabel){
   const sewnDays = inv=> [...new Set(inv.garments.filter(g=> g.tailor===username && g.tailorCompletedDate && g.tailorCompletedDate.slice(0,7)===monthLabel && g.status!=="ملغي").map(g=>g.tailorCompletedDate))].sort().join("، ");
   const tableRows = rows.map(({inv,count})=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${inv.date}</td><td>${sewnDays(inv)}</td><td>${count}</td><td>${fmtSar(wageOf(inv))} ﷼</td></tr>`).join("");
   return `<h3 style="margin:0 0 6px;font-size:15px;">تقرير الخياط ${esc(username)} — ${monthDisplay(monthLabel)}${isMonthClosed(monthLabel)?" (مقفل)":""}</h3>
-    <div class="table-wrap"><table><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>تاريخ الفاتورة</th><th>تاريخ «تم التفصيل»</th><th>عدد الثياب</th><th>الأجرة</th></tr></thead><tbody>${tableRows}</tbody>
+    <div class="table-wrap"><table><thead><tr><th>رقم الفاتورة</th><th>المستفيد</th><th>تاريخ الفاتورة</th><th>تاريخ «تم التفصيل»</th><th>عدد الثياب</th><th>الأجرة</th></tr></thead><tbody>${tableRows}</tbody>
     <tfoot><tr style="font-weight:800;"><td colspan="4">الإجمالي — ${rows.length} فاتورة</td><td>${totalGarments}</td><td>${fmtSar(totalWage)} ﷼</td></tr></tfoot></table></div>` + cancelledNote;
 }
 function buildInvoiceStatusReport(inv){
@@ -960,7 +960,7 @@ function renderDebtsTab(){
       </div>
       <button class="btn btn-gold btn-sm" onclick="payCreditDebt('${inv.id}', ${idx})">تسديد الدين</button>
       ${currentUser && currentUser.role==="مدير" ? `<div class="row-3" style="margin-top:10px;align-items:end;">
-        <div class="field" style="grid-column:span 2;"><label>سبب الإتلاف (للمدير)</label><input type="text" class="debt-writeoff-reason" data-inv="${inv.id}" data-idx="${idx}" placeholder="مثلاً: العميل ما رجع / دين ميؤوس منه"></div>
+        <div class="field" style="grid-column:span 2;"><label>سبب الإتلاف (للمدير)</label><input type="text" class="debt-writeoff-reason" data-inv="${inv.id}" data-idx="${idx}" placeholder="مثلاً: المستفيد ما رجع / دين ميؤوس منه"></div>
         <div class="field"><button class="btn btn-danger btn-sm" onclick="writeOffCreditDebt('${inv.id}', ${idx})">إتلاف الدين</button></div>
       </div>` : ""}
     </div>`;
@@ -991,7 +991,7 @@ function renderCustomerDebts(){
     openings.map(c=>{
       const remaining = openingDebtRemaining(c);
       return `<div class="garment-card">
-        <span class="tag">دين سابق — عميل ${c.code} — ${esc(customerDisplayName(c))}</span>
+        <span class="tag">دين سابق — مستفيد ${c.code} — ${esc(customerDisplayName(c))}</span>
         <p class="sub" style="margin:6px 0;">الجوال: ${esc(c.mobile)} — سُجّل بتاريخ ${c.openingDebtDate||"—"} بمبلغ ${(c.openingDebt||0).toFixed(0)} ﷼${c.openingDebtNote?` — ${esc(c.openingDebtNote)}`:""}</p>
         <p style="font-weight:700;color:var(--loss);margin:6px 0;">المبلغ المتبقي: ${fmtSar(remaining)} ﷼</p>
         ${openingDebtPaymentsOf(c).length ? `<details style="margin:6px 0;"><summary class="sub" style="cursor:pointer;">سدادات سابقة (${openingDebtPaymentsOf(c).length}) — اضغط للطباعة</summary>
@@ -1012,7 +1012,7 @@ function renderCustomerDebts(){
         <p class="sub" style="margin:0 0 6px;font-weight:700;">إجراءات المدير</p>
         <div class="row-2">
           <div class="field" style="margin-bottom:0;"><label>المبلغ الأصلي الصحيح (ريال)</label><input type="number" class="od-edit-amount" data-cust="${c.id}" min="0" value="${c.openingDebt}"></div>
-          <div class="field" style="margin-bottom:0;"><label>السبب</label><input type="text" class="od-admin-reason" data-cust="${c.id}" placeholder="مثلاً: غلط بالإدخال / العميل متوفى"></div>
+          <div class="field" style="margin-bottom:0;"><label>السبب</label><input type="text" class="od-admin-reason" data-cust="${c.id}" placeholder="مثلاً: غلط بالإدخال / المستفيد متوفى"></div>
         </div>
         <div class="actions-row" style="margin-top:8px;">
           <button class="btn btn-ghost btn-sm" onclick="editOpeningDebt('${c.id}')">تعديل المبلغ</button>
@@ -1040,9 +1040,9 @@ function renderCustomerDebts(){
     `<div class="actions-row" style="margin-top:10px;"><button class="btn btn-ghost btn-sm" id="printCustomerDebtsBtn">طباعة / حفظ PDF</button></div>`;
   const printBtn = $("printCustomerDebtsBtn");
   if(printBtn) printBtn.addEventListener("click", ()=>{
-    const html = `<h2>مديونيات العملاء — ${todayStr()}</h2><p>عدد المديونيات: ${debts.length+openings.length} — إجمالي المتبقي: ${totalOwed.toFixed(0)} ريال</p>
-      <table style="width:100%;border-collapse:collapse;"><thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>الجوال</th><th>التاريخ</th><th>المبلغ المتبقي</th></tr></thead><tbody>` +
-      openings.map(c=>`<tr><td>دين سابق (عميل ${c.code})</td><td>${esc(customerDisplayName(c))}</td><td>${esc(c.mobile)}</td><td>${c.openingDebtDate||"—"}</td><td>${openingDebtRemaining(c).toFixed(0)} ريال</td></tr>`).join("") +
+    const html = `<h2>مديونيات المستفيدين — ${todayStr()}</h2><p>عدد المديونيات: ${debts.length+openings.length} — إجمالي المتبقي: ${totalOwed.toFixed(0)} ريال</p>
+      <table style="width:100%;border-collapse:collapse;"><thead><tr><th>رقم الفاتورة</th><th>المستفيد</th><th>الجوال</th><th>التاريخ</th><th>المبلغ المتبقي</th></tr></thead><tbody>` +
+      openings.map(c=>`<tr><td>دين سابق (مستفيد ${c.code})</td><td>${esc(customerDisplayName(c))}</td><td>${esc(c.mobile)}</td><td>${c.openingDebtDate||"—"}</td><td>${openingDebtRemaining(c).toFixed(0)} ريال</td></tr>`).join("") +
       debts.map(inv=>`<tr><td>${esc(inv.number)}</td><td>${esc(inv.customerName||"—")}</td><td>${esc(inv.customerMobile||"—")}</td><td>${inv.date}</td><td>${invoiceRemaining(inv).toFixed(0)} ريال</td></tr>`).join("") +
       `</tbody></table>`;
     printHtml(html);
@@ -1057,7 +1057,7 @@ function printDebtReceipt(r){
   printHtml(`<h2>سند قبض — سداد مديونية${r.voucherNo?` — رقم ${r.voucherNo}`:""}</h2>
     <p style="font-size:12px;">${state.settings.shopName?esc(state.settings.shopName)+" — ":""}التاريخ: ${r.date}</p>
     <table><tbody>
-      ${row("العميل", `${esc(r.customerName||"—")}${r.mobile?` — ${esc(r.mobile)}`:""}`)}
+      ${row("المستفيد", `${esc(r.customerName||"—")}${r.mobile?` — ${esc(r.mobile)}`:""}`)}
       ${row("عن", esc(r.ref))}
       ${row("المديونية قبل السداد", sar(r.before))}
       ${row("المبلغ المستلم", sar(r.amount), true)}
@@ -1065,7 +1065,7 @@ function printDebtReceipt(r){
       ${row("المتبقي بعد السداد", sar(r.after), true)}
       ${row("استلمه", esc(r.by||"—"))}
     </tbody></table>
-    <p style="margin-top:26px;">توقيع العميل: ____________ &nbsp;&nbsp;&nbsp; توقيع المستلم: ____________</p>`);
+    <p style="margin-top:26px;">توقيع المستفيد: ____________ &nbsp;&nbsp;&nbsp; توقيع المستلم: ____________</p>`);
 }
 async function settleCustomerDebt(invId){
   const inv = state.invoices.find(i=>i.id===invId);
@@ -1079,7 +1079,7 @@ async function settleCustomerDebt(invId){
   const method = methodSel.value;
   if(!inv.payments) inv.payments=[];
   const snapshot = JSON.parse(JSON.stringify(state));
-  const payment = {id:Date.now()+"-settle", date:todayStr(), cash: method==="cash"?amount:0, network: isNetworkMethod(method)?amount:0, receipt:"", recordedBy: currentUser.username, note:"سداد من شاشة مديونيات العملاء", cardType: isNetworkMethod(method) ? readMethodCard(method) : undefined};
+  const payment = {id:Date.now()+"-settle", date:todayStr(), cash: method==="cash"?amount:0, network: isNetworkMethod(method)?amount:0, receipt:"", recordedBy: currentUser.username, note:"سداد من شاشة مديونيات المستفيدين", cardType: isNetworkMethod(method) ? readMethodCard(method) : undefined};
   inv.payments.push(payment);
   applyPaymentToBalances(payment); // this was missing entirely before — the cash/network was never credited to any box
   if(await saveStateWithRollback(snapshot)){
@@ -1098,7 +1098,7 @@ async function addOpeningDebtCustomer(){
   const mobile = $("odMobile").value.trim();
   const amount = parseFloat($("odAmount").value)||0;
   const note = $("odNote").value.trim();
-  if(!name){ showToast("أدخل اسم العميل"); return; }
+  if(!name){ showToast("أدخل اسم المستفيد"); return; }
   if(!/^[0-9]{10}$/.test(mobile)){ showToast("رقم الجوال لازم يكون 10 أرقام"); return; }
   if(amount<=0){ showToast("أدخل مبلغ الدين السابق"); return; }
   const existing = findCustomerByMobile(mobile);
@@ -1112,7 +1112,7 @@ async function addOpeningDebtCustomer(){
   if(await saveStateWithRollback(snapshot)){
     logAudit("opening_debt_added", {customerCode:cust.code, mobile, amount});
     ["odName","odMobile","odAmount","odNote"].forEach(id=> $(id).value="");
-    showToast(`تم حفظ العميل — كوده ${cust.code} — وعليه دين سابق ${amount.toFixed(0)} ريال`);
+    showToast(`تم حفظ المستفيد — كوده ${cust.code} — وعليه دين سابق ${amount.toFixed(0)} ريال`);
   }
 }
 // ---- admin-only corrections of an opening debt. Each one is audited with the old and new figures.
@@ -1133,13 +1133,13 @@ async function editOpeningDebt(custId){
   if(Math.abs(newAmount - cust.openingDebt) < 0.01){ showToast("نفس المبلغ الحالي"); return; }
   const reason = openingDebtAdminReason(custId);
   if(!reason){ showToast("اكتب سبب التعديل"); return; }
-  if(!await confirmWithPassword(`تعديل الدين السابق للعميل ${cust.code} من ${cust.openingDebt.toFixed(0)} إلى ${newAmount.toFixed(0)} ريال\nالسبب: ${reason}\nأدخل كلمة مرورك للتأكيد.`)) return;
+  if(!await confirmWithPassword(`تعديل الدين السابق للمستفيد ${cust.code} من ${cust.openingDebt.toFixed(0)} إلى ${newAmount.toFixed(0)} ريال\nالسبب: ${reason}\nأدخل كلمة مرورك للتأكيد.`)) return;
   const oldAmount = cust.openingDebt;
   const snapshot = JSON.parse(JSON.stringify(state));
   cust.openingDebt = newAmount;
   if(await saveStateWithRollback(snapshot)){
     logAudit("opening_debt_edited", {customerCode:cust.code, oldAmount, newAmount, reason});
-    showToast(`تم تعديل الدين السابق للعميل ${cust.code} من ${oldAmount.toFixed(0)} إلى ${newAmount.toFixed(0)} ريال`);
+    showToast(`تم تعديل الدين السابق للمستفيد ${cust.code} من ${oldAmount.toFixed(0)} إلى ${newAmount.toFixed(0)} ريال`);
   }
 }
 async function writeOffOpeningDebt(custId){
@@ -1148,14 +1148,14 @@ async function writeOffOpeningDebt(custId){
   if(remaining<=0.01){ showToast("ما عليه متبقي"); return; }
   const reason = openingDebtAdminReason(custId);
   if(!reason){ showToast("اكتب سبب الإتلاف"); return; }
-  if(!await confirmWithPassword(`إتلاف المتبقي من الدين السابق على العميل ${cust.code} (${fmtSar(remaining)} ريال)؟ يختفي من المديونيات والتنبيهات ويبقى مسجّلاً في سجل التدقيق.\nأدخل كلمة مرورك للتأكيد.`)) return;
+  if(!await confirmWithPassword(`إتلاف المتبقي من الدين السابق على المستفيد ${cust.code} (${fmtSar(remaining)} ريال)؟ يختفي من المديونيات والتنبيهات ويبقى مسجّلاً في سجل التدقيق.\nأدخل كلمة مرورك للتأكيد.`)) return;
   const snapshot = JSON.parse(JSON.stringify(state));
   // the debt was never booked as revenue, so writing it off moves no money and touches no P&L figure
   cust.openingDebtWrittenOff = (cust.openingDebtWrittenOff||0) + remaining;
   cust.openingDebtWriteOffs = (cust.openingDebtWriteOffs||[]).concat([{date:todayStr(), amount:remaining, reason, by:currentUser.username}]);
   if(await saveStateWithRollback(snapshot)){
     logAudit("opening_debt_written_off", {customerCode:cust.code, amount:remaining, reason});
-    showToast(`تم إتلاف ${fmtSar(remaining)} ريال من الدين السابق للعميل ${cust.code}`);
+    showToast(`تم إتلاف ${fmtSar(remaining)} ريال من الدين السابق للمستفيد ${cust.code}`);
   }
 }
 async function deleteOpeningDebt(custId){
@@ -1164,13 +1164,13 @@ async function deleteOpeningDebt(custId){
   if(openingDebtPaymentsOf(cust).length){ showToast("انسدد جزء من هذا الدين — ما ينحذف. عدّل المبلغ أو أتلف المتبقي"); return; }
   const reason = openingDebtAdminReason(custId);
   if(!reason){ showToast("اكتب سبب الحذف"); return; }
-  if(!await confirmWithPassword(`حذف الدين السابق (${cust.openingDebt.toFixed(0)} ريال) عن العميل ${cust.code} نهائياً؟ العميل نفسه يبقى مسجّلاً.\nأدخل كلمة مرورك للتأكيد.`)) return;
+  if(!await confirmWithPassword(`حذف الدين السابق (${cust.openingDebt.toFixed(0)} ريال) عن المستفيد ${cust.code} نهائياً؟ المستفيد نفسه يبقى مسجّلاً.\nأدخل كلمة مرورك للتأكيد.`)) return;
   const snapshot = JSON.parse(JSON.stringify(state));
   const amount = cust.openingDebt;
   ["openingDebt","openingDebtDate","openingDebtBy","openingDebtNote","openingDebtWrittenOff","openingDebtWriteOffs"].forEach(k=> delete cust[k]);
   if(await saveStateWithRollback(snapshot)){
     logAudit("opening_debt_deleted", {customerCode:cust.code, amount, reason});
-    showToast(`تم حذف الدين السابق عن العميل ${cust.code}`);
+    showToast(`تم حذف الدين السابق عن المستفيد ${cust.code}`);
   }
 }
 async function settleOpeningDebt(custId){
@@ -1191,7 +1191,7 @@ async function settleOpeningDebt(custId){
     logAudit("opening_debt_settled", {customerCode:cust.code, amount, method});
     showToast(`تم تسجيل سداد ${amount.toFixed(0)} ريال من الدين السابق — المتبقي ${openingDebtRemaining(cust).toFixed(0)} ريال`);
     printDebtReceipt({date:payment.date, voucherNo:payment.cashReceiptNo, customerName:(cust.individuals&&cust.individuals[0]||{}).name||customerDisplayName(cust), mobile:cust.mobile,
-      ref:`دين سابق (قبل النظام) — عميل ${cust.code}`, before:remaining, amount, cash:payment.cash, network:payment.network, after:openingDebtRemaining(cust), by:currentUser.username});
+      ref:`دين سابق (قبل النظام) — مستفيد ${cust.code}`, before:remaining, amount, cash:payment.cash, network:payment.network, after:openingDebtRemaining(cust), by:currentUser.username});
   }
 }
 // reprint the receipt of an opening-debt payment already made (older payments may have no receipt number)
@@ -1205,7 +1205,7 @@ function reprintOpeningDebtReceipt(custId, payId){
   const amount = (p.cash||0)+(p.network||0);
   printDebtReceipt({date:p.date, voucherNo:p.cashReceiptNo||undefined, networkNo:p.networkReceiptNo,
     customerName:(cust.individuals&&cust.individuals[0]||{}).name||customerDisplayName(cust), mobile:cust.mobile,
-    ref:`دين سابق (قبل النظام) — عميل ${cust.code} — إعادة طباعة`, before:Math.max(0,before), amount, cash:p.cash||0, network:p.network||0,
+    ref:`دين سابق (قبل النظام) — مستفيد ${cust.code} — إعادة طباعة`, before:Math.max(0,before), amount, cash:p.cash||0, network:p.network||0,
     after:Math.max(0, before-amount), by:p.recordedBy||"—"});
 }
 async function payCreditDebt(invId, idx){

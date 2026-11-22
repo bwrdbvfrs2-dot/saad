@@ -241,7 +241,7 @@ function computeShiftExpected(username, date){
   (state.openingDebtPayments||[]).forEach(p=>{
     if(p.recordedBy===username && p.date===date){
       sysCash += p.cash||0; sysNetwork += p.network||0;
-      payRefs.push({source:"دين سابق", invNumber:"عميل "+p.customerCode, cash:p.cash||0, network:p.network||0, cashReceiptNo:null, networkReceiptNo:p.receipt||null});
+      payRefs.push({source:"دين سابق", invNumber:"مستفيد "+p.customerCode, cash:p.cash||0, network:p.network||0, cashReceiptNo:null, networkReceiptNo:p.receipt||null});
     }
   });
   (state.repairs||[]).forEach(r=> (r.payments||[]).forEach(p=>{
@@ -453,7 +453,7 @@ function allVoucherEntries(){
   };
   state.invoices.forEach(inv=> (inv.payments||[]).forEach(p=> pay(p, `دفعة ${paymentKindLabel(inv,p)||""} — فاتورة تفصيل #${inv.number} — ${inv.customerName||"—"} ${inv.customerMobile||""}`, {invId:inv.id})));
   (state.salesInvoices||[]).forEach(x=>{ if(x.payment) pay({...x.payment, date:x.payment.date||x.date, recordedBy:x.payment.recordedBy||x.recordedBy}, `فاتورة مبيعات #${x.number} — ${x.customerName||"—"}`); });
-  (state.openingDebtPayments||[]).forEach(p=> pay(p, `تحصيل دين سابق — عميل ${p.customerCode||""} ${p.mobile||""}`));
+  (state.openingDebtPayments||[]).forEach(p=> pay(p, `تحصيل دين سابق — مستفيد ${p.customerCode||""} ${p.mobile||""}`));
   (state.repairs||[]).forEach(r=>{
     (r.payments||[]).forEach(p=> pay(p, `دفعة صيانة ص-${r.number}${r.customerName?" — "+r.customerName:""}`));
     (r.refunds||[]).forEach(f=> push("صرف", f.voucherNo, {date:f.date, amount:(f.cash||0)+(f.network||0), title:`استرداد صيانة ملغاة ص-${r.number}`, by:f.owner, box:mainBox(f.owner, f.cash?"cash":"network")}));
@@ -995,8 +995,8 @@ function updateLiveTotals(){
   if($("directDiscountLabel")) $("directDiscountLabel").textContent = isManagerUser(currentUser)
     ? "خصم مباشر (ريال) — مدير: خصم مفتوح حتى لو فيه عرض أو كود خصم"
     : directDiscountVip
-    ? "خصم مباشر (ريال) — عميل VIP: أي موظف يقدر يخصم بدون حد (حتى 100%)"
-    : userDiscountEnabled(currentUser) ? `خصم مباشر (ريال) — حدّك الأقصى ${maxDirectDiscount.toFixed(0)} ريال` : "خصم مباشر (ريال) — ما عندك صلاحية خصم (إلا لعميل VIP)";
+    ? "خصم مباشر (ريال) — مستفيد VIP: أي موظف يقدر يخصم بدون حد (حتى 100%)"
+    : userDiscountEnabled(currentUser) ? `خصم مباشر (ريال) — حدّك الأقصى ${maxDirectDiscount.toFixed(0)} ريال` : "خصم مباشر (ريال) — ما عندك صلاحية خصم (إلا لمستفيد VIP)";
   if(directDiscount > maxDirectDiscount){ directDiscount = maxDirectDiscount; if(directDiscountInp) directDiscountInp.value = maxDirectDiscount.toFixed(0); }
   const totalDiscount = loyaltyDiscount + promoDiscount + directDiscount;
   $("liveInvoiceTotal").textContent = prices.toFixed(0)+" ﷼";
@@ -1273,7 +1273,7 @@ function heldInvoicesLive(){
 async function holdCurrentInvoice(){
   if(editingId){ showToast("التعليق للفاتورة الجديدة بس — هذي فاتورة محفوظة"); return; }
   const name = $("custName").value.trim(), mobile = $("custMobile").value.trim();
-  if(!name || !/^05\d{8}$/.test(mobile)){ showToast("اكتب اسم العميل وجواله أول عشان تقدر تجيب الفاتورة لما يرجع"); return; }
+  if(!name || !/^05\d{8}$/.test(mobile)){ showToast("اكتب اسم المستفيد وجواله أول عشان تقدر تجيب الفاتورة لما يرجع"); return; }
   if(paymentsListTemp.length){ showToast("فيه دفعات مضافة — الفاتورة المعلّقة تكون بدون أي مبلغ. احذف الدفعات أو احفظ الفاتورة عادي"); return; }
   const garments = readGarmentFields();
   // keep the fabric choice exactly as picked — "أجرة تفصيل (بدون قماش)" included (it reads back as "")
@@ -1313,7 +1313,7 @@ function fetchHeldInvoice(id){
 }
 async function deleteHeldInvoice(id){
   const h = (state.heldInvoices||[]).find(x=>x.id===id); if(!h) return;
-  if(!await showConfirm(`حذف الفاتورة المعلّقة للعميل ${h.customerName}؟`)) return;
+  if(!await showConfirm(`حذف الفاتورة المعلّقة للمستفيد ${h.customerName}؟`)) return;
   const snapshot = JSON.parse(JSON.stringify(state));
   state.heldInvoices = (state.heldInvoices||[]).filter(x=>x.id!==id);
   if(fetchedHeldId===id) fetchedHeldId = null;
@@ -1390,7 +1390,7 @@ function restoreInvoiceDraft(){
   renderGarmentFields(d.garments);
   ["input","change"].forEach(ev=> $("custMobile").dispatchEvent(new Event(ev)));
   updateLiveTotals(); renderInvoiceDraftBanner();
-  showToast("رجعت الفاتورة بالعميل والثياب والمقاسات — أضف الدفعة واحفظ");
+  showToast("رجعت الفاتورة بالمستفيد والثياب والمقاسات — أضف الدفعة واحفظ");
 }
 function loadInvoiceIntoForm(inv){
   switchTab("invoice");
@@ -1464,7 +1464,7 @@ async function submitInvoiceReturn(){
   // a second return on the same invoice would refund the customer again
   if(state.invoiceReturns.some(r=>r.invoiceId===inv.id)){ showToast(`الفاتورة ${num} مسجّل لها مرتجع مسبقاً — ما يمكن ترجيعها مرة ثانية`); return; }
   const refundable = invoicePaid(inv) - invoiceRefunded(inv);
-  if(refundAmount - refundable > 0.01){ showToast(`المبلغ المرتجع أكبر من اللي دفعه العميل فعلياً (${refundable.toFixed(0)} ريال)`); return; }
+  if(refundAmount - refundable > 0.01){ showToast(`المبلغ المرتجع أكبر من اللي دفعه المستفيد فعلياً (${refundable.toFixed(0)} ريال)`); return; }
   const responsibleUsername = $("returnResponsible").value;
   const pendingRequest = responsibleUsername && state.mailRequests.find(m=>m.type==="invoice_return_defect" && m.invoiceId===inv.id && m.status==="pending");
   const preReturnSaleTotal = invoiceSaleTotal(inv);

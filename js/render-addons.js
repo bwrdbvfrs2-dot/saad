@@ -137,7 +137,7 @@ function renderInvoiceLog(curInvoices){
     tr.innerHTML = `<td><b>${esc(inv.number)}</b>${otherMonth}</td><td>${esc(inv.customerName||"—")}${inv.customerMobile?`<br><span class="sub" style="font-size:10.5px;">${esc(inv.customerMobile)}</span>`:""}${byLine}</td><td>${inv.date}</td>
       <td>${fmtSar(s)} ﷼${disc>0.004?`<br><span class="sub" style="font-size:10px;">قبل الخصم ${fmtSar(gross)} — خصم ${fmtSar(disc)}</span>`:""}</td><td>${fmtSar(paid)} ﷼</td><td>${fmtSar(rem)} ﷼</td>
       ${showProfit ? `<td>${profitCell}</td>` : ""}
-      <td style="white-space:nowrap;"><button class="btn btn-gold btn-sm" onclick="openInvoiceFromLog('${inv.id}')" title="فتح الفاتورة: المراحل والدفعات والتسليم">فتح</button> ${isAdmin?`<button class="btn btn-ghost btn-sm" style="color:var(--gold-soft);border-color:var(--gold-soft);" onclick="editInvoice('${inv.id}')" title="تعديل الفاتورة">تعديل</button> <button class="btn btn-ghost btn-sm" onclick="createInvoiceReturn('${inv.id}')" title="تسجيل مرتجع">مرتجع</button>`:returnRequestButtonHtml(inv)}<button class="icon-btn" onclick="editInvoiceMeasurements('${inv.id}')" title="تعديل المقاس"><i data-lucide="ruler"></i></button><button class="icon-btn" onclick="printCustomerReceipt('${inv.id}')" title="طباعة فاتورة العميل"><i data-lucide="printer"></i></button><button class="icon-btn" onclick="shareReceiptViaWhatsApp('${inv.id}')" title="إرسال الفاتورة واتساب"><i data-lucide="send"></i></button>${inv.einvoice?`<button class="icon-btn" onclick="showEinvoiceDetails('${inv.id}')" title="بيانات الفوترة الإلكترونية"><i data-lucide="receipt"></i></button>`:""}</td>`;
+      <td style="white-space:nowrap;"><button class="btn btn-gold btn-sm" onclick="openInvoiceFromLog('${inv.id}')" title="فتح الفاتورة: المراحل والدفعات والتسليم">فتح</button> ${isAdmin?`<button class="btn btn-ghost btn-sm" style="color:var(--gold-soft);border-color:var(--gold-soft);" onclick="editInvoice('${inv.id}')" title="تعديل الفاتورة">تعديل</button> <button class="btn btn-ghost btn-sm" onclick="createInvoiceReturn('${inv.id}')" title="تسجيل مرتجع">مرتجع</button>`:returnRequestButtonHtml(inv)}<button class="icon-btn" onclick="editInvoiceMeasurements('${inv.id}')" title="تعديل المقاس"><i data-lucide="ruler"></i></button><button class="icon-btn" onclick="printCustomerReceipt('${inv.id}')" title="طباعة فاتورة المستفيد"><i data-lucide="printer"></i></button><button class="icon-btn" onclick="shareReceiptViaWhatsApp('${inv.id}')" title="إرسال الفاتورة واتساب"><i data-lucide="send"></i></button>${inv.einvoice?`<button class="icon-btn" onclick="showEinvoiceDetails('${inv.id}')" title="بيانات الفوترة الإلكترونية"><i data-lucide="receipt"></i></button>`:""}</td>`;
     body.appendChild(tr);
     const badges = inv.garments.map(g=>{const st=STATUSES.find(x=>x.v===g.status);return `<span class="badge ${st.cls}">${st.label}${esc(g.tailor?" — "+g.tailor:"")}</span>`;}).join(" ");
     const tr2=document.createElement("tr"); tr2.innerHTML=`<td colspan="${showProfit?8:7}" style="padding-top:0;padding-bottom:14px;">${badges}</td>`; body.appendChild(tr2);
@@ -567,7 +567,7 @@ function searchInvoiceForAlteration(){
       return `<div class="garment-card">
         <span class="tag">ثوب ${i+1} — ${esc(g.fabricType)}</span>
         <p class="sub" style="margin:6px 0;">الخياط: ${esc(g.tailor||"—")} — الحالة: ${STATUSES.find(s=>s.v===g.status)?.label||g.status}</p>
-        ${notDelivered ? `<p class="locked-note">هذا الثوب لسا ما انسلّم للعميل — التعديل يخص الثياب المُسلَّمة بس.</p>` : pending ? `<p style="color:var(--gold-soft);font-weight:700;">معاد للتعديل حالياً — بانتظار الخياط (${esc(pending.reason)}) — رقم التعديل: ${pending.alterationNumber}</p>
+        ${notDelivered ? `<p class="locked-note">هذا الثوب لسا ما انسلّم للمستفيد — التعديل يخص الثياب المُسلَّمة بس.</p>` : pending ? `<p style="color:var(--gold-soft);font-weight:700;">معاد للتعديل حالياً — بانتظار الخياط (${esc(pending.reason)}) — رقم التعديل: ${pending.alterationNumber}</p>
           <div class="actions-row" style="margin-top:0;"><button class="btn btn-gold btn-sm" onclick="printAlterationInvoice('${pending.id}')">طباعة فاتورة التعديل #${pending.alterationNumber}</button>
           <button class="btn btn-ghost btn-sm" onclick="document.getElementById('altMeas_p${i}').style.display=''">تعديل المقاسات</button>
           <button class="btn btn-ghost btn-sm" onclick="printCuttingCard('${inv.id}', ${i})">عرض كرت المقاسات</button></div>
@@ -675,7 +675,7 @@ async function printAlterationInvoice(altId){
       <div style="font-size:12px;">مرتبطة بفاتورة التفصيل رقم ${esc(a.invoiceNumber)} — تاريخ الاستلام ${a.dateReceived}</div>
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:8px;">
-      <tr><td style="padding:3px;"><b>العميل:</b> ${fmt(inv&&inv.customerName)}</td><td style="padding:3px;"><b>الجوال:</b> ${fmt(inv&&inv.customerMobile)}</td></tr>
+      <tr><td style="padding:3px;"><b>المستفيد:</b> ${fmt(inv&&inv.customerName)}</td><td style="padding:3px;"><b>الجوال:</b> ${fmt(inv&&inv.customerMobile)}</td></tr>
       <tr><td style="padding:3px;"><b>الثوب:</b> ${a.garmentIndex+1} — ${fmt(g&&g.fabricType)} (${fmt(g&&g.category)})</td><td style="padding:3px;"><b>الخياط الأصلي:</b> ${fmt(g&&g.tailor)}</td></tr>
       <tr><td style="padding:3px;"><b>سبب التعديل:</b> ${fmt(a.reason)}</td><td style="padding:3px;"><b>المتسبب:</b> ${fmt(a.responsible)}</td></tr>
       <tr><td colspan="2" style="padding:3px;"><b>ملاحظات:</b> ${fmt(a.notes)}</td></tr>
@@ -728,7 +728,7 @@ function addLegacyItem(){
   const count = parseInt($("legCount").value)||1;
   const remaining = parseFloat($("legRemaining").value)||0;
   const notes = $("legNotes").value.trim();
-  if(!name){ showToast("أدخل اسم العميل"); return; }
+  if(!name){ showToast("أدخل اسم المستفيد"); return; }
   if(!mobile || !/^[0-9]{10}$/.test(mobile)){ showToast("رقم الجوال لازم يكون 10 أرقام بالضبط"); return; }
   if(!desc){ showToast("أدخل وصف القطعة"); return; }
   state.legacyItems.push({id:newId(), name, mobile, desc, count, deliveredCount:0, remaining, notes, status:"جاهز", addedDate:todayStr(), deliveredDate:null});
