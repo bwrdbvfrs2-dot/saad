@@ -495,6 +495,12 @@ function renderSuppliers(){
       <div class="field" style="display:flex;align-items:flex-end;"><button class="btn btn-gold btn-sm" style="width:100%;" onclick="paySupplier('${s.id}')">تسديد</button></div>
     </div>` : ``}
     ${(s.writeOffs||[]).length ? `<p class="sub" style="margin:4px 0;color:var(--gold-soft);">متلف: ${fmtSar(supplierWrittenOff(s))} ريال${s.writeOffs.map(w=>` (${esc(w.date)} — ${esc(w.reason)})`).join("")}</p>` : ""}
+    ${(s.payments||[]).length ? `<details style="margin-top:6px;"><summary class="sub" style="cursor:pointer;">سدادات سابقة (${s.payments.length}) — اضغط للطباعة</summary>
+      <div style="margin-top:6px;">${s.payments.map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--row-line);">
+        <span class="sub">${esc(p.date||"—")} — ${fmtSar(p.amount)} ﷼${p.voucherNo?` — سند ${p.voucherNo}`:" — بدون رقم سند"}</span>
+        <button class="btn btn-ghost btn-sm" onclick="reprintSupplierReceipt('${s.id}','${p.id}')">طباعة السند</button>
+      </div>`).join("")}</div>
+    </details>` : ""}
     ${isAdmin && (s.openingDebts||[]).length ? `<details style="margin-top:6px;"><summary class="sub" style="cursor:pointer;">قيود الدين السابق (${s.openingDebts.length}) — للتصحيح لو فيه قيد مكرر أو غلط</summary>
       <div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>المبلغ</th><th>الملاحظة</th><th>سجّله</th><th></th></tr></thead><tbody>
       ${s.openingDebts.map(d=>`<tr><td>${esc(d.date||"—")}</td><td>${fmtSar(d.amount)} ﷼</td><td>${esc(d.note||"—")}</td><td>${esc(d.recordedBy||"—")}</td><td><button class="btn btn-danger btn-sm" onclick="deleteSupplierOpeningDebt('${s.id}','${d.id}')">حذف القيد</button></td></tr>`).join("")}
@@ -555,11 +561,36 @@ async function paySupplier(supId){
   const snapshot = JSON.parse(JSON.stringify(state));
   box.balance -= amount; s.balance -= amount;
   s.payments = s.payments||[];
-  s.payments.push({id:newId(), date:todayStr(), amount, boxId:box.id, recordedBy:currentUser.username});
+  // the سند صرف number comes from the payments counter, as every other payment voucher (the snapshot restores it on failure)
+  const payment = {id:newId(), date:todayStr(), amount, boxId:box.id, recordedBy:currentUser.username, voucherNo:nextPaymentVoucherNo(), balanceAfter:s.balance};
+  s.payments.push(payment);
   if(await saveStateWithRollback(snapshot)){
     logAudit("supplier_paid", {supplierName:s.name, amount});
     showToast(`تم تسديد ${amount.toFixed(0)} ريال لـ${s.name} — المتبقي ${s.balance.toFixed(0)}`);
+    printSupplierReceipt(s, payment);
   }
+}
+// سند صرف for a payment to a supplier / creditor (printHtml opens the print dialog itself)
+function printSupplierReceipt(s, p){
+  const sar = n=> `${fmtSar(n||0)} ﷼`;
+  const row = (k,v,b)=> `<tr${b?' style="font-weight:800;"':""}><td>${k}</td><td>${v}</td></tr>`;
+  const box = p.boxId ? findCashBox(p.boxId) : null;
+  printHtml(`<h2>سند صرف — تسديد ${esc(s.kind||"مورد")}${p.voucherNo?` — رقم ${p.voucherNo}`:""}</h2>
+    <p style="font-size:12px;">${state.settings.shopName?esc(state.settings.shopName)+" — ":""}التاريخ: ${esc(p.date||"—")}</p>
+    <table><tbody>
+      ${row("اسم الجهة", esc(s.name))}
+      ${row("المبلغ المصروف", sar(p.amount), true)}
+      ${box?row("صُرف من", `${esc(box.owner)} — ${esc(box.name)}`):""}
+      ${p.balanceAfter!==undefined?row("المتبقي له بعد هذا السند", sar(p.balanceAfter), true):""}
+      ${row("سجّله", esc(p.recordedBy||"—"))}
+    </tbody></table>
+    <p style="margin-top:26px;">استلمت المبلغ أعلاه — توقيع المستلم: ____________ &nbsp;&nbsp;&nbsp; توقيع المدير: ____________</p>`);
+}
+// reprint a payment already made (older payments may have no voucher number, and no remaining-after figure)
+function reprintSupplierReceipt(supId, payId){
+  const s = state.suppliers.find(x=>x.id===supId); if(!s) return;
+  const p = (s.payments||[]).find(x=>x.id===payId); if(!p) return;
+  printSupplierReceipt(s, p);
 }
 
 function refreshPurchaseForm(){
